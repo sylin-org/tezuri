@@ -1,0 +1,24 @@
+{
+  "schema": "tezuri.editor-hints/v1",
+  "groups": [
+    { "id": "story", "label": "Story" },
+    { "id": "standing", "label": "Standing today" }
+  ],
+  "fields": [
+    { "pointer": "/title", "role": "title", "control": "text", "group": "story", "order": 10 },
+    { "pointer": "/tags", "role": "tags", "control": "tags", "group": "story", "order": 20 },
+    {
+      "pointer": "/status",
+      "role": "editorial-currency",
+      "control": "select",
+      "group": "standing",
+      "order": 30,
+      "options": [
+        { "value": "timeless", "label": "Timeless" },
+        { "value": "current", "label": "Current" },
+        { "value": "of-its-time", "label": "Of its time" },
+        { "value": "revised", "label": "Revised" }
+      ]
+    }
+  ]
+}

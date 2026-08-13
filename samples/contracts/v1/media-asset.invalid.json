@@ -1,0 +1,12 @@
+{
+  "protocol": "tezuri.media-asset-receipt",
+  "version": 1,
+  "articleId": "article:patina",
+  "originalFileName": "patina.png",
+  "fileName": "patina.png",
+  "relativePath": "C:\\outside\\patina.png",
+  "mediaType": "image/png",
+  "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "byteLength": 2048,
+  "deduplicated": false
+}

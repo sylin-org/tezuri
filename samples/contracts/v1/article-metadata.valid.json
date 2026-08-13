@@ -1,0 +1,11 @@
+{
+  "id": "article:patina",
+  "title": "Patina as memory",
+  "description": "A synthetic article used to test Tezuri contracts.",
+  "date": "2026-08-13",
+  "publicationState": "published",
+  "editorialCurrency": "current",
+  "standing": "Useful now; revisit when the underlying platform changes.",
+  "tags": ["architecture", "Responsible Delight"],
+  "targetOwnedField": "preserved"
+}

@@ -1,0 +1,33 @@
+{
+  "schema": "tezuri.publication-receipt/v1",
+  "receiptId": "publication:receipt-1",
+  "planId": "publication:plan-1",
+  "operationId": "operation:publication-1",
+  "status": "pushed",
+  "startedAt": "2026-08-13T15:12:00Z",
+  "completedAt": "2026-08-13T15:13:00Z",
+  "baseCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "branch": "main",
+  "paths": ["src/writing/patina/index.md", "src/writing/patina/media/patina.png"],
+  "proof": {
+    "runId": "proof:synthetic-1",
+    "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "status": "passed"
+  },
+  "commit": {
+    "created": true,
+    "sha": "cccccccccccccccccccccccccccccccccccccccc"
+  },
+  "push": {
+    "requested": true,
+    "attempted": true,
+    "succeeded": true,
+    "remote": "origin",
+    "ref": "refs/heads/main"
+  },
+  "verification": {
+    "attempted": false,
+    "succeeded": false,
+    "urls": []
+  }
+}

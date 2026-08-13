@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Description>Filesystem, document, proof, import, and Git adapters for Tezuri.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Tezuri.Domain\Tezuri.Domain.csproj" />
+  </ItemGroup>
+</Project>

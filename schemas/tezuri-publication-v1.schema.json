@@ -1,0 +1,221 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:sylin:tezuri:publication:v1",
+  "title": "Tezuri publication plan and receipt v1",
+  "oneOf": [
+    { "$ref": "#/$defs/plan" },
+    { "$ref": "#/$defs/receipt" }
+  ],
+  "$defs": {
+    "plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "planId",
+        "createdAt",
+        "workspaceRevision",
+        "sourceDigest",
+        "baseCommit",
+        "branch",
+        "paths",
+        "proof",
+        "commitMessage",
+        "pushRequested",
+        "idempotencyKey"
+      ],
+      "properties": {
+        "schema": { "const": "tezuri.publication-plan/v1" },
+        "planId": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/contractId" },
+        "createdAt": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/utcTimestamp" },
+        "workspaceRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "sourceDigest": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/sha256Digest" },
+        "baseCommit": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/gitCommit" },
+        "remoteTip": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/gitCommit" },
+        "branch": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^(?!/)(?!.*\\.\\.)(?!.*//)(?!.*[~^:?*\\[\\]\\\\])(?!.*[/.]$)[ -~]+$"
+        },
+        "paths": { "$ref": "#/$defs/paths" },
+        "artifacts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/plannedArtifact" }
+        },
+        "proof": { "$ref": "#/$defs/proofReference" },
+        "commitMessage": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "pushRequested": { "type": "boolean" },
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 200
+        }
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "receiptId",
+        "planId",
+        "operationId",
+        "status",
+        "startedAt",
+        "completedAt",
+        "baseCommit",
+        "branch",
+        "paths",
+        "proof",
+        "commit",
+        "push",
+        "verification"
+      ],
+      "properties": {
+        "schema": { "const": "tezuri.publication-receipt/v1" },
+        "receiptId": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/contractId" },
+        "planId": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/contractId" },
+        "operationId": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/contractId" },
+        "status": { "enum": ["prepared", "committed", "pushed", "verified", "failed"] },
+        "startedAt": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/utcTimestamp" },
+        "completedAt": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/utcTimestamp" },
+        "baseCommit": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/gitCommit" },
+        "branch": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "paths": { "$ref": "#/$defs/paths" },
+        "proof": { "$ref": "#/$defs/proofReference" },
+        "commit": { "$ref": "#/$defs/commitResult" },
+        "push": { "$ref": "#/$defs/pushResult" },
+        "verification": { "$ref": "#/$defs/verificationResult" },
+        "correction": { "$ref": "#/$defs/correction" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "status": { "const": "failed" } },
+            "required": ["status"]
+          },
+          "then": { "required": ["correction"] }
+        }
+      ]
+    },
+    "paths": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/repositoryPath" }
+    },
+    "plannedArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "digest"],
+      "properties": {
+        "path": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/repositoryPath" },
+        "digest": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/sha256Digest" }
+      }
+    },
+    "proofReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "digest", "status"],
+      "properties": {
+        "runId": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/contractId" },
+        "digest": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/sha256Digest" },
+        "status": { "const": "passed" }
+      }
+    },
+    "commitResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["created"],
+      "properties": {
+        "created": { "type": "boolean" },
+        "sha": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/gitCommit" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "created": { "const": true } },
+            "required": ["created"]
+          },
+          "then": { "required": ["sha"] }
+        }
+      ]
+    },
+    "pushResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requested", "attempted", "succeeded"],
+      "properties": {
+        "requested": { "type": "boolean" },
+        "attempted": { "type": "boolean" },
+        "succeeded": { "type": "boolean" },
+        "remote": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "errorCode": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/stableCode" }
+      }
+    },
+    "verificationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attempted", "succeeded", "urls"],
+      "properties": {
+        "attempted": { "type": "boolean" },
+        "succeeded": { "type": "boolean" },
+        "urls": {
+          "type": "array",
+          "items": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/httpUrl" }
+        },
+        "observedRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "verifiedAt": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/utcTimestamp" },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      }
+    },
+    "correction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "canRetry"],
+      "properties": {
+        "code": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/stableCode" },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "canRetry": { "type": "boolean" }
+      }
+    }
+  }
+}

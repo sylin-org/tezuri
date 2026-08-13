@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:sylin:tezuri:article-source:v1",
+  "title": "Tezuri article source protocols v1",
+  "oneOf": [
+    { "$ref": "#/$defs/sourceEnvelope" },
+    { "$ref": "#/$defs/patchSet" },
+    { "$ref": "#/$defs/appliedPatch" },
+    { "$ref": "#/$defs/patchConflict" },
+    { "$ref": "#/$defs/articleList" }
+  ],
+  "$defs": {
+    "byteRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "endExclusive"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 0 },
+        "endExclusive": { "type": "integer", "minimum": 0 },
+        "length": { "type": "integer", "minimum": 0, "readOnly": true }
+      }
+    },
+    "base64": {
+      "type": "string",
+      "contentEncoding": "base64"
+    },
+    "canonicalSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["encoding", "bom", "lineEndings", "byteLength", "sha256", "utf8Base64"],
+      "properties": {
+        "encoding": { "const": "utf-8" },
+        "bom": { "enum": ["none", "utf-8"] },
+        "lineEndings": { "enum": ["none", "lf", "crlf", "mixed"] },
+        "byteLength": { "type": "integer", "minimum": 0 },
+        "sha256": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/sha256Hex" },
+        "utf8Base64": { "$ref": "#/$defs/base64" }
+      }
+    },
+    "sourceSlice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["range", "sha256", "utf8Base64"],
+      "properties": {
+        "range": { "$ref": "#/$defs/byteRange" },
+        "sha256": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/sha256Hex" },
+        "utf8Base64": { "$ref": "#/$defs/base64" }
+      }
+    },
+    "segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id", "range", "source", "syntax", "syntaxHint", "notice"],
+      "properties": {
+        "kind": { "enum": ["rich", "protected-raw"] },
+        "id": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/contractId" },
+        "range": { "$ref": "#/$defs/byteRange" },
+        "source": { "$ref": "#/$defs/sourceSlice" },
+        "syntax": { "type": ["string", "null"], "maxLength": 100 },
+        "syntaxHint": { "type": ["string", "null"], "maxLength": 100 },
+        "notice": { "type": ["string", "null"], "maxLength": 2000 }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "severity", "message", "range"],
+      "properties": {
+        "code": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/stableCode" },
+        "severity": { "enum": ["information", "warning", "error"] },
+        "message": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "range": {
+          "anyOf": [
+            { "$ref": "#/$defs/byteRange" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "descriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "slug", "displayTitle", "relativePath"],
+      "properties": {
+        "id": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/articleId" },
+        "slug": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "displayTitle": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "relativePath": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/repositoryPath" }
+      }
+    },
+    "sourceEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "version", "article", "base", "projection", "capabilities", "diagnostics"],
+      "properties": {
+        "protocol": { "const": "tezuri.article-source" },
+        "version": { "const": 1 },
+        "article": { "$ref": "#/$defs/descriptor" },
+        "base": { "$ref": "#/$defs/canonicalSource" },
+        "projection": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["frontmatter", "body", "segments"],
+          "properties": {
+            "frontmatter": { "$ref": "#/$defs/sourceSlice" },
+            "body": { "$ref": "#/$defs/sourceSlice" },
+            "segments": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/segment" }
+            }
+          }
+        },
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["richEditing", "protectedSegmentCount"],
+          "properties": {
+            "richEditing": { "enum": ["available", "source-only"] },
+            "protectedSegmentCount": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/diagnostic" }
+        }
+      }
+    },
+    "replaceOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "range", "expectedUtf8Base64", "replacementUtf8Base64", "intent", "segmentId"],
+      "properties": {
+        "kind": { "const": "replace" },
+        "range": { "$ref": "#/$defs/byteRange" },
+        "expectedUtf8Base64": { "$ref": "#/$defs/base64" },
+        "replacementUtf8Base64": { "$ref": "#/$defs/base64" },
+        "intent": { "enum": ["rich-edit", "source-edit", "metadata-edit"] },
+        "segmentId": {
+          "anyOf": [
+            { "$ref": "urn:sylin:tezuri:common:v1#/$defs/contractId" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "patchSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "version", "articleId", "relativePath", "baseSha256", "operations"],
+      "properties": {
+        "protocol": { "const": "tezuri.source-patch-set" },
+        "version": { "const": 1 },
+        "articleId": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/articleId" },
+        "relativePath": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/repositoryPath" },
+        "baseSha256": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/sha256Hex" },
+        "operations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/replaceOperation" }
+        }
+      }
+    },
+    "appliedPatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "version", "savedAt", "previousSha256", "current"],
+      "properties": {
+        "protocol": { "const": "tezuri.applied-source-patch" },
+        "version": { "const": 1 },
+        "savedAt": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/utcTimestamp" },
+        "previousSha256": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/sha256Hex" },
+        "current": { "$ref": "#/$defs/sourceEnvelope" }
+      }
+    },
+    "patchConflict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "version", "articleId", "expectedBaseSha256", "current", "message"],
+      "properties": {
+        "protocol": { "const": "tezuri.source-patch-conflict" },
+        "version": { "const": 1 },
+        "articleId": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/articleId" },
+        "expectedBaseSha256": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/sha256Hex" },
+        "current": { "$ref": "#/$defs/sourceEnvelope" },
+        "message": { "type": "string", "minLength": 1, "maxLength": 2000 }
+      }
+    },
+    "articleSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "slug", "displayTitle", "relativePath", "publicationState", "sourceSha256", "updatedAt", "byteLength"],
+      "properties": {
+        "id": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/articleId" },
+        "slug": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "displayTitle": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "relativePath": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/repositoryPath" },
+        "publicationState": { "enum": ["draft", "published", "unknown"] },
+        "sourceSha256": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/sha256Hex" },
+        "updatedAt": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/utcTimestamp" },
+        "byteLength": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "articleList": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "version", "articles"],
+      "properties": {
+        "protocol": { "const": "tezuri.article-list" },
+        "version": { "const": 1 },
+        "articles": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/articleSummary" }
+        }
+      }
+    }
+  }
+}

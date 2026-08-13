@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:sylin:tezuri:operation:v1",
+  "title": "Tezuri operation envelope v1",
+  "type": "object",
+  "required": ["protocol", "version", "operationId", "kind", "state", "createdAt"],
+  "properties": {
+    "protocol": { "const": "tezuri.operation" },
+    "version": { "const": 1 },
+    "operationId": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/contractId" },
+    "kind": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/stableCode" },
+    "state": {
+      "enum": ["queued", "running", "awaiting-approval", "succeeded", "failed", "cancelled"]
+    },
+    "createdAt": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/utcTimestamp" },
+    "startedAt": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/utcTimestamp" },
+    "completedAt": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/utcTimestamp" },
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 200
+    },
+    "inputDigest": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/sha256Digest" },
+    "progress": { "$ref": "#/$defs/progress" },
+    "approval": { "$ref": "#/$defs/approval" },
+    "result": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "problem": { "$ref": "urn:sylin:tezuri:problem:v1" },
+    "links": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "format": "uri-reference" }
+    }
+  },
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": { "enum": ["succeeded", "failed", "cancelled"] }
+        },
+        "required": ["state"]
+      },
+      "then": { "required": ["completedAt"] }
+    },
+    {
+      "if": {
+        "properties": { "state": { "const": "awaiting-approval" } },
+        "required": ["state"]
+      },
+      "then": { "required": ["approval"] }
+    }
+  ],
+  "$defs": {
+    "progress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "completed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "planDigest"],
+      "properties": {
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "planDigest": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/sha256Digest" }
+      }
+    }
+  }
+}

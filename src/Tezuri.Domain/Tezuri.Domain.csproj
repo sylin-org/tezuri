@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Description>Tezuri's file-native article and publication contracts.</Description>
+  </PropertyGroup>
+</Project>

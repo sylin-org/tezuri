@@ -1,0 +1,22 @@
+{
+  "schema": "tezuri.workspace/v1",
+  "site": { "url": "https://example.test" },
+  "articles": {
+    "root": "../outside",
+    "fileName": "index.md",
+    "mediaDirectory": "media",
+    "metadataSchema": "schemas/article-v1.schema.json"
+  },
+  "media": {
+    "requireOwnedAssets": true,
+    "maximumAssetBytes": 26214400,
+    "allowedExtensions": [".png"]
+  },
+  "proof": {
+    "workingDirectory": ".",
+    "commands": [
+      { "id": "site-test", "executable": "npm", "arguments": ["test"], "timeoutSeconds": 300 }
+    ]
+  },
+  "git": { "allowedPaths": ["src/writing/**"] }
+}

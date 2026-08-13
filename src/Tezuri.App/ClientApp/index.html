@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#0b1712" />
+    <meta
+      name="description"
+      content="Tezuri is a repository-native writing and publishing room."
+    />
+    <title>Tezuri - The local press.</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#editor-heading">Skip to the editor</a>
+
+    <div id="app" class="app-shell" aria-busy="true" data-editor-state="loading">
+      <header class="topbar">
+        <div class="brand" aria-label="Tezuri home">
+          <span class="brand-mark" aria-hidden="true">T</span>
+          <span>
+            <span class="brand-name">Tezuri</span>
+            <span class="brand-tagline">The local press.</span>
+          </span>
+        </div>
+
+        <div class="workspace-identity" aria-label="Workspace status">
+          <span class="workspace-label">Workspace</span>
+          <strong>/workspace</strong>
+          <span class="status-pill status-pill--quiet" id="workspace-status">Connecting</span>
+        </div>
+
+        <div class="topbar-actions">
+          <span class="connection-state">
+            <span class="connection-dot" aria-hidden="true"></span>
+            Local only
+          </span>
+          <button class="button button--ghost" id="publish-shortcut" type="button" disabled>
+            Publish
+          </button>
+        </div>
+      </header>
+
+      <div class="workspace-layout">
+        <nav class="article-rail" aria-labelledby="articles-heading">
+          <div class="rail-heading">
+            <div>
+              <p class="eyebrow">Writing room</p>
+              <h2 id="articles-heading">Articles</h2>
+            </div>
+            <button class="icon-button" type="button" disabled aria-label="Create an article">
+              <span aria-hidden="true">+</span>
+            </button>
+          </div>
+
+          <label class="search-field">
+            <span class="visually-hidden">Filter articles</span>
+            <span aria-hidden="true">⌕</span>
+            <input id="article-filter" type="search" placeholder="Filter articles" disabled />
+          </label>
+
+          <p class="rail-note" id="article-list-note">
+            Loading articles from the mounted workspace.
+          </p>
+
+          <ul id="article-list" class="article-list" aria-describedby="article-list-note">
+            <li class="article-empty">Loading articles…</li>
+          </ul>
+
+          <div class="rail-footer" aria-live="polite">
+            <span aria-hidden="true">⌘</span>
+            <span id="git-rail-status">Checking Git status…</span>
+          </div>
+        </nav>
+
+        <main class="writing-room" id="main-content">
+          <header class="document-heading">
+            <div>
+              <p class="breadcrumb" id="article-path">Opening canonical article source…</p>
+              <h1 id="article-title">Writing room</h1>
+            </div>
+            <div class="document-state" aria-label="Document state">
+              <span class="status-pill status-pill--quiet" id="source-capability-state">Source loading</span>
+              <span id="dirty-state">Opening source…</span>
+            </div>
+          </header>
+
+          <section class="editor-card" aria-labelledby="editor-heading">
+            <h2 id="editor-heading" class="visually-hidden">Article body editor</h2>
+
+            <div class="editor-commandbar">
+              <div class="mode-tabs" role="tablist" aria-label="Editing mode">
+                <button
+                  id="rich-mode-tab"
+                  class="mode-tab is-selected"
+                  type="button"
+                  role="tab"
+                  aria-selected="true"
+                  aria-controls="rich-editor-panel"
+                  tabindex="0"
+                >
+                  Rich preview
+                </button>
+                <button
+                  id="source-mode-tab"
+                  class="mode-tab"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="source-editor-panel"
+                  tabindex="-1"
+                >
+                  Markdown source
+                </button>
+              </div>
+
+              <div class="formatting-tools" role="toolbar" aria-label="Text formatting">
+                <button
+                  class="tool-button"
+                  type="button"
+                  data-editor-command="strong"
+                  disabled
+                  aria-label="Bold, Control or Command B"
+                >
+                  <strong aria-hidden="true">B</strong>
+                </button>
+                <button
+                  class="tool-button"
+                  type="button"
+                  data-editor-command="emphasis"
+                  disabled
+                  aria-label="Italic, Control or Command I"
+                >
+                  <em aria-hidden="true">I</em>
+                </button>
+                <button
+                  class="tool-button tool-button--code"
+                  type="button"
+                  data-editor-command="inline-code"
+                  disabled
+                  aria-label="Inline code, Control or Command E"
+                >
+                  <span aria-hidden="true">&lt;/&gt;</span>
+                </button>
+              </div>
+
+              <button
+                class="button button--primary"
+                id="save-button"
+                type="button"
+                disabled
+                aria-describedby="save-explanation"
+              >
+                Save source
+              </button>
+            </div>
+
+            <p class="editor-notice" id="save-explanation">
+              Source save becomes available only for a supported body edit against the opened
+              canonical byte base. Rich preview never writes source.
+            </p>
+
+            <section
+              id="source-conflict"
+              class="source-conflict"
+              role="alert"
+              aria-labelledby="conflict-heading"
+              hidden
+            >
+              <div>
+                <p class="eyebrow">Save paused</p>
+                <h3 id="conflict-heading">The repository source changed</h3>
+                <p id="conflict-message"></p>
+              </div>
+              <div>
+                <h4>Current repository body</h4>
+                <pre id="conflict-current-source" tabindex="0"></pre>
+              </div>
+            </section>
+
+            <div
+              id="rich-editor-panel"
+              class="editor-panel"
+              role="tabpanel"
+              aria-labelledby="rich-mode-tab"
+            >
+              <div id="milkdown-editor" class="milkdown-host"></div>
+            </div>
+
+            <div
+              id="source-editor-panel"
+              class="editor-panel editor-panel--source"
+              role="tabpanel"
+              aria-labelledby="source-mode-tab"
+              hidden
+            >
+              <label for="markdown-source">Markdown body source</label>
+              <p id="source-help">
+                Frontmatter stays outside this editor. Save emits one localized UTF-8 byte-range
+                replacement and blocks edits that cross a server-declared protected raw segment.
+              </p>
+              <textarea
+                id="markdown-source"
+                aria-describedby="source-help"
+                spellcheck="true"
+                autocapitalize="sentences"
+                disabled
+              ></textarea>
+            </div>
+
+            <footer class="editor-footer">
+              <span id="document-count">0 words · 0 characters</span>
+              <span id="authority-state">Canonical UTF-8 bytes are the authority</span>
+            </footer>
+          </section>
+        </main>
+
+        <aside class="inspector" aria-label="Article media, metadata, proof, and publication">
+          <section class="inspector-section" aria-labelledby="metadata-heading">
+            <div class="inspector-heading">
+              <div>
+                <p class="eyebrow">Document</p>
+                <h2 id="metadata-heading">Metadata</h2>
+              </div>
+              <span class="status-pill status-pill--quiet" id="metadata-state">Loading</span>
+            </div>
+
+            <p id="metadata-help" class="section-note">
+              Schema-driven metadata controls will patch the lossless frontmatter source.
+            </p>
+            <div class="metadata-fields" aria-describedby="metadata-help">
+              <label>
+                <span>Title</span>
+                <input id="metadata-title" type="text" value="Loading…" readonly />
+              </label>
+              <label>
+                <span>Publication state</span>
+                <input id="metadata-publication" type="text" value="Unknown" readonly />
+              </label>
+              <label>
+                <span>Tags</span>
+                <input id="metadata-tags" type="text" value="Not projected by the V1 source contract" readonly />
+              </label>
+              <label>
+                <span>Canonical path</span>
+                <input id="metadata-path" type="text" value="Opening…" readonly />
+              </label>
+            </div>
+          </section>
+
+          <section class="inspector-section media-section" aria-labelledby="media-heading">
+            <div class="inspector-heading">
+              <div>
+                <p class="eyebrow">Article-owned asset</p>
+                <h2 id="media-heading">Media</h2>
+              </div>
+              <span class="status-pill status-pill--quiet" id="media-status">No file</span>
+            </div>
+
+            <p class="section-note" id="media-note">
+              Upload an image into this article, then insert its Markdown at the source cursor.
+            </p>
+
+            <form id="media-form" class="inspector-form" aria-describedby="media-note">
+              <label>
+                <span>Image file</span>
+                <input
+                  id="media-file"
+                  type="file"
+                  name="file"
+                  accept="image/avif,image/gif,image/jpeg,image/png,image/webp,.avif,.gif,.jpeg,.jpg,.png,.webp"
+                  required
+                />
+              </label>
+              <label>
+                <span>Alternative text</span>
+                <input
+                  id="media-alt"
+                  type="text"
+                  maxlength="240"
+                  autocomplete="off"
+                  placeholder="Describe the image"
+                  required
+                />
+              </label>
+              <button class="button button--wide" id="media-upload-button" type="submit" disabled>
+                Upload and insert
+              </button>
+            </form>
+          </section>
+
+          <section class="inspector-section proof-section" aria-labelledby="proof-heading">
+            <div class="inspector-heading">
+              <div>
+                <p class="eyebrow">Real-site render</p>
+                <h2 id="proof-heading">Proof</h2>
+              </div>
+              <span class="status-pill status-pill--quiet" id="proof-status">Not run</span>
+            </div>
+
+            <p class="section-note" id="proof-note">
+              Proof will run the mounted repository's declared build in an isolated copy.
+            </p>
+
+            <dl class="evidence-list" id="proof-evidence">
+              <div>
+                <dt>Declared repository command</dt>
+                <dd><span class="evidence-dot evidence-dot--pending"></span>Not run</dd>
+              </div>
+            </dl>
+
+            <button class="button button--wide" id="proof-run-button" type="button" disabled>
+              Run site proof
+            </button>
+          </section>
+
+          <section class="inspector-section publication-section" aria-labelledby="git-heading">
+            <div class="inspector-heading">
+              <div>
+                <p class="eyebrow">Explicit Git handoff</p>
+                <h2 id="git-heading" tabindex="-1">Publish</h2>
+              </div>
+              <span class="status-pill status-pill--quiet" id="git-status">Checking</span>
+            </div>
+
+            <p class="section-note" id="git-note">
+              Review exact repository paths, create a local commit, then choose whether to push it.
+              Site Proof remains a separate check.
+            </p>
+
+            <div class="publication-summary" id="git-summary" role="status">
+              Reading the mounted repository…
+            </div>
+
+            <fieldset class="publication-paths" id="git-path-fieldset" disabled>
+              <legend id="git-path-legend">Changed paths</legend>
+              <div id="git-changes" class="publication-change-list">
+                <p>No Git status loaded.</p>
+              </div>
+            </fieldset>
+
+            <label class="publication-message">
+              <span>Commit message</span>
+              <input
+                id="git-commit-message"
+                type="text"
+                maxlength="120"
+                autocomplete="off"
+                placeholder="Describe this publication"
+                disabled
+              />
+            </label>
+
+            <div class="publication-actions">
+              <button class="button" id="git-refresh-button" type="button">
+                Refresh changes
+              </button>
+              <button class="button button--primary" id="git-review-button" type="button" disabled>
+                Review commit
+              </button>
+            </div>
+
+            <section class="publication-review" id="git-plan-review" aria-labelledby="git-plan-heading" hidden>
+              <p class="eyebrow">Reviewed path plan</p>
+              <h3 id="git-plan-heading">Ready to create commit</h3>
+              <p id="git-plan-summary"></p>
+              <ul id="git-plan-paths"></ul>
+              <button class="button button--primary button--wide" id="git-commit-button" type="button">
+                Create reviewed commit
+              </button>
+            </section>
+
+            <section class="publication-review" id="git-push-panel" aria-labelledby="git-push-heading" hidden>
+              <p class="eyebrow">Optional remote action</p>
+              <h3 id="git-push-heading">Commit created</h3>
+              <p id="git-push-summary"></p>
+              <button class="button button--wide" id="git-push-button" type="button">
+                Push commit
+              </button>
+            </section>
+
+            <p class="publication-alert" id="git-alert" role="alert" hidden></p>
+          </section>
+        </aside>
+      </div>
+
+      <p id="announcer" class="visually-hidden" role="status" aria-live="polite"></p>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "schema": "tezuri.media-manifest/v1",
+  "articleId": "article:patina",
+  "generatedAt": "2026-08-13T15:30:00Z",
+  "assets": [
+    {
+      "path": "src/writing/patina/media/patina.png",
+      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "mediaType": "image/png",
+      "bytes": 2048,
+      "width": 1200,
+      "height": 630,
+      "source": {
+        "id": "substack-image-1",
+        "url": "https://example.test/images/patina.png",
+        "importedAt": "2026-08-13T15:30:00Z"
+      },
+      "credit": "Synthetic fixture",
+      "rights": { "spdxExpression": "CC-BY-4.0" }
+    }
+  ]
+}

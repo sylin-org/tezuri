@@ -1,0 +1,266 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:sylin:tezuri:import-manifest:v1",
+  "title": "Tezuri import manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "importId",
+    "source",
+    "state",
+    "startedAt",
+    "summary",
+    "articles",
+    "exclusions"
+  ],
+  "properties": {
+    "schema": { "const": "tezuri.import-manifest/v1" },
+    "importId": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/contractId" },
+    "source": { "$ref": "#/$defs/importSource" },
+    "state": {
+      "enum": ["queued", "running", "awaiting-approval", "succeeded", "failed", "cancelled"]
+    },
+    "startedAt": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/utcTimestamp" },
+    "completedAt": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/utcTimestamp" },
+    "summary": { "$ref": "#/$defs/summary" },
+    "articles": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/article" }
+    },
+    "exclusions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/exclusion" }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": { "enum": ["succeeded", "failed", "cancelled"] }
+        },
+        "required": ["state"]
+      },
+      "then": { "required": ["completedAt"] }
+    }
+  ],
+  "$defs": {
+    "importSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "enum": ["substack-feed-archive", "substack-export", "generic-feed", "generic-archive"]
+        },
+        "feedUrl": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/httpUrl" },
+        "archiveUrl": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/httpUrl" },
+        "exportDigest": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/sha256Digest" },
+        "discoveredAt": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/utcTimestamp" }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["discovered", "imported", "skipped", "failed", "reviewRequired"],
+      "properties": {
+        "discovered": { "type": "integer", "minimum": 0 },
+        "imported": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 },
+        "failed": { "type": "integer", "minimum": 0 },
+        "reviewRequired": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "sourceArticle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "url": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/httpUrl" },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "publishedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "sourceDigest": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/sha256Digest" },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "article": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "disposition", "transformations", "warnings", "fidelity", "assets"],
+      "properties": {
+        "source": { "$ref": "#/$defs/sourceArticle" },
+        "disposition": {
+          "enum": ["imported", "skipped", "failed", "review-required"]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "destinationPath": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/repositoryPath" },
+        "resultDigest": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/sha256Digest" },
+        "resultMetadata": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "transformations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/transformation" }
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/warning" }
+        },
+        "fidelity": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/fidelity" }
+        },
+        "assets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/asset" }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "disposition": { "const": "imported" } },
+            "required": ["disposition"]
+          },
+          "then": { "required": ["destinationPath", "resultDigest", "resultMetadata"] }
+        },
+        {
+          "if": {
+            "properties": { "disposition": { "enum": ["skipped", "failed", "review-required"] } },
+            "required": ["disposition"]
+          },
+          "then": { "required": ["reason"] }
+        }
+      ]
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceUrl", "disposition", "transformations", "warnings"],
+      "properties": {
+        "sourceUrl": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/httpUrl" },
+        "sourceDigest": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/sha256Digest" },
+        "disposition": {
+          "enum": ["imported", "skipped", "failed", "review-required"]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "destinationPath": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/repositoryPath" },
+        "resultDigest": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/sha256Digest" },
+        "transformations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/transformation" }
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/warning" }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "disposition": { "const": "imported" } },
+            "required": ["disposition"]
+          },
+          "then": { "required": ["destinationPath", "resultDigest"] }
+        },
+        {
+          "if": {
+            "properties": { "disposition": { "enum": ["skipped", "failed", "review-required"] } },
+            "required": ["disposition"]
+          },
+          "then": { "required": ["reason"] }
+        }
+      ]
+    },
+    "transformation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "detail"],
+      "properties": {
+        "kind": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/stableCode" },
+        "detail": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "sourcePointer": { "type": "string", "maxLength": 1000 },
+        "resultPointer": { "type": "string", "maxLength": 1000 }
+      }
+    },
+    "warning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "severity", "message"],
+      "properties": {
+        "code": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/stableCode" },
+        "severity": { "enum": ["info", "warning", "error"] },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "sourcePointer": { "type": "string", "maxLength": 1000 }
+      }
+    },
+    "fidelity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["area", "state"],
+      "properties": {
+        "area": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/stableCode" },
+        "state": { "enum": ["preserved", "transformed", "degraded", "missing", "unverified"] },
+        "evidence": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      }
+    },
+    "exclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceId", "reason", "reviewedAt", "reviewedBy"],
+      "properties": {
+        "sourceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "reviewedAt": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/utcTimestamp" },
+        "reviewedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      }
+    }
+  }
+}

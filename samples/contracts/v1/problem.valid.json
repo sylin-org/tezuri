@@ -1,0 +1,11 @@
+{
+  "type": "https://tezuri.local/problems/source-conflict",
+  "title": "The article changed outside Tezuri.",
+  "status": 409,
+  "detail": "Reload the current source and review the edit again.",
+  "instance": "/api/v1/articles/article%3Apatina/source-patches",
+  "code": "source-conflict",
+  "currentHash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "retryable": false,
+  "fieldErrors": []
+}

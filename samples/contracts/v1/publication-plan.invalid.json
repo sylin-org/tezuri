@@ -1,0 +1,18 @@
+{
+  "schema": "tezuri.publication-plan/v1",
+  "planId": "publication:plan-invalid",
+  "createdAt": "2026-08-13T15:10:00Z",
+  "workspaceRevision": "working:synthetic-1",
+  "sourceDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "baseCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "branch": "main",
+  "paths": ["../outside.md"],
+  "proof": {
+    "runId": "proof:synthetic-1",
+    "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "status": "passed"
+  },
+  "commitMessage": "feat(writing): escape the repository",
+  "pushRequested": false,
+  "idempotencyKey": "publication-plan-invalid"
+}

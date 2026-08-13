@@ -1,0 +1,162 @@
+name: Release container
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify release source
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  publish:
+    name: Publish and verify multi-platform image
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    env:
+      IMAGE_NAME: ghcr.io/sylin-org/tezuri
+    steps:
+      - name: Check out source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Validate semantic version tag
+        shell: bash
+        run: |
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
+            echo "Release tags must match vMAJOR.MINOR.PATCH or a SemVer prerelease." >&2
+            exit 1
+          fi
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive image metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          flavor: latest=false
+          tags: |
+            type=semver,pattern={{version}}
+            type=sha,format=long,prefix=sha-
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+          labels: |
+            org.opencontainers.image.description=Local-first authoring workspace for Bundling Ways
+            org.opencontainers.image.licenses=Apache-2.0
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            REVISION=${{ github.sha }}
+          sbom: true
+          provenance: mode=max
+
+      - name: Attest published image
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Verify anonymous pull and both architectures
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="${IMAGE_NAME}@${{ steps.build.outputs.digest }}"
+
+          docker logout ghcr.io
+          docker pull "${image}"
+          docker buildx imagetools inspect "${image}" | tee manifest.txt
+          grep -F 'linux/amd64' manifest.txt
+          grep -F 'linux/arm64' manifest.txt
+
+          smoke() {
+            local platform="$1"
+            local port="$2"
+            local suffix="${platform#linux/}"
+            local container="tezuri-release-${suffix}"
+            local workspace="${RUNNER_TEMP}/tezuri-${suffix}"
+            mkdir -p "${workspace}"
+            cp -R samples/folder-native-workspace/. "${workspace}/"
+
+            docker run --detach \
+              --name "${container}" \
+              --platform "${platform}" \
+              --user "$(id -u):$(id -g)" \
+              --read-only \
+              --cap-drop ALL \
+              --security-opt no-new-privileges \
+              --tmpfs /tmp:rw,nosuid,nodev,size=256m,mode=1777 \
+              --tmpfs /app/data:rw,nosuid,nodev,size=64m,mode=1777 \
+              --mount "type=bind,src=${workspace},dst=/workspace" \
+              --publish "127.0.0.1:${port}:8080" \
+              "${image}"
+
+            for attempt in $(seq 1 90); do
+              status="$(docker inspect --format '{{.State.Health.Status}}' "${container}" 2>/dev/null || true)"
+              if [[ "${status}" == healthy ]]; then
+                break
+              fi
+              if [[ "${status}" == unhealthy ]] || \
+                 [[ "$(docker inspect --format '{{.State.Running}}' "${container}")" != true ]]; then
+                docker logs "${container}"
+                docker rm --force "${container}" >/dev/null 2>&1 || true
+                return 1
+              fi
+              sleep 2
+            done
+
+            test "$(docker inspect --format '{{.State.Health.Status}}' "${container}")" = healthy
+            test "$(docker exec "${container}" id -u)" != "0"
+            docker exec "${container}" sh -c \
+              'printf smoke > /workspace/.tezuri-container-smoke'
+            test -f "${workspace}/.tezuri-container-smoke"
+            curl --fail --silent --show-error "http://127.0.0.1:${port}/health/live"
+            curl --fail --silent --show-error "http://127.0.0.1:${port}/health/ready"
+            curl --fail --silent --show-error "http://127.0.0.1:${port}/api/v1/articles" | grep -F 'first-proof'
+            docker rm --force "${container}"
+          }
+
+          trap 'docker rm --force tezuri-release-amd64 tezuri-release-arm64 >/dev/null 2>&1 || true' EXIT
+          smoke linux/amd64 18080
+          smoke linux/arm64 18081

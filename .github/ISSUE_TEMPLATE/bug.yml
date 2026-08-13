@@ -1,0 +1,64 @@
+name: Reproducible defect
+description: Report a bounded Tezuri behavior that can be reproduced without sensitive content.
+title: "bug: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include credentials, private drafts, repository contents, or vulnerability details.
+        Security reports belong in SECURITY.md.
+  - type: input
+    id: revision
+    attributes:
+      label: Tezuri revision or version
+      description: Commit SHA, image digest, or release version.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Expected and actual outcome
+      description: What should have happened, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Use the synthetic sample workspace or a redacted minimal repository.
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - Windows with Docker Desktop
+        - macOS with Docker Desktop
+        - Linux Docker Engine
+        - Source build on Windows
+        - Source build on macOS
+        - Source build on Linux
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redacted evidence
+      description: Relevant status codes, errors, or screenshots after removing sensitive content.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed secrets, credentials, private writing, and unrelated repository content.
+          required: true
+        - label: This is not a vulnerability report; I used SECURITY.md if disclosure should be private.
+          required: true
+

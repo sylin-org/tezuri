@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:sylin:tezuri:editor-hints:v1",
+  "title": "Tezuri editor hints v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "fields"],
+  "properties": {
+    "schema": { "const": "tezuri.editor-hints/v1" },
+    "groups": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/group" }
+    },
+    "fields": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/field" }
+    }
+  },
+  "$defs": {
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label"],
+      "properties": {
+        "id": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/stableCode" },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pointer", "role", "control"],
+      "properties": {
+        "pointer": {
+          "type": "string",
+          "pattern": "^/(?:[^~/]|~0|~1)*(?:/(?:[^~/]|~0|~1)*)*$"
+        },
+        "role": {
+          "enum": [
+            "id",
+            "title",
+            "summary",
+            "slug",
+            "published-on",
+            "updated-on",
+            "publication-state",
+            "editorial-currency",
+            "standing",
+            "tags",
+            "topics",
+            "language",
+            "canonical-url",
+            "cover-asset",
+            "cover-alt",
+            "custom"
+          ]
+        },
+        "customRole": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)+$"
+        },
+        "control": {
+          "enum": [
+            "text",
+            "textarea",
+            "date",
+            "datetime",
+            "select",
+            "multiselect",
+            "tags",
+            "toggle",
+            "asset",
+            "url",
+            "hidden",
+            "readonly"
+          ]
+        },
+        "group": { "$ref": "urn:sylin:tezuri:common:v1#/$defs/stableCode" },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "order": { "type": "integer" },
+        "readOnly": { "type": "boolean" },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["value", "label"],
+            "properties": {
+              "value": { "type": ["string", "number", "boolean"] },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "role": { "const": "custom" } },
+            "required": ["role"]
+          },
+          "then": { "required": ["customRole"] }
+        }
+      ]
+    }
+  }
+}

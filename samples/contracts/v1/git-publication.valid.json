@@ -1,0 +1,16 @@
+{
+  "protocol": "tezuri.git-commit-plan",
+  "version": 1,
+  "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "branch": "main",
+  "planSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "selectedPaths": ["src/writing/patina/index.md"],
+  "changes": [
+    {
+      "path": "src/writing/patina/index.md",
+      "indexStatus": "none",
+      "workTreeStatus": "modified",
+      "allowed": true
+    }
+  ]
+}

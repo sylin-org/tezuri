@@ -1,0 +1,136 @@
+{
+  "version": 2,
+  "dependencies": {
+    "net10.0": {
+      "Sylin.Koan.App": {
+        "type": "Direct",
+        "requested": "[0.20.7, )",
+        "resolved": "0.20.7",
+        "contentHash": "Ad05DcxWuTlbKqE1oPVRs0of9lzkkbIKohRyFIsjy/cvXBHCgj/6M8pp+RGmgTl8MieXlvIvfpEUdIL/Cyp8Gg==",
+        "dependencies": {
+          "Sylin.Koan": "[0.20.7, 0.21.0)",
+          "Sylin.Koan.Web": "[0.20.4, 0.21.0)"
+        }
+      },
+      "Microsoft.AspNetCore.JsonPatch": {
+        "type": "Transitive",
+        "resolved": "10.0.10",
+        "contentHash": "sNPvgAoV/IsK4fS2gYDAqvbK5kMQPCU8h7WjOjxS1f4/0+bGnnZbTJ0ceM8jvMcUanDoNpYRFf+7UDb+s3P1ag==",
+        "dependencies": {
+          "Newtonsoft.Json": "13.0.3"
+        }
+      },
+      "Microsoft.AspNetCore.Mvc.NewtonsoftJson": {
+        "type": "Transitive",
+        "resolved": "10.0.10",
+        "contentHash": "BuigyKPrvORCHyU8Vna7eQMQg6hDNqRQyFGCEa0+QJ8pLL5xcgNpLzaD1eom54Oaxb4mHnPs8MaPKejNL9lTKA==",
+        "dependencies": {
+          "Microsoft.AspNetCore.JsonPatch": "10.0.10",
+          "Newtonsoft.Json": "13.0.3",
+          "Newtonsoft.Json.Bson": "1.0.2"
+        }
+      },
+      "Newtonsoft.Json": {
+        "type": "Transitive",
+        "resolved": "13.0.4",
+        "contentHash": "pdgNNMai3zv51W5aq268sujXUyx7SNdE2bj1wZcWjAQrKMFZV260lbqYop1d2GM67JI1huLRwxo9ZqnfF/lC6A=="
+      },
+      "Newtonsoft.Json.Bson": {
+        "type": "Transitive",
+        "resolved": "1.0.2",
+        "contentHash": "QYFyxhaABwmq3p/21VrZNYvCg3DaEoN/wUuw5nmfAf0X3HLjgupwhkEWdgfb9nvGAUIv3osmZoD3kKl4jxEmYQ==",
+        "dependencies": {
+          "Newtonsoft.Json": "12.0.1"
+        }
+      },
+      "Sylin.Koan": {
+        "type": "Transitive",
+        "resolved": "0.20.7",
+        "contentHash": "OgF5cMK2GRtAMjEPfu7NWWNQUkBHzLMfTIhimgKhKC8AepDujax1ccwXs4TDeYRo6+nmHAM/YN1CU0yKt3tL4g==",
+        "dependencies": {
+          "Sylin.Koan.Communication": "[0.20.6, 0.21.0)",
+          "Sylin.Koan.Core": "[0.20.5, 0.21.0)",
+          "Sylin.Koan.Data.Abstractions": "[0.20.4, 0.21.0)",
+          "Sylin.Koan.Data.Connector.Json": "[0.20.4, 0.21.0)",
+          "Sylin.Koan.Data.Core": "[0.20.4, 0.21.0)"
+        }
+      },
+      "Sylin.Koan.Cache.Abstractions": {
+        "type": "Transitive",
+        "resolved": "0.20.2",
+        "contentHash": "GsTrBiiszmJEy7YuUlHqrtrAyPKdlGbjkrxjPQNJamOSeWpLcI2XDa/pHsCFEbcwUMmvrKjSChd62nfyGP4rfw==",
+        "dependencies": {
+          "Sylin.Koan.Core": "[0.20.5, 0.21.0)"
+        }
+      },
+      "Sylin.Koan.Communication": {
+        "type": "Transitive",
+        "resolved": "0.20.6",
+        "contentHash": "bdj8+nEN2NdPuUEAFMG7SRNKxlSaDKeu4np22sb7xguc/B3kEpZEDVTQo8UM8bcHF2JSIwmZ135xQt8p1lN6hw==",
+        "dependencies": {
+          "Sylin.Koan.Core": "[0.20.5, 0.21.0)",
+          "Sylin.Koan.Data.Abstractions": "[0.20.4, 0.21.0)",
+          "Sylin.Koan.Data.Core": "[0.20.4, 0.21.0)"
+        }
+      },
+      "Sylin.Koan.Core": {
+        "type": "Transitive",
+        "resolved": "0.20.5",
+        "contentHash": "BBUfzDHR15spKF0UzHbQ8EM75TRwiFX6cnA5G1oBBAo7zcwQEt9pyFun0vvHTsxLVBpHgt/dKpV3onQEt4D9UQ==",
+        "dependencies": {
+          "Newtonsoft.Json": "13.0.4"
+        }
+      },
+      "Sylin.Koan.Data.Abstractions": {
+        "type": "Transitive",
+        "resolved": "0.20.4",
+        "contentHash": "UTmJP9iTne36lMuVlxhHTyzx8EH2m1G3lSHu4M8nh+YKELZpMIiDLkCJyV35Zq3ZOkeF6fLG86TD06xmqgcJwg==",
+        "dependencies": {
+          "Newtonsoft.Json": "13.0.4",
+          "Sylin.Koan.Core": "[0.20.5, 0.21.0)"
+        }
+      },
+      "Sylin.Koan.Data.Connector.Json": {
+        "type": "Transitive",
+        "resolved": "0.20.4",
+        "contentHash": "QkIMBzNAJS7c9WIXrMFH4dzB3T7n1Dl2wUlF32ialmCACcjafzRzPqEOAdo1SJ5/qtzlDynhvzmk2W9wRkhaJw==",
+        "dependencies": {
+          "Newtonsoft.Json": "13.0.4",
+          "Sylin.Koan.Core": "[0.20.5, 0.21.0)",
+          "Sylin.Koan.Data.Abstractions": "[0.20.4, 0.21.0)",
+          "Sylin.Koan.Data.Core": "[0.20.4, 0.21.0)"
+        }
+      },
+      "Sylin.Koan.Data.Core": {
+        "type": "Transitive",
+        "resolved": "0.20.4",
+        "contentHash": "98IWQGaeQRQUsFJFzbEfG2trmejL+uJSzFX2qM2h3BvqUJQ8d+MqLE8vkvzmxDsQrFZtBVL9VXa2ZMsz1YdWiw==",
+        "dependencies": {
+          "Sylin.Koan.Cache.Abstractions": "[0.20.2, 0.21.0)",
+          "Sylin.Koan.Core": "[0.20.5, 0.21.0)",
+          "Sylin.Koan.Data.Abstractions": "[0.20.4, 0.21.0)"
+        }
+      },
+      "Sylin.Koan.Web": {
+        "type": "Transitive",
+        "resolved": "0.20.4",
+        "contentHash": "gEHw3TiYJgCbAxELr1ADU+jdBcUbFkhA6/+nzufqUo9phctqA/Jsiu502Akt4X7K1Vmr9Waf0zakd/EYml943Q==",
+        "dependencies": {
+          "Microsoft.AspNetCore.Mvc.NewtonsoftJson": "10.0.10",
+          "Sylin.Koan.Core": "[0.20.5, 0.21.0)",
+          "Sylin.Koan.Data.Abstractions": "[0.20.4, 0.21.0)",
+          "Sylin.Koan.Data.Core": "[0.20.4, 0.21.0)"
+        }
+      },
+      "tezuri.domain": {
+        "type": "Project"
+      },
+      "tezuri.infrastructure": {
+        "type": "Project",
+        "dependencies": {
+          "Tezuri.Domain": "[1.0.0, )"
+        }
+      }
+    }
+  }
+}

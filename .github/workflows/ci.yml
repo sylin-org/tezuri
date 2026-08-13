@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Restore, build, test, and smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Check out source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24.18.0
+          cache: npm
+          cache-dependency-path: src/Tezuri.App/ClientApp/package-lock.json
+
+      - name: Restore locked .NET dependencies
+        run: dotnet restore Tezuri.sln --locked-mode
+
+      - name: Install locked client dependencies
+        working-directory: src/Tezuri.App/ClientApp
+        run: npm ci --no-audit --no-fund
+
+      - name: Check and build client
+        working-directory: src/Tezuri.App/ClientApp
+        run: |
+          npm run check
+          npm test
+          npm run build
+
+      - name: Build .NET solution
+        run: dotnet build Tezuri.sln --configuration Release --no-restore
+
+      - name: Test .NET solution
+        run: dotnet test Tezuri.sln --configuration Release --no-build --no-restore
+
+      - name: Verify repository contracts and formatting
+        run: |
+          dotnet format Tezuri.sln --verify-no-changes --no-restore
+          node eng/verify-repository.mjs
+          git diff --check
+
+      - name: Build container image
+        run: >-
+          docker build
+          --build-arg REVISION=${GITHUB_SHA}
+          --tag tezuri-ci:${GITHUB_SHA}
+          .
+
+      - name: Reject high or critical container vulnerabilities
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+        with:
+          image: tezuri-ci:${{ github.sha }}
+          fail-build: true
+          severity-cutoff: high
+          output-format: table
+
+      - name: Smoke container as a non-root user
+        shell: bash
+        run: |
+          set -euo pipefail
+          container=tezuri-ci-smoke
+          workspace="${RUNNER_TEMP}/tezuri-workspace"
+          mkdir -p "${workspace}"
+          cp -R samples/folder-native-workspace/. "${workspace}/"
+
+          cleanup() {
+            docker rm --force "${container}" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          test "$(docker image inspect --format '{{.Config.User}}' "tezuri-ci:${GITHUB_SHA}")" = "app"
+
+          docker run --detach \
+            --name "${container}" \
+            --platform linux/amd64 \
+            --user "$(id -u):$(id -g)" \
+            --read-only \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --tmpfs /tmp:rw,nosuid,nodev,size=256m,mode=1777 \
+            --tmpfs /app/data:rw,nosuid,nodev,size=64m,mode=1777 \
+            --mount "type=bind,src=${workspace},dst=/workspace" \
+            --publish 127.0.0.1:18080:8080 \
+            "tezuri-ci:${GITHUB_SHA}"
+
+          test "$(docker exec "${container}" id -u)" != "0"
+          docker exec "${container}" sh -c \
+            'printf smoke > /workspace/.tezuri-container-smoke'
+          test -f "${workspace}/.tezuri-container-smoke"
+
+          for attempt in $(seq 1 60); do
+            status="$(docker inspect --format '{{.State.Health.Status}}' "${container}" 2>/dev/null || true)"
+            if [[ "${status}" == healthy ]]; then
+              break
+            fi
+            if [[ "${status}" == unhealthy ]] || \
+               [[ "$(docker inspect --format '{{.State.Running}}' "${container}")" != true ]]; then
+              docker logs "${container}"
+              exit 1
+            fi
+            sleep 2
+          done
+
+          test "$(docker inspect --format '{{.State.Health.Status}}' "${container}")" = healthy
+          curl --fail --silent --show-error http://127.0.0.1:18080/health/live
+          curl --fail --silent --show-error http://127.0.0.1:18080/health/ready
+          curl --fail --silent --show-error http://127.0.0.1:18080/api/v1/articles | grep -F 'first-proof'

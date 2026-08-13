@@ -1,0 +1,17 @@
+{
+  "cases": [
+    { "schema": "tezuri-workspace-v1.schema.json", "valid": "workspace.valid.json", "invalid": "workspace.invalid.json" },
+    { "schema": "tezuri-article-metadata-v1.schema.json", "valid": "article-metadata.valid.json", "invalid": "article-metadata.invalid.json" },
+    { "schema": "tezuri-editor-hints-v1.schema.json", "valid": "editor-hints.valid.json", "invalid": "editor-hints.invalid.json" },
+    { "schema": "tezuri-media-manifest-v1.schema.json", "valid": "media-manifest.valid.json", "invalid": "media-manifest.invalid.json" },
+    { "schema": "tezuri-import-manifest-v1.schema.json", "valid": "import-manifest.valid.json", "invalid": "import-manifest.invalid.json" },
+    { "schema": "tezuri-operation-v1.schema.json", "valid": "operation.valid.json", "invalid": "operation.invalid.json" },
+    { "schema": "tezuri-problem-v1.schema.json", "valid": "problem.valid.json", "invalid": "problem.invalid.json" },
+    { "schema": "tezuri-site-proof-v1.schema.json", "valid": "site-proof.valid.json", "invalid": "site-proof.invalid.json" },
+    { "schema": "tezuri-publication-v1.schema.json", "valid": "publication-plan.valid.json", "invalid": "publication-plan.invalid.json" },
+    { "schema": "tezuri-publication-v1.schema.json", "valid": "publication-receipt.valid.json", "invalid": "publication-receipt.invalid.json" },
+    { "schema": "tezuri-article-source-v1.schema.json", "valid": "article-source.valid.json", "invalid": "article-source.invalid.json" },
+    { "schema": "tezuri-media-asset-v1.schema.json", "valid": "media-asset.valid.json", "invalid": "media-asset.invalid.json" },
+    { "schema": "tezuri-git-publication-v1.schema.json", "valid": "git-publication.valid.json", "invalid": "git-publication.invalid.json" }
+  ]
+}
