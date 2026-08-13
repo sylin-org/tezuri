@@ -4,11 +4,11 @@
     "net10.0": {
       "Sylin.Koan.App": {
         "type": "Direct",
-        "requested": "[0.20.7, )",
-        "resolved": "0.20.7",
-        "contentHash": "Ad05DcxWuTlbKqE1oPVRs0of9lzkkbIKohRyFIsjy/cvXBHCgj/6M8pp+RGmgTl8MieXlvIvfpEUdIL/Cyp8Gg==",
+        "requested": "[0.20.10, )",
+        "resolved": "0.20.10",
+        "contentHash": "SmKA/PNEvm+FPsy9jgwMhJUud9+TN/9AOK9QVDgxZsLKl3A94MPX6Yk0kuh1i05DB7wmR0e2mPvj40pEsngcEg==",
         "dependencies": {
-          "Sylin.Koan": "[0.20.7, 0.21.0)",
+          "Sylin.Koan": "[0.20.10, 0.21.0)",
           "Sylin.Koan.Web": "[0.20.4, 0.21.0)"
         }
       },
@@ -45,14 +45,14 @@
       },
       "Sylin.Koan": {
         "type": "Transitive",
-        "resolved": "0.20.7",
-        "contentHash": "OgF5cMK2GRtAMjEPfu7NWWNQUkBHzLMfTIhimgKhKC8AepDujax1ccwXs4TDeYRo6+nmHAM/YN1CU0yKt3tL4g==",
+        "resolved": "0.20.10",
+        "contentHash": "TGj2owyy46C8ec7vtTbcikx1PiBv0ykpJHm2MXA5zsWGcYrnzqsIE9yLf8QmZLf2H7mrX3Nwh2a/Un1dfT2ZVw==",
         "dependencies": {
           "Sylin.Koan.Communication": "[0.20.6, 0.21.0)",
-          "Sylin.Koan.Core": "[0.20.5, 0.21.0)",
-          "Sylin.Koan.Data.Abstractions": "[0.20.4, 0.21.0)",
-          "Sylin.Koan.Data.Connector.Json": "[0.20.4, 0.21.0)",
-          "Sylin.Koan.Data.Core": "[0.20.4, 0.21.0)"
+          "Sylin.Koan.Core": "[0.20.7, 0.21.0)",
+          "Sylin.Koan.Data.Abstractions": "[0.21.0, 0.22.0)",
+          "Sylin.Koan.Data.Connector.Json": "[0.21.0, 0.22.0)",
+          "Sylin.Koan.Data.Core": "[0.21.0, 0.22.0)"
         }
       },
       "Sylin.Koan.Cache.Abstractions": {
@@ -75,40 +75,40 @@
       },
       "Sylin.Koan.Core": {
         "type": "Transitive",
-        "resolved": "0.20.5",
-        "contentHash": "BBUfzDHR15spKF0UzHbQ8EM75TRwiFX6cnA5G1oBBAo7zcwQEt9pyFun0vvHTsxLVBpHgt/dKpV3onQEt4D9UQ==",
+        "resolved": "0.20.7",
+        "contentHash": "AId5LRH3iYlU+7DVHJiYraZ4wkoNfQvueSU+JPzTuHsCFWJVNITef0jeB+DcfjPWFPwa9MM2D9S3SYoh53pF9Q==",
         "dependencies": {
           "Newtonsoft.Json": "13.0.4"
         }
       },
       "Sylin.Koan.Data.Abstractions": {
         "type": "Transitive",
-        "resolved": "0.20.4",
-        "contentHash": "UTmJP9iTne36lMuVlxhHTyzx8EH2m1G3lSHu4M8nh+YKELZpMIiDLkCJyV35Zq3ZOkeF6fLG86TD06xmqgcJwg==",
+        "resolved": "0.21.0",
+        "contentHash": "s61Mq/n9Nmq/vA3Sqk4RfKW8SzYAtxmTIIInjWUynpL6+8rJd1Za7kmIyLyMqtr0whfwDjWpeOkANs0RcRXeKg==",
         "dependencies": {
           "Newtonsoft.Json": "13.0.4",
-          "Sylin.Koan.Core": "[0.20.5, 0.21.0)"
+          "Sylin.Koan.Core": "[0.20.7, 0.21.0)"
         }
       },
       "Sylin.Koan.Data.Connector.Json": {
         "type": "Transitive",
-        "resolved": "0.20.4",
-        "contentHash": "QkIMBzNAJS7c9WIXrMFH4dzB3T7n1Dl2wUlF32ialmCACcjafzRzPqEOAdo1SJ5/qtzlDynhvzmk2W9wRkhaJw==",
+        "resolved": "0.21.0",
+        "contentHash": "0zMgPreRNBwCNONFtW/QMaepDszbMEoaCu7M8VIMJRt83euc7ltflClHBVZ28AQNAMinbblcw2C96ZiKiEkEJw==",
         "dependencies": {
           "Newtonsoft.Json": "13.0.4",
-          "Sylin.Koan.Core": "[0.20.5, 0.21.0)",
-          "Sylin.Koan.Data.Abstractions": "[0.20.4, 0.21.0)",
-          "Sylin.Koan.Data.Core": "[0.20.4, 0.21.0)"
+          "Sylin.Koan.Core": "[0.20.7, 0.21.0)",
+          "Sylin.Koan.Data.Abstractions": "[0.21.0, 0.22.0)",
+          "Sylin.Koan.Data.Core": "[0.21.0, 0.22.0)"
         }
       },
       "Sylin.Koan.Data.Core": {
         "type": "Transitive",
-        "resolved": "0.20.4",
-        "contentHash": "98IWQGaeQRQUsFJFzbEfG2trmejL+uJSzFX2qM2h3BvqUJQ8d+MqLE8vkvzmxDsQrFZtBVL9VXa2ZMsz1YdWiw==",
+        "resolved": "0.21.0",
+        "contentHash": "aXOIxQQof6Rp82n9t45LCmUFzyQ55HlSbm2Ml7u2Y2MYveVZFOyvLqDoSqy7nuy+7DfxBHb17MGY7c+LxDKeJw==",
         "dependencies": {
           "Sylin.Koan.Cache.Abstractions": "[0.20.2, 0.21.0)",
-          "Sylin.Koan.Core": "[0.20.5, 0.21.0)",
-          "Sylin.Koan.Data.Abstractions": "[0.20.4, 0.21.0)"
+          "Sylin.Koan.Core": "[0.20.7, 0.21.0)",
+          "Sylin.Koan.Data.Abstractions": "[0.21.0, 0.22.0)"
         }
       },
       "Sylin.Koan.Web": {
