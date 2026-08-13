@@ -14,7 +14,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@milkdown/kit": "7.21.3"
+    "@milkdown/kit": "7.22.0"
   },
   "devDependencies": {
     "typescript": "6.0.2",
