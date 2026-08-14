@@ -28,20 +28,18 @@ public sealed class GitPublicationService : IDisposable
     };
 
     private readonly WorkspacePathGuard _workspace;
-    private readonly WorkspaceConfigurationV1 _configuration;
-    private readonly WorkspaceConfigurationValidator _validator;
+    private readonly IReadOnlyList<string> _allowedPaths;
     private readonly GitCommandRunner _commands;
     private readonly SemaphoreSlim _operationGate = new(1, 1);
 
     public GitPublicationService(
         WorkspacePathGuard workspace,
-        WorkspaceConfigurationV1 configuration,
-        WorkspaceConfigurationValidator validator,
+        WorkspaceSettings settings,
         GitCommandRunner commands)
     {
+        ArgumentNullException.ThrowIfNull(settings);
         _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
-        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
-        _validator = validator ?? throw new ArgumentNullException(nameof(validator));
+        _allowedPaths = settings.AllowedPaths;
         _commands = commands ?? throw new ArgumentNullException(nameof(commands));
     }
 
@@ -372,7 +370,6 @@ public sealed class GitPublicationService : IDisposable
 
     private async Task EnsureRepositoryAsync(CancellationToken cancellationToken)
     {
-        _validator.EnsureValid(_configuration);
         var root = new DirectoryInfo(_workspace.Root);
         if (!root.Exists || root.LinkTarget is not null ||
             (root.Attributes & FileAttributes.ReparsePoint) != 0)
@@ -686,6 +683,9 @@ public sealed class GitPublicationService : IDisposable
 
     private void EnsureSafeSelectedPath(string path)
     {
+        // This ordering is the containment guarantee, not the allow-list. A path that traverses,
+        // escapes, or names .git is refused here regardless of what any pattern permits, so the
+        // allow-list only ever narrows an already-safe set.
         if (!IsPortableRepositoryPath(path))
         {
             throw new GitPublicationException(
@@ -697,7 +697,7 @@ public sealed class GitPublicationService : IDisposable
         {
             throw new GitPublicationException(
                 GitPublicationFailure.InvalidRequest,
-                "A selected path is outside git.allowedPaths in tezuri.yaml.");
+                "A selected path is outside the paths this workspace allows Tezuri to commit.");
         }
 
         try
@@ -713,7 +713,7 @@ public sealed class GitPublicationService : IDisposable
     }
 
     private bool IsAllowed(string path) =>
-        _configuration.Git.AllowedPaths.Any(pattern => GitAllowedPathMatcher.IsMatch(pattern, path));
+        _allowedPaths.Any(pattern => GitAllowedPathMatcher.IsMatch(pattern, path));
 
     private static bool IsPortableRepositoryPath(string path)
     {

@@ -242,7 +242,7 @@ internal sealed class SubstackExportReader(WorkspacePathGuard workspace)
             !StringComparer.Ordinal.Equals(Sha256(bytes), file.Sha256))
         {
             throw new SubstackImportException(
-                SubstackImportFailure.PlanChanged,
+                SubstackImportFailure.ExportChanged,
                 $"Export file '{file.RelativePath}' changed while it was being inspected.");
         }
 

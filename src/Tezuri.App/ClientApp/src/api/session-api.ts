@@ -1,20 +1,11 @@
 import { HttpTezuriApi, type TezuriApi } from './tezuri-api'
+import { resolveLaunchNonce, type NonceStorage } from './launch-nonce'
 
 /**
- * The bootstrap nonce is accepted once from the launch URL and removed from browser history before
- * the application performs any request.
- *
- * It is then held for the lifetime of this browser tab in `sessionStorage`. Keeping it only in a
- * module variable meant an ordinary page refresh silently downgraded the whole application to
- * read-only, with no way back except finding the launch URL again — the most common way to lose
- * access to your own editor. Session storage is origin-scoped and dies with the tab, and any script
- * able to read it could already have issued requests with the in-memory value, so this restores the
- * refresh without widening the boundary. It is still never written to durable storage, a cookie, or
- * the repository.
+ * Binds the pure nonce resolution in `launch-nonce.ts` to this tab: read the launch URL, scrub it
+ * from history before any request goes out, and keep the value for the lifetime of the tab.
  */
-const SESSION_NONCE_KEY = 'tezuri.launch-nonce'
-
-const launchNonce = resolveLaunchNonce()
+const launchNonce = bindLaunchNonce()
 export const hasLaunchNonce = launchNonce !== undefined
 export const sessionApi: TezuriApi = new HttpTezuriApi(
   launchNonce === undefined ? {} : { nonce: launchNonce },
@@ -63,47 +54,18 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
   return body as T
 }
 
-function resolveLaunchNonce(): string | undefined {
-  const fromUrl = consumeLaunchNonce()
-  if (fromUrl !== undefined) {
-    remember(fromUrl)
-    return fromUrl
-  }
-
-  return recall()
-}
-
-function consumeLaunchNonce(): string | undefined {
-  const launchUrl = new URL(window.location.href)
-  if (!launchUrl.searchParams.has('nonce')) {
-    return undefined
-  }
-
-  const nonce = launchUrl.searchParams.get('nonce') ?? undefined
-  launchUrl.searchParams.delete('nonce')
-  window.history.replaceState(
-    window.history.state,
-    '',
-    `${launchUrl.pathname}${launchUrl.search}${launchUrl.hash}`,
-  )
-
-  return nonce === '' ? undefined : nonce
-}
-
-function remember(nonce: string): void {
+function bindLaunchNonce(): string | undefined {
+  let storage: NonceStorage | undefined
   try {
-    window.sessionStorage.setItem(SESSION_NONCE_KEY, nonce)
+    storage = window.sessionStorage
   } catch {
-    // Private modes and storage-partitioned contexts can refuse. The tab still works; only a
-    // refresh loses authority, which is the behaviour this replaced.
+    storage = undefined
   }
-}
 
-function recall(): string | undefined {
-  try {
-    const stored = window.sessionStorage.getItem(SESSION_NONCE_KEY)
-    return stored === null || stored === '' ? undefined : stored
-  } catch {
-    return undefined
+  const resolved = resolveLaunchNonce(window.location.href, storage)
+  if (resolved.scrubbedUrl !== undefined) {
+    window.history.replaceState(window.history.state, '', resolved.scrubbedUrl)
   }
+
+  return resolved.nonce
 }

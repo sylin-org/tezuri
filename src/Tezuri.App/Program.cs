@@ -11,7 +11,8 @@ var builder = WebApplication.CreateBuilder(args);
 // can be switched.
 builder.Configuration["Koan:Data:Sources:Default:Adapter"] = "json";
 builder.Configuration["Koan:Data:Sources:Default:json:Layout"] = "IndividualFiles";
-builder.Configuration["Koan:Data:Sources:Default:json:IndividualFilePath"] = "{id}/article.json";
+builder.Configuration["Koan:Data:Sources:Default:json:IndividualFilePath"] =
+    $"{{id}}/{WorkspaceLayout.ArticleDocumentFileName}";
 
 builder.Services.AddSingleton<SelectedWorkspace>();
 builder.Services.AddKoan();

@@ -73,11 +73,11 @@ dotnet run --project src/Tezuri.App/Tezuri.App.csproj
 
 ## Workspace contract
 
-Tezuri reads a committed `tezuri.yaml` at the repository root. The versioned schema is
-[`schemas/tezuri-workspace-v1.schema.json`](schemas/tezuri-workspace-v1.schema.json), and a complete
+Tezuri needs no configuration file. Layout is convention, and the remaining settings — media policy,
+the Proof command, and the paths Git publication may touch — have working defaults. A complete
 minimal repository is in [`samples/folder-native-workspace`](samples/folder-native-workspace).
 
-The V1 article layout is configurable but folder-native:
+The article layout is folder-native:
 
 ```text
 tezuri.yaml
@@ -104,11 +104,9 @@ Eleventy for sylin.org—owns publishable HTML, feeds, discovery files, and soci
 - `src/Tezuri.Domain` contains versioned source/media/proof/publication contracts.
 - `src/Tezuri.Infrastructure` owns guarded filesystem and process adapters.
 - `src/Tezuri.App` is the .NET 10 Koan host and bundled TypeScript/Milkdown client.
-- `tests` contains contract, filesystem, configuration, and host integration suites.
-- `schemas` and `samples` are committed interoperability artifacts.
+- `tests/Tezuri.Tests` is the single suite: filesystem, publication, proof, import, and host.
+- `samples` holds a committed example workspace.
 - [`docs`](docs/README.md) separates product truth, architecture, decisions, operations, and evidence.
-- [`docs/contracts`](docs/contracts/README.md) owns serialized authority, semantic vocabularies, and
-  compatible-evolution rules.
 
 The host deliberately uses only `builder.Services.AddKoan()`. App-owned security joins Koan through
 its supported pre-routing pipeline contributor; Tezuri does not depend on `.AsWebApi()` or a Koan

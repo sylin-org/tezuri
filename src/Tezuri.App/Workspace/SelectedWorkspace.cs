@@ -20,7 +20,9 @@ public sealed class SelectedWorkspace(IConfiguration configuration)
     public string Root => _root ??= Normalize(configuration["TEZURI_WORKSPACE"] ?? DefaultRoot);
 
     /// <summary>Where article documents and their folders live inside the selected repository.</summary>
-    public string ArticleRoot => Path.Combine(Root, "src", "writing");
+    public string ArticleRoot => Path.Combine(
+        Root,
+        WorkspaceLayout.ContentRoot.Replace('/', Path.DirectorySeparatorChar));
 
     private static string Normalize(string root) =>
         Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));

@@ -13,10 +13,9 @@ namespace Tezuri.Articles;
 /// </summary>
 public sealed class ArticleMarkdownWriter(WorkspacePathGuard paths, AtomicFileWriter writer)
 {
-    private const string ArticleRoot = "src/writing";
     private static readonly UTF8Encoding Utf8NoBom = new(false);
 
-    public string RelativePathFor(string articleId) => $"{ArticleRoot}/{articleId}/index.md";
+    public string RelativePathFor(string articleId) => WorkspaceLayout.RenderedArticle(articleId);
 
     public async Task WriteAsync(Article article, CancellationToken cancellationToken)
     {

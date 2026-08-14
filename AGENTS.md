@@ -10,10 +10,8 @@ the start of a new session; do not use it for transient task notes.
 3. [`docs/architecture/README.md`](docs/architecture/README.md) and
    [`docs/architecture/THREAT-MODEL.md`](docs/architecture/THREAT-MODEL.md).
 4. [`docs/decisions/README.md`](docs/decisions/README.md) plus ADRs relevant to the change.
-5. [`docs/contracts/README.md`](docs/contracts/README.md) before adding or changing persisted or wire
-   shapes.
-6. [`docs/operations/TESTING.md`](docs/operations/TESTING.md) and the nearest existing code/test.
-7. [`docs/MEMORY.md`](docs/MEMORY.md) for standing preferences, durable learnings, and the index of
+5. [`docs/operations/TESTING.md`](docs/operations/TESTING.md) and the nearest existing code/test.
+6. [`docs/MEMORY.md`](docs/MEMORY.md) for standing preferences, durable learnings, and the index of
    which document owns which subject.
 
 Working notes that must not be committed — environment paths, credential *locations*, session

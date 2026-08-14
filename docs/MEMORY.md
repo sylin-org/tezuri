@@ -47,6 +47,18 @@ gitignored. See [`local/README.md`](../local/README.md).
 - Configuration read from `builder.Configuration` at host-build time cannot be overridden by
   `WebApplicationFactory`, whose `ConfigureAppConfiguration` runs later. Resolve runtime-selected
   values lazily.
+- Koan's static entity facade (`Article.All`, `Article.Upsert`) binds to the host that built it, so
+  two `WebApplicationFactory` instances alive at once will not stay separate. Tests that touch
+  articles share one host through the `tezuri-host` xUnit collection and isolate themselves with
+  unique slugs instead.
+- **Idempotence can replace a protocol.** The Substack importer used to carry plan digests, an
+  `If-Match` preview/apply handshake, a staging tree, atomic directory moves, and a committed
+  manifest — roughly 1,100 lines — so that a re-run could not damage anything. Making the apply step
+  skip any article that already exists gives the same guarantee in one `Directory.Exists` check.
+  When a mechanism exists to make an operation safe to repeat, ask whether the operation can simply
+  be repeatable.
+- `node --test <dir>` is resolved as a module path and fails; `node --test` with no positional
+  argument discovers `**/*.test.ts` correctly and skips `node_modules`.
 
 ## Index
 

@@ -18,9 +18,6 @@ document owns which subject. Start there when you are not sure where something l
 - [Architecture map](architecture/README.md)
 - [Workspace and publication](architecture/WORKSPACE-AND-PUBLICATION.md)
 - [Threat model](architecture/THREAT-MODEL.md)
-- [Public contract catalog](contracts/README.md)
-- [Article and media profile](contracts/ARTICLE-AND-MEDIA-PROFILE-V1.md)
-- [API and compatibility profile](contracts/API-AND-COMPATIBILITY-V1.md)
 - [Architecture decision records](decisions/README.md)
 - [ADR template](decisions/ADR-TEMPLATE.md)
 

@@ -271,28 +271,18 @@ public sealed class ArticleMediaStoreTests
         long maximumAssetBytes = 1_048_576,
         IReadOnlyList<string>? allowedExtensions = null)
     {
-        var contract = WorkspaceContract.Default;
-        var configuration = new WorkspaceConfigurationV1(
-            WorkspaceConfigurationV1.SchemaName,
-            new SiteConfiguration("https://example.test"),
-            new ArticleLayoutConfiguration(
-                contract.ContentRoot,
-                contract.ArticleFileName,
-                contract.MediaDirectoryName,
-                "schemas/article-v1.schema.json"),
-            new MediaPolicyConfiguration(
-                RequireOwnedAssets: true,
-                MaximumAssetBytes: maximumAssetBytes,
-                AllowedExtensions: allowedExtensions ?? [".png"]),
-            new ProofConfiguration(
-                ".",
-                [new ProofCommandConfiguration("test", "npm", ["test"], 300, "dist")]),
-            new GitPublicationConfiguration(["src/writing/**"]));
+        var settings = new WorkspaceSettings
+        {
+            Media = new MediaPolicy
+            {
+                MaximumAssetBytes = maximumAssetBytes,
+                AllowedExtensions = allowedExtensions ?? [".png"]
+            }
+        };
 
         return new ArticleMediaStore(
             new WorkspacePathGuard(root),
-            contract,
-            configuration,
+            settings,
             new AtomicFileWriter());
     }
 

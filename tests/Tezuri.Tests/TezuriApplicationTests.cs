@@ -12,7 +12,8 @@ using Tezuri.Security;
 
 namespace Tezuri.App.Tests;
 
-public sealed class TezuriApplicationTests : IClassFixture<TezuriApplicationFactory>
+[Collection(TezuriHostCollection.Name)]
+public sealed class TezuriApplicationTests
 {
     private readonly TezuriApplicationFactory _factory;
     private readonly HttpClient _client;
@@ -145,85 +146,5 @@ public sealed class TezuriApplicationTests : IClassFixture<TezuriApplicationFact
         Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
         Assert.Contains("frame-ancestors 'none'", response.Headers.GetValues("Content-Security-Policy").Single());
         Assert.Equal("no-referrer", response.Headers.GetValues("Referrer-Policy").Single());
-    }
-}
-
-public sealed class TezuriApplicationFactory : WebApplicationFactory<Program>
-{
-    private readonly string _safeParent = Path.Combine(Path.GetTempPath(), "tezuri-app-tests");
-
-    public TezuriApplicationFactory()
-    {
-        WorkspaceRoot = Path.Combine(_safeParent, Guid.NewGuid().ToString("N"));
-        var articleDirectory = Path.Combine(WorkspaceRoot, "src", "writing", "patina");
-        Directory.CreateDirectory(articleDirectory);
-        File.WriteAllText(
-            Path.Combine(articleDirectory, "index.md"),
-            "---\ntitle: Patina\n---\n\nA kept paragraph.\n",
-            new UTF8Encoding(false));
-        File.WriteAllText(
-            Path.Combine(WorkspaceRoot, "tezuri.yaml"),
-            """
-            schema: tezuri.workspace/v1
-            site:
-              url: https://example.test
-            articles:
-              root: src/writing
-              fileName: index.md
-              mediaDirectory: media
-              metadataSchema: schemas/article-v1.schema.json
-            media:
-              requireOwnedAssets: true
-              maximumAssetBytes: 26214400
-              allowedExtensions:
-                - .png
-            proof:
-              workingDirectory: .
-              commands:
-                - id: site-test
-                  executable: npm
-                  arguments:
-                    - test
-                  timeoutSeconds: 300
-                  outputDirectory: dist
-            git:
-              allowedPaths:
-                - src/writing/**
-            """,
-            new UTF8Encoding(false));
-    }
-
-    public string WorkspaceRoot { get; }
-
-    protected override void ConfigureWebHost(IWebHostBuilder builder)
-    {
-        builder.UseSetting(WebHostDefaults.StaticWebAssetsKey, string.Empty);
-        builder.ConfigureLogging(logging => logging.ClearProviders());
-        builder.ConfigureAppConfiguration((_, configuration) =>
-            configuration.AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["TEZURI_WORKSPACE"] = WorkspaceRoot
-            }));
-    }
-
-    protected override void Dispose(bool disposing)
-    {
-        base.Dispose(disposing);
-        if (!disposing)
-        {
-            return;
-        }
-
-        var resolved = Path.GetFullPath(WorkspaceRoot);
-        var expectedParent = Path.GetFullPath(_safeParent) + Path.DirectorySeparatorChar;
-        if (resolved.StartsWith(
-                expectedParent,
-                OperatingSystem.IsWindows()
-                    ? StringComparison.OrdinalIgnoreCase
-                    : StringComparison.Ordinal) &&
-            Directory.Exists(resolved))
-        {
-            Directory.Delete(resolved, recursive: true);
-        }
     }
 }

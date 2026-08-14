@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Koan.Web.Hosting;
 using Koan.Web.Options;
 using Tezuri.Workspace;
@@ -32,31 +33,23 @@ public sealed class TezuriModule : KoanModule
             ServiceDescriptor.Singleton<IKoanWebPipelineContributor, TezuriSecurityPipelineContributor>());
         services.AddSingleton(BootstrapNonce.Create());
         services.AddSingleton(sp => new WorkspacePathGuard(
-            sp.GetRequiredService<Tezuri.Workspace.SelectedWorkspace>().Root));
-        services.AddSingleton<WorkspaceConfigurationParser>();
-        services.AddSingleton<WorkspaceConfigurationValidator>();
-        services.AddSingleton<WorkspaceConfigurationLoader>();
-        services.AddSingleton(sp => sp
-            .GetRequiredService<WorkspaceConfigurationLoader>()
-            .LoadAsync(sp.GetRequiredService<WorkspacePathGuard>())
-            .GetAwaiter()
-            .GetResult());
-        services.AddSingleton(sp => sp.GetRequiredService<WorkspaceConfigurationV1>().ToWorkspaceContract());
+            sp.GetRequiredService<SelectedWorkspace>().Root));
+
+        // Layout is convention (WorkspaceLayout); only the media policy, the proof command, and the
+        // committable paths are choices, and each ships with a working default.
+        services.AddOptions<WorkspaceSettings>().BindConfiguration("Tezuri");
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<IOptions<WorkspaceSettings>>().Value);
+
         services.AddSingleton<AtomicFileWriter>();
         services.AddSingleton<ArticleMarkdownWriter>();
         services.AddSingleton<ArticleMediaStore>();
-        services.AddSingleton(sp => new SubstackImporter(
-            sp.GetRequiredService<WorkspacePathGuard>(),
-            sp.GetRequiredService<WorkspaceContract>(),
-            sp.GetRequiredService<WorkspaceConfigurationV1>(),
-            sp.GetRequiredService<AtomicFileWriter>(),
-            TimeProvider.System));
+        services.AddSingleton<SubstackImporter>();
         services.AddSingleton<GitCommandRunner>();
         services.AddSingleton<GitPublicationService>();
         services.AddSingleton(sp => new SiteProofRunner(
             sp.GetRequiredService<WorkspacePathGuard>(),
-            sp.GetRequiredService<WorkspaceConfigurationV1>(),
-            sp.GetRequiredService<WorkspaceConfigurationValidator>()));
+            sp.GetRequiredService<WorkspaceSettings>()));
     }
 
     public override void Report(

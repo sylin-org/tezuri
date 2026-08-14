@@ -23,5 +23,4 @@ security headers. This is Koan's supported ordering seam; Program-level middlewa
 sit after its mapped controller endpoints.
 
 Read [workspace and publication](WORKSPACE-AND-PUBLICATION.md), the [threat model](THREAT-MODEL.md),
-the [public contract catalog](../contracts/README.md), and the [ADR index](../decisions/README.md)
-before changing authority or boundaries.
+and the [ADR index](../decisions/README.md) before changing authority or boundaries.

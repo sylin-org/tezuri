@@ -73,20 +73,67 @@ public sealed class SiteProofRunnerTests
     {
         using var temporary = new TemporaryProofWorkspace();
         temporary.Write("source.txt", "original");
-        var configuration = Configuration(
-            [Command("site-proof", [FixtureAssembly, "isolate"])],
-            workingDirectory: "../outside");
         using var runner = new SiteProofRunner(
             new WorkspacePathGuard(temporary.WorkspaceRoot),
-            configuration,
-            new WorkspaceConfigurationValidator(),
+            Settings([Command("site-proof", [FixtureAssembly, "isolate"])], workingDirectory: "../outside"),
             temporary.ProofRoot);
 
-        var error = await Assert.ThrowsAsync<WorkspaceConfigurationValidationException>(() =>
+        var error = await Assert.ThrowsAsync<SiteProofException>(() =>
             runner.RunAsync(TestContext.Current.CancellationToken));
 
-        Assert.Contains(error.Issues, issue => issue.Path == "proof.workingDirectory");
+        Assert.Contains("working directory", error.Message, StringComparison.Ordinal);
         Assert.Equal("original", temporary.Read("source.txt"));
+        AssertNoTemporaryRuns(temporary);
+    }
+
+    /// <summary>
+    /// Tezuri never runs a proof command through a shell, so naming one as the executable would put
+    /// every argument back into shell syntax. This refusal is the reason that cannot happen.
+    /// </summary>
+    [Theory]
+    [InlineData("sh")]
+    [InlineData("bash")]
+    [InlineData("cmd.exe")]
+    [InlineData("pwsh")]
+    [InlineData("powershell.exe")]
+    [InlineData("tools/zsh")]
+    public async Task RejectsShellInterpretersAsProofExecutables(string executable)
+    {
+        using var temporary = new TemporaryProofWorkspace();
+        temporary.Write("source.txt", "original");
+        using var runner = new SiteProofRunner(
+            new WorkspacePathGuard(temporary.WorkspaceRoot),
+            Settings([new ProofCommand
+            {
+                Id = "site-test",
+                Executable = executable,
+                Arguments = ["-c", "npm test"],
+                TimeoutSeconds = 60,
+                OutputDirectory = "dist"
+            }]),
+            temporary.ProofRoot);
+
+        var error = await Assert.ThrowsAsync<SiteProofException>(() =>
+            runner.RunAsync(TestContext.Current.CancellationToken));
+
+        Assert.Contains("shell interpreter", error.Message, StringComparison.Ordinal);
+        Assert.Equal("original", temporary.Read("source.txt"));
+        AssertNoTemporaryRuns(temporary);
+    }
+
+    [Fact]
+    public async Task RejectsAnUnboundedCommandTimeoutBeforeCreatingACopy()
+    {
+        using var temporary = new TemporaryProofWorkspace();
+        temporary.Write("source.txt", "original");
+        using var runner = new SiteProofRunner(
+            new WorkspacePathGuard(temporary.WorkspaceRoot),
+            Settings([Command("site-proof", [FixtureAssembly, "isolate"], timeoutSeconds: 0)]),
+            temporary.ProofRoot);
+
+        await Assert.ThrowsAsync<SiteProofException>(() =>
+            runner.RunAsync(TestContext.Current.CancellationToken));
+
         AssertNoTemporaryRuns(temporary);
     }
 
@@ -131,32 +178,34 @@ public sealed class SiteProofRunnerTests
 
     private static SiteProofRunner CreateRunner(
         TemporaryProofWorkspace temporary,
-        IReadOnlyList<ProofCommandConfiguration> commands) => new(
+        IReadOnlyList<ProofCommand> commands) => new(
         new WorkspacePathGuard(temporary.WorkspaceRoot),
-        Configuration(commands),
-        new WorkspaceConfigurationValidator(),
+        Settings(commands),
         temporary.ProofRoot);
 
-    private static ProofCommandConfiguration Command(
+    private static ProofCommand Command(
         string id,
         IReadOnlyList<string> arguments,
         int timeoutSeconds = 30,
-        string? outputDirectory = null) => new(
-        id,
-        "dotnet",
-        arguments,
-        timeoutSeconds,
-        outputDirectory);
+        string? outputDirectory = null) => new()
+        {
+            Id = id,
+            Executable = "dotnet",
+            Arguments = arguments,
+            TimeoutSeconds = timeoutSeconds,
+            OutputDirectory = outputDirectory
+        };
 
-    private static WorkspaceConfigurationV1 Configuration(
-        IReadOnlyList<ProofCommandConfiguration> commands,
-        string workingDirectory = ".") => new(
-        WorkspaceConfigurationV1.SchemaName,
-        new SiteConfiguration("https://example.test"),
-        new ArticleLayoutConfiguration("src/writing", "index.md", "media", "schemas/article.json"),
-        new MediaPolicyConfiguration(true, 1_024, [".png"]),
-        new ProofConfiguration(workingDirectory, commands),
-        new GitPublicationConfiguration(["src/writing/**"]));
+    private static WorkspaceSettings Settings(
+        IReadOnlyList<ProofCommand> commands,
+        string workingDirectory = ".") => new()
+        {
+            Proof = new ProofSettings
+            {
+                WorkingDirectory = workingDirectory,
+                Commands = commands
+            }
+        };
 
     private static void AssertNoTemporaryRuns(TemporaryProofWorkspace temporary) =>
         Assert.Empty(Directory.EnumerateFileSystemEntries(temporary.ProofRoot));

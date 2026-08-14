@@ -354,20 +354,9 @@ public sealed class GitPublicationServiceTests
         var paths = new WorkspacePathGuard(root);
         return new GitPublicationService(
             paths,
-            Configuration(),
-            new WorkspaceConfigurationValidator(),
+            new WorkspaceSettings { AllowedPaths = ["content/**"] },
             new GitCommandRunner(paths));
     }
-
-    private static WorkspaceConfigurationV1 Configuration() => new(
-        WorkspaceConfigurationV1.SchemaName,
-        new SiteConfiguration("https://example.test"),
-        new ArticleLayoutConfiguration("content", "index.md", "media", "schemas/article.json"),
-        new MediaPolicyConfiguration(true, 1_024, [".png"]),
-        new ProofConfiguration(
-            ".",
-            [new ProofCommandConfiguration("test", "dotnet", ["test"], 300, "dist")]),
-        new GitPublicationConfiguration(["content/**"]));
 
     private sealed class TemporaryGitRepository : IDisposable
     {

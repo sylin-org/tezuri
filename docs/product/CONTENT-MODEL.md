@@ -2,13 +2,13 @@
 
 ## Workspace
 
-A workspace is one mounted Git-capable repository containing a versioned `tezuri.yaml`. V1 validates
-a deterministic YAML subset and the public JSON Schema at
-[`schemas/tezuri-workspace-v1.schema.json`](../../schemas/tezuri-workspace-v1.schema.json).
+A workspace is one Git-capable repository Tezuri has been pointed at. Its layout is convention, not
+configuration: articles live in `src/writing/<slug>/`, each holding `article.json`, a generated
+`index.md`, and a `media/` directory. See `Workspace/WorkspaceLayout.cs`.
 
-Configuration names the public site URL, folder-native article layout, metadata schema, owned-media
-policy, trusted Proof executable/argument arrays, and Git paths Tezuri may prepare. All repository
-paths are relative, portable, canonicalized, and containment-checked.
+The only settings left are the media policy, the Proof executable/argument arrays, and the paths Git
+publication may touch. Each ships with a working default, and all repository paths are relative,
+portable, canonicalized, and containment-checked.
 
 ## Article
 

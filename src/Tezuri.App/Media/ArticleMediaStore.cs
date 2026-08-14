@@ -5,10 +5,14 @@ using Tezuri.Workspace;
 
 namespace Tezuri.Media;
 
+/// <summary>
+/// Article-owned images. Every asset lands in <c>media/</c> beside the article that displays it,
+/// named by its own SHA-256, so the same bytes uploaded twice are one file and a folder can be moved
+/// or committed with everything it needs.
+/// </summary>
 public sealed class ArticleMediaStore(
     WorkspacePathGuard paths,
-    WorkspaceContract contract,
-    WorkspaceConfigurationV1 configuration,
+    WorkspaceSettings settings,
     AtomicFileWriter writer)
 {
     private const int ReadBufferBytes = 81_920;
@@ -36,7 +40,7 @@ public sealed class ArticleMediaStore(
             [".webp"] = new("image/webp", IsCompleteWebp)
         };
 
-    private readonly MediaPolicyConfiguration _policy = configuration.Media;
+    private readonly MediaPolicy _policy = settings.Media;
 
     public Task<MediaAssetReceiptV1> IngestAsync(
         string articleId,
@@ -60,7 +64,6 @@ public sealed class ArticleMediaStore(
 
     public ArticleMediaFile? Find(string articleId, string storedFileName)
     {
-        EnsureValidContract();
         EnsurePortableArticleId(articleId);
         var extension = EnsureSupportedFileName(storedFileName);
         var contentHash = Path.GetFileNameWithoutExtension(storedFileName);
@@ -73,28 +76,10 @@ public sealed class ArticleMediaStore(
                 "Stored media names must use Tezuri's lowercase SHA-256 content name.");
         }
 
-        var articleDirectory = paths.Resolve(Path.Combine(contract.ContentRoot, articleId));
-        var articleSourcePath = paths.Resolve(Path.Combine(
-            contract.ContentRoot,
-            articleId,
-            contract.ArticleFileName));
-        if (!File.Exists(articleSourcePath))
-        {
-            throw new MediaAssetException(
-                MediaAssetFailure.ArticleNotFound,
-                $"Article '{articleId}' does not exist in the configured workspace.");
-        }
-
-        var mediaDirectory = paths.Resolve(Path.Combine(
-            contract.ContentRoot,
-            articleId,
-            contract.MediaDirectoryName));
+        var articleDirectory = EnsureArticleDirectory(articleId);
+        var mediaDirectory = paths.Resolve(WorkspaceLayout.MediaFolder(articleId));
         EnsureDirectChild(articleDirectory, mediaDirectory, "The media directory must be owned by the article.");
-        var absolutePath = paths.Resolve(Path.Combine(
-            contract.ContentRoot,
-            articleId,
-            contract.MediaDirectoryName,
-            storedFileName));
+        var absolutePath = paths.Resolve(WorkspaceLayout.MediaFile(articleId, storedFileName));
         EnsureDirectChild(mediaDirectory, absolutePath, "Media files must stay in the article media directory.");
 
         return File.Exists(absolutePath)
@@ -124,7 +109,6 @@ public sealed class ArticleMediaStore(
         Stream content,
         CancellationToken cancellationToken)
     {
-        EnsureValidContract();
         EnsurePortableArticleId(articleId);
         var extension = EnsureSupportedFileName(originalFileName);
 
@@ -135,22 +119,8 @@ public sealed class ArticleMediaStore(
                 "The uploaded media stream is not readable.");
         }
 
-        var articleDirectory = paths.Resolve(Path.Combine(contract.ContentRoot, articleId));
-        var articleSourcePath = paths.Resolve(Path.Combine(
-            contract.ContentRoot,
-            articleId,
-            contract.ArticleFileName));
-        if (!File.Exists(articleSourcePath))
-        {
-            throw new MediaAssetException(
-                MediaAssetFailure.ArticleNotFound,
-                $"Article '{articleId}' does not exist in the configured workspace.");
-        }
-
-        var mediaDirectory = paths.Resolve(Path.Combine(
-            contract.ContentRoot,
-            articleId,
-            contract.MediaDirectoryName));
+        var articleDirectory = EnsureArticleDirectory(articleId);
+        var mediaDirectory = paths.Resolve(WorkspaceLayout.MediaFolder(articleId));
         EnsureDirectChild(articleDirectory, mediaDirectory, "The media directory must be owned by the article.");
 
         var bytes = await ReadBoundedAsync(content, cancellationToken);
@@ -164,12 +134,7 @@ public sealed class ArticleMediaStore(
 
         var sha256 = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
         var storedFileName = sha256 + extension;
-        var relativePath = Path.Combine(
-                contract.ContentRoot,
-                articleId,
-                contract.MediaDirectoryName,
-                storedFileName)
-            .Replace('\\', '/');
+        var relativePath = WorkspaceLayout.MediaFile(articleId, storedFileName);
         var targetPath = paths.Resolve(relativePath);
         EnsureDirectChild(mediaDirectory, targetPath, "Media files must stay in the article media directory.");
 
@@ -196,12 +161,9 @@ public sealed class ArticleMediaStore(
             throw Collision(relativePath);
         }
 
-        var stagingRelativePath = Path.Combine(
-                contract.ContentRoot,
-                articleId,
-                contract.MediaDirectoryName,
-                $".tezuri-{Guid.NewGuid():N}.upload")
-            .Replace('\\', '/');
+        var stagingRelativePath = WorkspaceLayout.MediaFile(
+            articleId,
+            $".tezuri-{Guid.NewGuid():N}.upload");
         var stagingPath = paths.Resolve(stagingRelativePath);
         EnsureDirectChild(mediaDirectory, stagingPath, "Media staging files must stay in the article media directory.");
 
@@ -328,21 +290,21 @@ public sealed class ArticleMediaStore(
         return extension;
     }
 
-    private void EnsureValidContract()
+    /// <summary>
+    /// An article is its folder. Media can only be written into one that already exists, so an
+    /// upload naming an article nobody created cannot bring a directory into being.
+    /// </summary>
+    private string EnsureArticleDirectory(string articleId)
     {
-        if (!_policy.RequireOwnedAssets)
+        var articleDirectory = paths.Resolve(WorkspaceLayout.ArticleFolder(articleId));
+        if (!Directory.Exists(articleDirectory))
         {
-            throw new InvalidOperationException("The V1 media store requires article-owned assets.");
+            throw new MediaAssetException(
+                MediaAssetFailure.ArticleNotFound,
+                $"Article '{articleId}' does not exist in this workspace.");
         }
 
-        var articleFileStem = Path.GetFileName(contract.ArticleFileName).Split('.', 2)[0];
-        if (!IsPortableSegment(contract.MediaDirectoryName) ||
-            ReservedFileNames.Contains(contract.MediaDirectoryName) ||
-            !StringComparer.Ordinal.Equals(contract.ArticleFileName, Path.GetFileName(contract.ArticleFileName)) ||
-            ReservedFileNames.Contains(articleFileStem))
-        {
-            throw new InvalidOperationException("The workspace contract does not define an article-local media layout.");
-        }
+        return articleDirectory;
     }
 
     private static void EnsurePortableArticleId(string articleId)

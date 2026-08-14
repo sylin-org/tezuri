@@ -37,12 +37,8 @@
       "id": "Sylin.Koan.App"
     },
     {
-      "kind": "project",
-      "id": "Tezuri.Domain"
-    },
-    {
-      "kind": "project",
-      "id": "Tezuri.Infrastructure"
+      "kind": "package",
+      "id": "Sylin.Koan.Data.Core"
     }
   ]
 }

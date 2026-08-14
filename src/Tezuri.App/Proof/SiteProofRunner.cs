@@ -22,20 +22,18 @@ public sealed class SiteProofRunner : IDisposable
         TimeSpan.FromMilliseconds(250));
 
     private readonly WorkspacePathGuard _workspace;
-    private readonly WorkspaceConfigurationV1 _configuration;
-    private readonly WorkspaceConfigurationValidator _validator;
+    private readonly ProofSettings _proof;
     private readonly string _temporaryParent;
     private readonly SemaphoreSlim _runGate = new(1, 1);
 
     public SiteProofRunner(
         WorkspacePathGuard workspace,
-        WorkspaceConfigurationV1 configuration,
-        WorkspaceConfigurationValidator validator,
+        WorkspaceSettings settings,
         string? temporaryParent = null)
     {
+        ArgumentNullException.ThrowIfNull(settings);
         _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
-        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
-        _validator = validator ?? throw new ArgumentNullException(nameof(validator));
+        _proof = settings.Proof;
         _temporaryParent = Path.GetFullPath(
             temporaryParent ?? Path.Combine(Path.GetTempPath(), "tezuri-proof-runs"));
 
@@ -49,7 +47,8 @@ public sealed class SiteProofRunner : IDisposable
 
     public async Task<SiteProofRunReceiptV1> RunAsync(CancellationToken cancellationToken = default)
     {
-        _validator.EnsureValid(_configuration);
+        // Before a byte is copied: no shell interpreter, no escaping path, no unbounded timeout.
+        ProofSettingsGuard.EnsureRunnable(_proof);
         await _runGate.WaitAsync(cancellationToken);
         try
         {
@@ -81,16 +80,16 @@ public sealed class SiteProofRunner : IDisposable
                 cancellationToken: cancellationToken);
             var workingDirectory = ResolveContained(
                 isolatedRoot,
-                _configuration.Proof.WorkingDirectory);
+                _proof.WorkingDirectory);
             if (!Directory.Exists(workingDirectory))
             {
                 throw new SiteProofException(
-                    $"Configured proof working directory '{_configuration.Proof.WorkingDirectory}' does not exist.");
+                    $"Configured proof working directory '{_proof.WorkingDirectory}' does not exist.");
             }
 
             var commandResults = new List<SiteProofCommandResultV1>(
-                _configuration.Proof.Commands.Count);
-            foreach (var command in _configuration.Proof.Commands)
+                _proof.Commands.Count);
+            foreach (var command in _proof.Commands)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var result = await ExecuteCommandAsync(
@@ -105,7 +104,7 @@ public sealed class SiteProofRunner : IDisposable
                 }
             }
 
-            var succeeded = commandResults.Count == _configuration.Proof.Commands.Count &&
+            var succeeded = commandResults.Count == _proof.Commands.Count &&
                             commandResults.All(result =>
                                 StringComparer.Ordinal.Equals(result.Status, SiteProofProtocolV1.Passed));
             var status = succeeded ? SiteProofProtocolV1.Passed : SiteProofProtocolV1.Failed;
@@ -120,7 +119,7 @@ public sealed class SiteProofRunner : IDisposable
                 new SiteProofProgressV1(
                     status,
                     commandResults.Count,
-                    _configuration.Proof.Commands.Count,
+                    _proof.Commands.Count,
                     CurrentCommandId: null),
                 new SiteProofResultV1(succeeded, commandResults));
         }
@@ -131,7 +130,7 @@ public sealed class SiteProofRunner : IDisposable
     }
 
     private async Task<SiteProofCommandResultV1> ExecuteCommandAsync(
-        ProofCommandConfiguration command,
+        ProofCommand command,
         string isolatedRoot,
         string workingDirectory,
         CancellationToken cancellationToken)
@@ -237,7 +236,7 @@ public sealed class SiteProofRunner : IDisposable
     }
 
     private SiteProofCommandResultV1 CreateStartFailure(
-        ProofCommandConfiguration command,
+        ProofCommand command,
         string isolatedRoot,
         string workingDirectory,
         DateTimeOffset startedAt,
@@ -359,7 +358,7 @@ public sealed class SiteProofRunner : IDisposable
     }
 
     private static OutputDirectoryState DescribeOutput(
-        ProofCommandConfiguration command,
+        ProofCommand command,
         string isolatedRoot,
         string workingDirectory)
     {
@@ -384,16 +383,16 @@ public sealed class SiteProofRunner : IDisposable
     private HashSet<string> GetConfiguredOutputPaths()
     {
         var outputs = new HashSet<string>(StringComparerForPlatform);
-        foreach (var command in _configuration.Proof.Commands)
+        foreach (var command in _proof.Commands)
         {
             if (command.OutputDirectory is null)
             {
                 continue;
             }
 
-            var path = _configuration.Proof.WorkingDirectory == "."
+            var path = _proof.WorkingDirectory == "."
                 ? command.OutputDirectory
-                : $"{_configuration.Proof.WorkingDirectory}/{command.OutputDirectory}";
+                : $"{_proof.WorkingDirectory}/{command.OutputDirectory}";
             outputs.Add(path);
         }
 
