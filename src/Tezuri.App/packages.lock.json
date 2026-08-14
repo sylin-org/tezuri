@@ -83,7 +83,13 @@
       "Sylin.Koan.Communication": {
         "type": "Transitive",
         "resolved": "1.0.0",
-        "contentHash": "/JG3KBVJQVTglqxVkTT+di43jGiRivhb+hH0p+PUdV2EZUZJKd6soGUb4R65swqWkrxxbEYHuff4x6TdL7cTzw=="
+        "contentHash": "EL/1mRF1aOq5Z+zfkpYDn5ay8hUttS5BGREdPHAKlQdcEqmQoQN/f92k5mnjNMH5bTNcn/W4k+YXr5E1gnAqLQ==",
+        "dependencies": {
+          "Newtonsoft.Json": "13.0.4",
+          "Sylin.Koan.Core": "[1.0.0, 2.0.0)",
+          "Sylin.Koan.Data.Abstractions": "[1.0.0, 2.0.0)",
+          "Sylin.Koan.Data.Core": "[1.0.0, 2.0.0)"
+        }
       },
       "Sylin.Koan.Core": {
         "type": "Transitive",

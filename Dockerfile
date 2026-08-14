@@ -29,10 +29,6 @@ COPY global.json Directory.Build.props Directory.Packages.props ./
 COPY src/Tezuri.App/Tezuri.App.csproj \
      src/Tezuri.App/packages.lock.json \
      src/Tezuri.App/koan.lock.json ./src/Tezuri.App/
-COPY src/Tezuri.Domain/Tezuri.Domain.csproj \
-     src/Tezuri.Domain/packages.lock.json ./src/Tezuri.Domain/
-COPY src/Tezuri.Infrastructure/Tezuri.Infrastructure.csproj \
-     src/Tezuri.Infrastructure/packages.lock.json ./src/Tezuri.Infrastructure/
 
 RUN dotnet restore src/Tezuri.App/Tezuri.App.csproj --locked-mode
 
