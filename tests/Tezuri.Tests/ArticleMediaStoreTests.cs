@@ -1,10 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Tezuri.Media;
-using Tezuri.Workspace;
 
-namespace Tezuri.Media.Tests;
+namespace Tezuri.Tests;
 
 public sealed class ArticleMediaStoreTests
 {
@@ -26,8 +24,6 @@ public sealed class ArticleMediaStoreTests
 
         var expectedFileName = expectedSha256 + ".png";
         var expectedRelativePath = $"src/writing/patina/media/{expectedFileName}";
-        Assert.Equal(MediaAssetProtocolV1.Receipt, receipt.Protocol);
-        Assert.Equal(MediaAssetProtocolV1.Version, receipt.Version);
         Assert.Equal("patina", receipt.ArticleId);
         Assert.Equal("cover.png", receipt.OriginalFileName);
         Assert.Equal(expectedFileName, receipt.FileName);
@@ -248,9 +244,7 @@ public sealed class ArticleMediaStoreTests
     [Fact]
     public void ReceiptRoundTripsAsJson()
     {
-        var receipt = new MediaAssetReceiptV1(
-            MediaAssetProtocolV1.Receipt,
-            MediaAssetProtocolV1.Version,
+        var receipt = new MediaAssetReceipt(
             "patina",
             "cover.png",
             "abc.png",
@@ -261,7 +255,7 @@ public sealed class ArticleMediaStoreTests
             false);
 
         var json = JsonSerializer.Serialize(receipt);
-        var roundTrip = JsonSerializer.Deserialize<MediaAssetReceiptV1>(json);
+        var roundTrip = JsonSerializer.Deserialize<MediaAssetReceipt>(json);
 
         Assert.Equal(receipt, roundTrip);
     }

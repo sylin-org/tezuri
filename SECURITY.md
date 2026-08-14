@@ -25,14 +25,16 @@ a response or remediation SLA.
 
 ## Scope
 
-The current threat boundary is documented in
-[`docs/architecture/THREAT-MODEL.md`](docs/architecture/THREAT-MODEL.md). Reports are particularly
-useful for workspace/symlink escape, DNS rebinding or CSRF bypass, unsafe imported markup, arbitrary
-command execution, credential leakage, Git history damage, dependency or image compromise, and
-cross-workspace data exposure.
+Tezuri is local, single-user software. It binds loopback only, requires a per-launch nonce for every
+mutation, and writes only inside the repository you chose. The boundary and the decisions behind it
+are in [`docs/DECISIONS.md`](docs/DECISIONS.md) and [`README.md`](README.md).
+
+Reports are particularly useful for workspace or symlink escape, DNS rebinding or CSRF bypass,
+unsafe imported markup, arbitrary command execution, credential leakage, Git history damage, and
+dependency compromise.
 
 Tezuri is intentionally a loopback single-user tool, not an authenticated multi-user service. Do
-not expose its container port to a LAN or the public Internet. Social engineering, unsupported public
+not expose its loopback port to a LAN or the public Internet. Social engineering, unsupported public
 deployment, and vulnerabilities that require a user to deliberately replace trusted `tezuri.yaml`
 with an untrusted executable configuration may fall outside the supported boundary, though defense-
 in-depth reports are still welcome.

@@ -1,10 +1,8 @@
 using System.Text;
-using Tezuri.Proof;
-using Tezuri.Workspace;
 
-namespace Tezuri.Proof.Tests;
+namespace Tezuri.Tests;
 
-public sealed class SiteProofRunnerTests
+public sealed class ProofRunnerTests
 {
     private static readonly string FixtureAssembly = Path.Combine(
         AppContext.BaseDirectory,
@@ -27,13 +25,11 @@ public sealed class SiteProofRunnerTests
 
         var receipt = await runner.RunAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(SiteProofProtocolV1.RunReceipt, receipt.Protocol);
-        Assert.Equal(SiteProofProtocolV1.Version, receipt.Version);
-        Assert.Equal(SiteProofProtocolV1.Passed, receipt.Status);
+        Assert.Equal(ProofStatus.Passed, receipt.Status);
         Assert.True(receipt.Result.Succeeded);
         Assert.Equal(1, receipt.Progress.CompletedCommands);
         var result = Assert.Single(receipt.Result.Commands);
-        Assert.Equal(SiteProofProtocolV1.Passed, result.Status);
+        Assert.Equal(ProofStatus.Passed, result.Status);
         Assert.Equal(0, result.ExitCode);
         Assert.Equal("proof-output", result.OutputDirectory);
         Assert.True(result.OutputDirectoryExists);
@@ -59,9 +55,9 @@ public sealed class SiteProofRunnerTests
         var receipt = await runner.RunAsync(TestContext.Current.CancellationToken);
 
         Assert.False(receipt.Result.Succeeded);
-        Assert.Equal(SiteProofProtocolV1.Failed, receipt.Status);
+        Assert.Equal(ProofStatus.Failed, receipt.Status);
         var result = Assert.Single(receipt.Result.Commands);
-        Assert.Equal(SiteProofProtocolV1.TimedOut, result.Status);
+        Assert.Equal(ProofStatus.TimedOut, result.Status);
         Assert.True(result.TimedOut);
         Assert.Null(result.ExitCode);
         Assert.Equal("original", temporary.Read("source.txt"));
@@ -73,12 +69,12 @@ public sealed class SiteProofRunnerTests
     {
         using var temporary = new TemporaryProofWorkspace();
         temporary.Write("source.txt", "original");
-        using var runner = new SiteProofRunner(
+        using var runner = new ProofRunner(
             new WorkspacePathGuard(temporary.WorkspaceRoot),
             Settings([Command("site-proof", [FixtureAssembly, "isolate"])], workingDirectory: "../outside"),
             temporary.ProofRoot);
 
-        var error = await Assert.ThrowsAsync<SiteProofException>(() =>
+        var error = await Assert.ThrowsAsync<ProofException>(() =>
             runner.RunAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains("working directory", error.Message, StringComparison.Ordinal);
@@ -101,7 +97,7 @@ public sealed class SiteProofRunnerTests
     {
         using var temporary = new TemporaryProofWorkspace();
         temporary.Write("source.txt", "original");
-        using var runner = new SiteProofRunner(
+        using var runner = new ProofRunner(
             new WorkspacePathGuard(temporary.WorkspaceRoot),
             Settings([new ProofCommand
             {
@@ -113,7 +109,7 @@ public sealed class SiteProofRunnerTests
             }]),
             temporary.ProofRoot);
 
-        var error = await Assert.ThrowsAsync<SiteProofException>(() =>
+        var error = await Assert.ThrowsAsync<ProofException>(() =>
             runner.RunAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains("shell interpreter", error.Message, StringComparison.Ordinal);
@@ -126,12 +122,12 @@ public sealed class SiteProofRunnerTests
     {
         using var temporary = new TemporaryProofWorkspace();
         temporary.Write("source.txt", "original");
-        using var runner = new SiteProofRunner(
+        using var runner = new ProofRunner(
             new WorkspacePathGuard(temporary.WorkspaceRoot),
             Settings([Command("site-proof", [FixtureAssembly, "isolate"], timeoutSeconds: 0)]),
             temporary.ProofRoot);
 
-        await Assert.ThrowsAsync<SiteProofException>(() =>
+        await Assert.ThrowsAsync<ProofException>(() =>
             runner.RunAsync(TestContext.Current.CancellationToken));
 
         AssertNoTemporaryRuns(temporary);
@@ -168,7 +164,7 @@ public sealed class SiteProofRunnerTests
 
         var result = Assert.Single(receipt.Result.Commands);
         Assert.True(result.StandardOutputTruncated);
-        Assert.True(result.StandardOutput.Length <= SiteProofRunner.MaximumCapturedCharacters);
+        Assert.True(result.StandardOutput.Length <= ProofRunner.MaximumCapturedCharacters);
         Assert.DoesNotContain("super-secret", result.StandardOutput, StringComparison.Ordinal);
         Assert.DoesNotContain("hunter2", result.StandardError, StringComparison.Ordinal);
         Assert.Contains("[REDACTED]", result.StandardOutput, StringComparison.Ordinal);
@@ -176,7 +172,7 @@ public sealed class SiteProofRunnerTests
         AssertNoTemporaryRuns(temporary);
     }
 
-    private static SiteProofRunner CreateRunner(
+    private static ProofRunner CreateRunner(
         TemporaryProofWorkspace temporary,
         IReadOnlyList<ProofCommand> commands) => new(
         new WorkspacePathGuard(temporary.WorkspaceRoot),

@@ -16,16 +16,10 @@ try {
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         npm run check
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        npx vite build --outDir=.verification-dist
+        npm run build
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     }
-    finally {
-        $verificationOutput = Join-Path (Get-Location) '.verification-dist'
-        if (Test-Path -LiteralPath $verificationOutput) {
-            Remove-Item -LiteralPath $verificationOutput -Recurse -Force
-        }
-        Pop-Location
-    }
+    finally { Pop-Location }
 
     dotnet format Tezuri.slnx --verify-no-changes --no-restore
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

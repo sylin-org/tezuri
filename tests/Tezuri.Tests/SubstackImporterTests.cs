@@ -1,11 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
-using Tezuri.App.Tests;
-using Tezuri.Articles;
-using Tezuri.Import;
 
-namespace Tezuri.Import.Tests;
+namespace Tezuri.Tests;
 
 /// <summary>
 /// The importer creates Koan entities, so it runs inside the shared host rather than against a bare

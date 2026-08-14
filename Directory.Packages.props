@@ -7,6 +7,8 @@
   <ItemGroup>
     <PackageVersion Include="Sylin.Koan.App" Version="1.0.0" />
     <PackageVersion Include="Sylin.Koan.Data.Core" Version="1.0.0" />
+    <PackageVersion Include="Photino.NET" Version="4.0.16" />
+    <PackageVersion Include="Microsoft.Extensions.FileProviders.Embedded" Version="10.0.10" />
 
     <!-- Test packages stay centralized so every test layer resolves one exact toolchain. -->
     <PackageVersion Include="coverlet.collector" Version="10.0.1" />

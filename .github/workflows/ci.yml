@@ -65,69 +65,47 @@ jobs:
           node eng/verify-repository.mjs
           git diff --check
 
-      - name: Build container image
+      - name: Publish the desktop executable
         run: >-
-          docker build
-          --build-arg REVISION=${GITHUB_SHA}
-          --tag tezuri-ci:${GITHUB_SHA}
-          .
+          dotnet publish src/Tezuri.App/Tezuri.App.csproj
+          --configuration Release
+          --runtime linux-x64
+          --self-contained
+          -p:PublishSingleFile=true
+          --output ${{ runner.temp }}/tezuri-publish
 
-      - name: Reject high or critical container vulnerabilities
-        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
-        with:
-          image: tezuri-ci:${{ github.sha }}
-          fail-build: true
-          severity-cutoff: high
-          output-format: table
-
-      - name: Smoke container as a non-root user
+      - name: The published artifact must need no runtime installed
         shell: bash
         run: |
           set -euo pipefail
-          container=tezuri-ci-smoke
+          test -x "${RUNNER_TEMP}/tezuri-publish/Tezuri.App"
+          ! ls "${RUNNER_TEMP}/tezuri-publish"/*.deps.json >/dev/null 2>&1
+
+      - name: Smoke the published executable against a real repository
+        shell: bash
+        run: |
+          set -euo pipefail
           workspace="${RUNNER_TEMP}/tezuri-workspace"
           mkdir -p "${workspace}"
           cp -R samples/folder-native-workspace/. "${workspace}/"
+          git -C "${workspace}" init --quiet
 
-          cleanup() {
-            docker rm --force "${container}" >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
+          TEZURI_WORKSPACE="${workspace}"             "${RUNNER_TEMP}/tezuri-publish/Tezuri.App" --server > "${RUNNER_TEMP}/tezuri.log" 2>&1 &
+          server=$!
+          trap 'kill "${server}" 2>/dev/null || true' EXIT
 
-          test "$(docker image inspect --format '{{.Config.User}}' "tezuri-ci:${GITHUB_SHA}")" = "app"
-
-          docker run --detach \
-            --name "${container}" \
-            --platform linux/amd64 \
-            --user "$(id -u):$(id -g)" \
-            --read-only \
-            --cap-drop ALL \
-            --security-opt no-new-privileges \
-            --tmpfs /tmp:rw,nosuid,nodev,size=256m,mode=1777 \
-            --tmpfs /app/data:rw,nosuid,nodev,size=64m,mode=1777 \
-            --mount "type=bind,src=${workspace},dst=/workspace" \
-            --publish 127.0.0.1:18080:8080 \
-            "tezuri-ci:${GITHUB_SHA}"
-
-          test "$(docker exec "${container}" id -u)" != "0"
-          docker exec "${container}" sh -c \
-            'printf smoke > /workspace/.tezuri-container-smoke'
-          test -f "${workspace}/.tezuri-container-smoke"
-
-          for attempt in $(seq 1 60); do
-            status="$(docker inspect --format '{{.State.Health.Status}}' "${container}" 2>/dev/null || true)"
-            if [[ "${status}" == healthy ]]; then
-              break
-            fi
-            if [[ "${status}" == unhealthy ]] || \
-               [[ "$(docker inspect --format '{{.State.Running}}' "${container}")" != true ]]; then
-              docker logs "${container}"
-              exit 1
-            fi
-            sleep 2
+          for _ in $(seq 1 60); do
+            origin="$(grep -oE 'http://127\.0\.0\.1:[0-9]+' "${RUNNER_TEMP}/tezuri.log" | head -1 || true)"
+            [[ -n "${origin}" ]] && break
+            sleep 1
           done
+          test -n "${origin}"
 
-          test "$(docker inspect --format '{{.State.Health.Status}}' "${container}")" = healthy
-          curl --fail --silent --show-error http://127.0.0.1:18080/health/live
-          curl --fail --silent --show-error http://127.0.0.1:18080/health/ready
-          curl --fail --silent --show-error http://127.0.0.1:18080/api/v1/articles | grep -F 'first-proof'
+          nonce="$(grep -oE 'nonce=[A-Za-z0-9_-]+' "${RUNNER_TEMP}/tezuri.log" | head -1 | cut -d= -f2)"
+          test -n "${nonce}"
+
+          curl --fail --silent --show-error "${origin}/api/v1/articles" > /dev/null
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}'             --request POST --header 'Content-Type: application/json'             --data '{"title":"Unauthorised"}' "${origin}/api/v1/articles")" = 403
+          curl --fail --silent --show-error --request POST             --header 'Content-Type: application/json'             --header "X-Tezuri-Nonce: ${nonce}"             --data '{"title":"CI Smoke"}' "${origin}/api/v1/articles" > /dev/null
+          test -f "${workspace}/src/writing/ci-smoke/article.json"
+          test -f "${workspace}/src/writing/ci-smoke/index.md"

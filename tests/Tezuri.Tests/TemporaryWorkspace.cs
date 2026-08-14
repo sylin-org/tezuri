@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Tezuri.Infrastructure.Tests.Workspace;
+namespace Tezuri.Tests;
 
 /// <summary>
 /// A disposable workspace root under the system temp directory. Disposal refuses to delete anything

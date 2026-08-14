@@ -1,10 +1,8 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
-using Tezuri.Publishing;
-using Tezuri.Workspace;
 
-namespace Tezuri.Git.Tests;
+namespace Tezuri.Tests;
 
 public sealed class GitPublicationServiceTests
 {
@@ -19,8 +17,6 @@ public sealed class GitPublicationServiceTests
 
         var snapshot = await service.InspectAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(GitPublicationProtocolV1.RepositorySnapshot, snapshot.Protocol);
-        Assert.Equal(GitPublicationProtocolV1.Version, snapshot.Version);
         Assert.Equal(repository.InitialSha, snapshot.HeadSha);
         Assert.Equal("main", snapshot.Branch);
         Assert.False(snapshot.IsDetached);
@@ -41,7 +37,7 @@ public sealed class GitPublicationServiceTests
         repository.Write("notes.txt", "unrelated change\n");
         using var service = CreateService(repository.Root);
         var plan = await service.PlanCommitAsync(
-            new GitCommitPlanRequestV1(["content/article.md"]),
+            new GitCommitPlanRequest(["content/article.md"]),
             TestContext.Current.CancellationToken);
 
         var receipt = await service.PrepareCommitAsync(
@@ -71,7 +67,7 @@ public sealed class GitPublicationServiceTests
 
         var error = await Assert.ThrowsAsync<GitPublicationException>(() =>
             service.PlanCommitAsync(
-                new GitCommitPlanRequestV1(["content/article.md"]),
+                new GitCommitPlanRequest(["content/article.md"]),
                 TestContext.Current.CancellationToken));
 
         Assert.Equal(GitPublicationFailure.StagedChangesPresent, error.Failure);
@@ -85,7 +81,7 @@ public sealed class GitPublicationServiceTests
         repository.Write("content/article.md", "planned\n");
         using var service = CreateService(repository.Root);
         var plan = await service.PlanCommitAsync(
-            new GitCommitPlanRequestV1(["content/article.md"]),
+            new GitCommitPlanRequest(["content/article.md"]),
             TestContext.Current.CancellationToken);
         repository.Write("content/article.md", "changed after review\n");
 
@@ -107,7 +103,7 @@ public sealed class GitPublicationServiceTests
         repository.Write("content/article.md", "planned\n");
         using var service = CreateService(repository.Root);
         var plan = await service.PlanCommitAsync(
-            new GitCommitPlanRequestV1(["content/article.md"]),
+            new GitCommitPlanRequest(["content/article.md"]),
             TestContext.Current.CancellationToken);
         repository.Write("notes.txt", "external commit\n");
         repository.Git("add", "--", "notes.txt");
@@ -131,7 +127,7 @@ public sealed class GitPublicationServiceTests
         repository.Write("content/article.md", "idempotent\n");
         using var service = CreateService(repository.Root);
         var plan = await service.PlanCommitAsync(
-            new GitCommitPlanRequestV1(["content/article.md"]),
+            new GitCommitPlanRequest(["content/article.md"]),
             TestContext.Current.CancellationToken);
         var request = Request(plan, "feat: idempotent publication");
 
@@ -152,7 +148,7 @@ public sealed class GitPublicationServiceTests
         repository.Write("content/article.md", "prepared without ambient identity\n");
         using var service = CreateService(repository.Root);
         var plan = await service.PlanCommitAsync(
-            new GitCommitPlanRequestV1(["content/article.md"]),
+            new GitCommitPlanRequest(["content/article.md"]),
             TestContext.Current.CancellationToken);
         repository.Git("config", "user.useConfigOnly", "true");
         repository.Git("config", "user.name", string.Empty);
@@ -192,7 +188,7 @@ public sealed class GitPublicationServiceTests
 
         var error = await Assert.ThrowsAsync<GitPublicationException>(() =>
             service.PlanCommitAsync(
-                new GitCommitPlanRequestV1(["content/linked.png"]),
+                new GitCommitPlanRequest(["content/linked.png"]),
                 TestContext.Current.CancellationToken));
 
         Assert.Equal(GitPublicationFailure.InvalidRequest, error.Failure);
@@ -212,7 +208,7 @@ public sealed class GitPublicationServiceTests
 
         var error = await Assert.ThrowsAsync<GitPublicationException>(() =>
             service.PlanCommitAsync(
-                new GitCommitPlanRequestV1([selectedPath]),
+                new GitCommitPlanRequest([selectedPath]),
                 TestContext.Current.CancellationToken));
 
         Assert.Equal(GitPublicationFailure.InvalidRequest, error.Failure);
@@ -235,14 +231,14 @@ public sealed class GitPublicationServiceTests
         Assert.Equal(remoteBefore, reviewedRemote.Sha);
         repository.Write("content/article.md", "ready to push\n");
         var plan = await service.PlanCommitAsync(
-            new GitCommitPlanRequestV1(["content/article.md"]),
+            new GitCommitPlanRequest(["content/article.md"]),
             TestContext.Current.CancellationToken);
         var commit = await service.PrepareCommitAsync(
             Request(plan, "feat: prepare push"),
             TestContext.Current.CancellationToken);
 
         var receipt = await service.PushAsync(
-            new GitPushRequestV1("origin", "main", commit.AfterSha, reviewedRemote.Sha),
+            new GitPushRequest("origin", "main", commit.AfterSha, reviewedRemote.Sha),
             TestContext.Current.CancellationToken);
 
         Assert.True(receipt.Pushed);
@@ -265,7 +261,7 @@ public sealed class GitPublicationServiceTests
         repository.Write("content/article.md", "local publication\n");
         using var service = CreateService(repository.Root);
         var plan = await service.PlanCommitAsync(
-            new GitCommitPlanRequestV1(["content/article.md"]),
+            new GitCommitPlanRequest(["content/article.md"]),
             TestContext.Current.CancellationToken);
         var local = await service.PrepareCommitAsync(
             Request(plan, "feat: local publication"),
@@ -284,7 +280,7 @@ public sealed class GitPublicationServiceTests
             "rev-parse", "refs/heads/main").Trim();
 
         var error = await Assert.ThrowsAsync<GitPublicationException>(() => service.PushAsync(
-            new GitPushRequestV1("origin", "main", local.AfterSha, expectedRemote),
+            new GitPushRequest("origin", "main", local.AfterSha, expectedRemote),
             TestContext.Current.CancellationToken));
 
         Assert.Equal(GitPublicationFailure.Diverged, error.Failure);
@@ -304,7 +300,7 @@ public sealed class GitPublicationServiceTests
         using var service = CreateService(repository.Root);
 
         var error = await Assert.ThrowsAsync<GitPublicationException>(() => service.PushAsync(
-            new GitPushRequestV1(
+            new GitPushRequest(
                 "origin",
                 "main",
                 repository.InitialSha,
@@ -319,9 +315,7 @@ public sealed class GitPublicationServiceTests
     [Fact]
     public void PublicationReceiptRoundTripsAsJson()
     {
-        var receipt = new GitCommitReceiptV1(
-            GitPublicationProtocolV1.CommitReceipt,
-            GitPublicationProtocolV1.Version,
+        var receipt = new GitCommitReceipt(
             new string('a', 40),
             new string('b', 40),
             "main",
@@ -330,11 +324,9 @@ public sealed class GitPublicationServiceTests
             Created: true);
 
         var json = JsonSerializer.Serialize(receipt);
-        var roundTrip = JsonSerializer.Deserialize<GitCommitReceiptV1>(json);
+        var roundTrip = JsonSerializer.Deserialize<GitCommitReceipt>(json);
 
         Assert.NotNull(roundTrip);
-        Assert.Equal(receipt.Protocol, roundTrip.Protocol);
-        Assert.Equal(receipt.Version, roundTrip.Version);
         Assert.Equal(receipt.BeforeSha, roundTrip.BeforeSha);
         Assert.Equal(receipt.AfterSha, roundTrip.AfterSha);
         Assert.Equal(receipt.Branch, roundTrip.Branch);
@@ -343,7 +335,7 @@ public sealed class GitPublicationServiceTests
         Assert.Equal(receipt.Created, roundTrip.Created);
     }
 
-    private static PrepareGitCommitRequestV1 Request(GitCommitPlanV1 plan, string message) => new(
+    private static PrepareGitCommitRequest Request(GitCommitPlan plan, string message) => new(
         plan.HeadSha,
         plan.PlanSha256,
         message,

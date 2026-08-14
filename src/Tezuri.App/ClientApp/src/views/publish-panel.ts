@@ -1,10 +1,10 @@
 import { hasLaunchNonce, sessionApi } from '../api/session-api'
 import type {
-  GitCommitPlanV1,
-  GitCommitReceiptV1,
-  GitPushReceiptV1,
-  GitRemoteBranchV1,
-  GitRepositorySnapshotV1,
+  GitCommitPlan,
+  GitCommitReceipt,
+  GitPushReceipt,
+  GitRemoteBranch,
+  GitRepositorySnapshot,
 } from '../api/tezuri-api'
 
 export interface PublishPanelElements {
@@ -40,7 +40,7 @@ export interface PublishPanelHost {
 export type StatusTone = 'default' | 'quiet' | 'warning' | 'success' | 'danger'
 
 interface PendingPush {
-  readonly remoteBranch: GitRemoteBranchV1
+  readonly remoteBranch: GitRemoteBranch
   readonly localSha: string
 }
 
@@ -51,8 +51,8 @@ interface PendingPush {
 export class PublishPanel {
   readonly #elements: PublishPanelElements
   readonly #host: PublishPanelHost
-  #snapshot: GitRepositorySnapshotV1 | undefined
-  #plan: GitCommitPlanV1 | undefined
+  #snapshot: GitRepositorySnapshot | undefined
+  #plan: GitCommitPlan | undefined
   #pendingPush: PendingPush | undefined
   #loading = false
   #acting = false
@@ -377,7 +377,7 @@ export class PublishPanel {
   }
 
   #renderSnapshot(
-    snapshot: GitRepositorySnapshotV1,
+    snapshot: GitRepositorySnapshot,
     selectedPaths: ReadonlySet<string> = new Set(),
   ): void {
     this.#elements.pathLegend.textContent = 'Changed files'
@@ -408,7 +408,7 @@ export class PublishPanel {
   }
 
   #renderChanges(
-    snapshot: GitRepositorySnapshotV1 | undefined,
+    snapshot: GitRepositorySnapshot | undefined,
     selectedPaths: ReadonlySet<string> = new Set(),
   ): void {
     this.#elements.changes.replaceChildren()
@@ -506,7 +506,7 @@ function describeChange(index: string, workTree: string, allowed: boolean): stri
   return states.join(' · ') || 'changed'
 }
 
-function describeSnapshot(snapshot: GitRepositorySnapshotV1): string {
+function describeSnapshot(snapshot: GitRepositorySnapshot): string {
   if (snapshot.isUnborn) {
     return 'Git refreshed. This branch has no commit yet.'
   }
@@ -519,8 +519,8 @@ function describeSnapshot(snapshot: GitRepositorySnapshotV1): string {
 }
 
 function resolveUpstream(
-  snapshot: GitRepositorySnapshotV1 | undefined,
-): GitRemoteBranchV1 | undefined {
+  snapshot: GitRepositorySnapshot | undefined,
+): GitRemoteBranch | undefined {
   if (snapshot?.upstream === null || snapshot?.upstream === undefined) {
     return undefined
   }
@@ -533,37 +533,29 @@ export function shortHash(hash: string): string {
   return hash.length <= 10 ? hash : hash.slice(0, 10)
 }
 
-function isGitSnapshot(value: GitRepositorySnapshotV1): boolean {
+function isGitSnapshot(value: GitRepositorySnapshot): boolean {
   return (
-    value.protocol === 'tezuri.git-repository-snapshot' &&
-    value.version === 1 &&
     Array.isArray(value.changes) &&
     Array.isArray(value.remoteBranches)
   )
 }
 
-function isGitCommitPlan(value: GitCommitPlanV1): boolean {
+function isGitCommitPlan(value: GitCommitPlan): boolean {
   return (
-    value.protocol === 'tezuri.git-commit-plan' &&
-    value.version === 1 &&
     typeof value.planSha256 === 'string' &&
     Array.isArray(value.selectedPaths)
   )
 }
 
-function isGitCommitReceipt(value: GitCommitReceiptV1): boolean {
+function isGitCommitReceipt(value: GitCommitReceipt): boolean {
   return (
-    value.protocol === 'tezuri.git-commit-receipt' &&
-    value.version === 1 &&
     typeof value.afterSha === 'string' &&
     Array.isArray(value.selectedPaths)
   )
 }
 
-function isGitPushReceipt(value: GitPushReceiptV1): boolean {
+function isGitPushReceipt(value: GitPushReceipt): boolean {
   return (
-    value.protocol === 'tezuri.git-push-receipt' &&
-    value.version === 1 &&
     typeof value.remoteAfterSha === 'string'
   )
 }

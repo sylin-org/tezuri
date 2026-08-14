@@ -7,10 +7,8 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Tezuri.Workspace;
-using Tezuri.Security;
 
-namespace Tezuri.App.Tests;
+namespace Tezuri.Tests;
 
 [Collection(TezuriHostCollection.Name)]
 public sealed class TezuriApplicationTests

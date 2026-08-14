@@ -436,6 +436,11 @@
           "Newtonsoft.Json": "12.0.1"
         }
       },
+      "Photino.Native": {
+        "type": "Transitive",
+        "resolved": "4.0.22",
+        "contentHash": "VIHipEOe4CZ7HElZE8zTwcvANOsCZ2yak/4nQ4LXzjdlwIjdbY8htmHfNR6rRPgWlCfTfT349GCa6V6Id2/Xyg=="
+      },
       "Sylin.Koan": {
         "type": "Transitive",
         "resolved": "1.0.0",
@@ -681,8 +686,28 @@
       "tezuri.app": {
         "type": "Project",
         "dependencies": {
+          "Microsoft.Extensions.FileProviders.Embedded": "[10.0.10, )",
+          "Photino.NET": "[4.0.16, )",
           "Sylin.Koan.App": "[1.0.0, )",
           "Sylin.Koan.Data.Core": "[1.0.0, )"
+        }
+      },
+      "Microsoft.Extensions.FileProviders.Embedded": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.10, )",
+        "resolved": "10.0.10",
+        "contentHash": "TZQQIZ1wFmQX7WdRAyhaDlv3splUPOYheTP3aZtoLpxMlVnLOFRjiLaDB0PZX/d27N52+FLbiNkwL02x4hZgjg==",
+        "dependencies": {
+          "Microsoft.Extensions.FileProviders.Abstractions": "10.0.10"
+        }
+      },
+      "Photino.NET": {
+        "type": "CentralTransitive",
+        "requested": "[4.0.16, )",
+        "resolved": "4.0.16",
+        "contentHash": "2oTFsxt8XpLlVvtChlBD8HzLw6MgfHF+DQ4aLEDfgc4GbYjumEywB1JMfWDChm2Whfkr4ZF7DV2deRrpitiBcw==",
+        "dependencies": {
+          "Photino.Native": "4.0.22"
         }
       },
       "Sylin.Koan.App": {

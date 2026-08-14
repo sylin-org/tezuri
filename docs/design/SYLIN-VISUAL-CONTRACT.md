@@ -4,7 +4,7 @@ Tezuri is a working room in the same house as sylin.org. This document is the lo
 language and the check against drift. It is normative: if the implementation and this file disagree,
 one of them is a bug.
 
-- Decision of record: [ADR 0014](../decisions/0014-sylin-workstation-design-language.md)
+- Decision of record: [docs/DECISIONS.md](../DECISIONS.md)
 - Source of truth: `sylin-org/website` `src/assets/site.css` and `src/assets/image-tools.css`
 - **Last reconciled: 2026-08-13**
 

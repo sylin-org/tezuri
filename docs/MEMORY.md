@@ -11,9 +11,9 @@ gitignored. See [`local/README.md`](../local/README.md).
 
 ## Standing preferences
 
-- **Never `dotnet run` directly.** Today that means Docker (`.\start.ps1` / `.\stop.ps1`). Once the
-  desktop shell lands it means running the built executable. A host-side `dotnet run` exercises a
-  configuration nobody ships and skips the mount, non-root, and loopback boundaries.
+- **Exercise the real artifact.** Run the published executable, not a convenience wrapper. This was
+  once "use Docker, never `dotnet run`"; the container is gone and the rule survives it, because the
+  point was always to test what ships. `--server` exists for hosts without a desktop.
 - **Least meaningful moving parts.** One deployable, organised by domain concept rather than
   technical layer. Prefer convention over configuration; prefer deleting a mechanism over
   documenting it.
@@ -59,16 +59,29 @@ gitignored. See [`local/README.md`](../local/README.md).
   be repeatable.
 - `node --test <dir>` is resolved as a module path and fails; `node --test` with no positional
   argument discovers `**/*.test.ts` correctly and skips `node_modules`.
+- **A compile-error list is not a plan.** A handoff once described the remaining work as "port three
+  services", which was a reading of the 28 build errors rather than of the agreed design. The work
+  was then done faithfully and was still wrong: the flattening and the wire-protocol removal were
+  simply absent. Check finished work against the proposal, not against the compiler.
+- `WebApplication.CreateBuilder(args)` takes the content root from the *working directory*. A
+  double-clicked application has no meaningful working directory, so pass
+  `ContentRootPath = AppContext.BaseDirectory`. Without it the published executable serves the SPA
+  only when launched from its own folder.
+- `SelfContained` as a project property makes the project unreferenceable by a non-self-contained
+  test project (NETSDK1151). Keep it on the `dotnet publish` command line instead.
+- A single-file publish still leaves `wwwroot/` beside the executable. Embedding it
+  (`GenerateEmbeddedFilesManifest` plus `ManifestEmbeddedFileProvider`) is what makes the artifact
+  genuinely one file; guard the publish so a missing client build fails loudly rather than shipping
+  an empty shell.
+- Photino needs a single-threaded apartment on Windows and blocks until the window closes, so the
+  window runs on its own STA thread while the host runs normally.
 
 ## Index
 
 | Topic | Owner document |
 | --- | --- |
-| Decision history | [`docs/decisions/README.md`](decisions/README.md) |
-| Current architecture decision | [ADR 0015](decisions/0015-article-entity-is-canonical-markdown-is-generated.md) |
-| Visual language, tokens, component grammar | [`docs/design/SYLIN-VISUAL-CONTRACT.md`](design/SYLIN-VISUAL-CONTRACT.md) and [ADR 0014](decisions/0014-sylin-workstation-design-language.md) |
-| Product invariants and non-goals | [`docs/product/PRODUCT-CONTRACT.md`](product/PRODUCT-CONTRACT.md) |
-| Build, test, release commands | [`docs/operations/`](operations/DEVELOPMENT.md) |
-| Current maturity and supported boundary | [`README.md`](../README.md) |
+| Every decision in force | [`docs/DECISIONS.md`](DECISIONS.md) |
+| Visual tokens and component grammar | [`docs/design/SYLIN-VISUAL-CONTRACT.md`](design/SYLIN-VISUAL-CONTRACT.md) |
+| What Tezuri is, how to run and build it, invariants | [`README.md`](../README.md) |
 | Agent onboarding | [`AGENTS.md`](../AGENTS.md) |
 | **In-flight work and resume point** | [`local/NOTES.md`](../local/NOTES.md) |

@@ -16,7 +16,7 @@ so nothing in it reaches the public repository.
 
 - Secrets, tokens, keys, or passwords in plain text. Record where a credential lives, not what it is.
 - Anything that is durable project truth. Standing preferences and learnings belong in the tracked
-  [`docs/MEMORY.md`](../docs/MEMORY.md); decisions belong in [`docs/decisions/`](../docs/decisions);
+  [`docs/MEMORY.md`](../docs/MEMORY.md); decisions belong in [`docs/DECISIONS.md`](../docs/DECISIONS.md);
   current state belongs in the document that owns it.
 
 If a note in `NOTES.md` turns out to matter beyond this machine, promote it to the right tracked

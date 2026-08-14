@@ -1,55 +1,49 @@
-import type { SiteProofRunReceiptV1 } from '../proof-protocol'
+import type { ProofRun } from './proof-types'
 
-export interface GitChangedPathV1 {
+export interface GitChangedPath {
   readonly path: string
   readonly indexStatus: string
   readonly workTreeStatus: string
   readonly allowed: boolean
 }
 
-export interface GitRemoteBranchV1 {
+export interface GitRemoteBranch {
   readonly remote: string
   readonly branch: string
   readonly sha: string
 }
 
-export interface GitRepositorySnapshotV1 {
-  readonly protocol: 'tezuri.git-repository-snapshot'
-  readonly version: 1
+export interface GitRepositorySnapshot {
   readonly headSha: string | null
   readonly isUnborn: boolean
   readonly isDetached: boolean
   readonly branch: string | null
   readonly upstream: string | null
   readonly remotes: readonly string[]
-  readonly remoteBranches: readonly GitRemoteBranchV1[]
-  readonly changes: readonly GitChangedPathV1[]
+  readonly remoteBranches: readonly GitRemoteBranch[]
+  readonly changes: readonly GitChangedPath[]
 }
 
-export interface GitCommitPlanRequestV1 {
+export interface GitCommitPlanRequest {
   readonly selectedPaths: readonly string[]
 }
 
-export interface GitCommitPlanV1 {
-  readonly protocol: 'tezuri.git-commit-plan'
-  readonly version: 1
+export interface GitCommitPlan {
   readonly headSha: string
   readonly branch: string
   readonly planSha256: string
   readonly selectedPaths: readonly string[]
-  readonly changes: readonly GitChangedPathV1[]
+  readonly changes: readonly GitChangedPath[]
 }
 
-export interface PrepareGitCommitRequestV1 {
+export interface PrepareGitCommitRequest {
   readonly expectedHeadSha: string
   readonly expectedPlanSha256: string
   readonly message: string
   readonly selectedPaths: readonly string[]
 }
 
-export interface GitCommitReceiptV1 {
-  readonly protocol: 'tezuri.git-commit-receipt'
-  readonly version: 1
+export interface GitCommitReceipt {
   readonly beforeSha: string
   readonly afterSha: string
   readonly branch: string
@@ -58,16 +52,14 @@ export interface GitCommitReceiptV1 {
   readonly created: boolean
 }
 
-export interface GitPushRequestV1 {
+export interface GitPushRequest {
   readonly remote: string
   readonly branch: string
   readonly expectedHeadSha: string
   readonly expectedRemoteSha: string
 }
 
-export interface GitPushReceiptV1 {
-  readonly protocol: 'tezuri.git-push-receipt'
-  readonly version: 1
+export interface GitPushReceipt {
   readonly remote: string
   readonly branch: string
   readonly localSha: string
@@ -77,17 +69,17 @@ export interface GitPushReceiptV1 {
 }
 
 export interface TezuriApi {
-  runSiteProof(signal?: AbortSignal): Promise<SiteProofRunReceiptV1>
-  inspectGit(signal?: AbortSignal): Promise<GitRepositorySnapshotV1>
+  runSiteProof(signal?: AbortSignal): Promise<ProofRun>
+  inspectGit(signal?: AbortSignal): Promise<GitRepositorySnapshot>
   planGitCommit(
-    request: GitCommitPlanRequestV1,
+    request: GitCommitPlanRequest,
     signal?: AbortSignal,
-  ): Promise<GitCommitPlanV1>
+  ): Promise<GitCommitPlan>
   prepareGitCommit(
-    request: PrepareGitCommitRequestV1,
+    request: PrepareGitCommitRequest,
     signal?: AbortSignal,
-  ): Promise<GitCommitReceiptV1>
-  pushGit(request: GitPushRequestV1, signal?: AbortSignal): Promise<GitPushReceiptV1>
+  ): Promise<GitCommitReceipt>
+  pushGit(request: GitPushRequest, signal?: AbortSignal): Promise<GitPushReceipt>
 }
 
 export interface TezuriApiClientOptions {
@@ -118,25 +110,25 @@ export class HttpTezuriApi implements TezuriApi {
   }
 
 
-  runSiteProof(signal?: AbortSignal): Promise<SiteProofRunReceiptV1> {
-    return this.#request<SiteProofRunReceiptV1>('/api/v1/proof/runs', {
+  runSiteProof(signal?: AbortSignal): Promise<ProofRun> {
+    return this.#request<ProofRun>('/api/v1/proof/runs', {
       method: 'POST',
       signal: signal ?? null,
     })
   }
 
-  inspectGit(signal?: AbortSignal): Promise<GitRepositorySnapshotV1> {
-    return this.#request<GitRepositorySnapshotV1>('/api/v1/git/status', {
+  inspectGit(signal?: AbortSignal): Promise<GitRepositorySnapshot> {
+    return this.#request<GitRepositorySnapshot>('/api/v1/git/status', {
       method: 'GET',
       signal: signal ?? null,
     })
   }
 
   planGitCommit(
-    request: GitCommitPlanRequestV1,
+    request: GitCommitPlanRequest,
     signal?: AbortSignal,
-  ): Promise<GitCommitPlanV1> {
-    return this.#request<GitCommitPlanV1>('/api/v1/git/commit-plans', {
+  ): Promise<GitCommitPlan> {
+    return this.#request<GitCommitPlan>('/api/v1/git/commit-plans', {
       method: 'POST',
       body: JSON.stringify(request),
       signal: signal ?? null,
@@ -144,18 +136,18 @@ export class HttpTezuriApi implements TezuriApi {
   }
 
   prepareGitCommit(
-    request: PrepareGitCommitRequestV1,
+    request: PrepareGitCommitRequest,
     signal?: AbortSignal,
-  ): Promise<GitCommitReceiptV1> {
-    return this.#request<GitCommitReceiptV1>('/api/v1/git/commits', {
+  ): Promise<GitCommitReceipt> {
+    return this.#request<GitCommitReceipt>('/api/v1/git/commits', {
       method: 'POST',
       body: JSON.stringify(request),
       signal: signal ?? null,
     })
   }
 
-  pushGit(request: GitPushRequestV1, signal?: AbortSignal): Promise<GitPushReceiptV1> {
-    return this.#request<GitPushReceiptV1>('/api/v1/git/pushes', {
+  pushGit(request: GitPushRequest, signal?: AbortSignal): Promise<GitPushReceipt> {
+    return this.#request<GitPushReceipt>('/api/v1/git/pushes', {
       method: 'POST',
       body: JSON.stringify(request),
       signal: signal ?? null,

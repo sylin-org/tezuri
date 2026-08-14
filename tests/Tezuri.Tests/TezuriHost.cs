@@ -4,7 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Text;
 
-namespace Tezuri.App.Tests;
+namespace Tezuri.Tests;
 
 /// <summary>
 /// One running Tezuri over a throwaway repository.
@@ -41,7 +41,9 @@ public sealed class TezuriApplicationFactory : WebApplicationFactory<Program>
         builder.ConfigureAppConfiguration((_, configuration) =>
             configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["TEZURI_WORKSPACE"] = WorkspaceRoot
+                ["TEZURI_WORKSPACE"] = WorkspaceRoot,
+                // No window: a test host is exactly the case the server mode exists for.
+                ["TEZURI_SHELL"] = "server"
             }));
     }
 

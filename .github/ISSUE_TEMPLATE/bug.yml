@@ -38,12 +38,10 @@ body:
     attributes:
       label: Environment
       options:
-        - Windows with Docker Desktop
-        - macOS with Docker Desktop
-        - Linux Docker Engine
-        - Source build on Windows
-        - Source build on macOS
-        - Source build on Linux
+        - Tezuri for Windows
+        - Tezuri for macOS
+        - Tezuri for Linux
+        - Source build
         - Other
     validations:
       required: true

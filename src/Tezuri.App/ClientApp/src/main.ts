@@ -5,12 +5,10 @@ import { articles as api, ArticleConflictError, type Article, type ArticleSummar
 import { createMediaUploader } from './editor/media-uploader'
 import { MarkdownEditor } from './editor/markdown-editor'
 import {
-  SITE_PROOF_PROTOCOL,
-  SITE_PROOF_PROTOCOL_VERSION,
-  type SiteProofCommandResultV1,
-  type SiteProofRunReceiptV1,
-  type SiteProofStatusV1,
-} from './proof-protocol'
+  type ProofCommandResult,
+  type ProofRun,
+  type ProofStatus,
+} from './api/proof-types'
 import { renderPostsRail, type PostFilter } from './views/posts-rail'
 import { PublishPanel, type StatusTone } from './views/publish-panel'
 import { openPrompt } from './views/prompt'
@@ -539,11 +537,7 @@ async function runProof(): Promise<void> {
 
   try {
     const receipt = await sessionApi.runSiteProof()
-    if (
-      receipt.protocol !== SITE_PROOF_PROTOCOL ||
-      receipt.version !== SITE_PROOF_PROTOCOL_VERSION ||
-      !Array.isArray(receipt.result.commands)
-    ) {
+    if (!Array.isArray(receipt.result.commands)) {
       throw new Error('The workspace returned an unsupported proof response.')
     }
     renderProof(receipt)
@@ -560,7 +554,7 @@ async function runProof(): Promise<void> {
   }
 }
 
-function renderProof(receipt: SiteProofRunReceiptV1): void {
+function renderProof(receipt: ProofRun): void {
   const passed = receipt.status === 'passed' && receipt.result.succeeded
   setStatusPill(el.proofStatus, passed ? 'Passed' : 'Failed', passed ? 'success' : 'danger')
   el.proofNote.textContent = passed
@@ -579,7 +573,7 @@ function renderProof(receipt: SiteProofRunReceiptV1): void {
   announce(passed ? 'Proof passed.' : 'Proof failed. The build output is on screen.')
 }
 
-function describeCommand(command: SiteProofCommandResultV1): string {
+function describeCommand(command: ProofCommandResult): string {
   const line = [command.executable, ...command.arguments].join(' ')
   const exit = command.exitCode === null ? '' : ` · exit ${command.exitCode}`
   const output =
@@ -589,7 +583,7 @@ function describeCommand(command: SiteProofCommandResultV1): string {
   return `${line} · ${statusLabel(command.status)}${exit} · ${command.durationMilliseconds} ms · ${output}`
 }
 
-function commandOutput(command: SiteProofCommandResultV1): string {
+function commandOutput(command: ProofCommandResult): string {
   const out = command.standardOutput.trim()
   const err = command.standardError.trim()
   if (out === '') {
@@ -601,7 +595,7 @@ function commandOutput(command: SiteProofCommandResultV1): string {
   return `${out}\n\n--- standard error ---\n${err}`
 }
 
-function statusLabel(status: SiteProofStatusV1): string {
+function statusLabel(status: ProofStatus): string {
   switch (status) {
     case 'passed':
       return 'passed'

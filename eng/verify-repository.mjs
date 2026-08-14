@@ -55,8 +55,8 @@ for (const file of files) {
 }
 
 const required = [
-  'AGENTS.md', 'CHANGELOG.md', 'CODE_OF_CONDUCT.md', 'CONTRIBUTING.md', 'LICENSE', 'README.md',
-  'SECURITY.md', 'SUPPORT.md',
+  'AGENTS.md', 'LICENSE', 'README.md', 'SECURITY.md',
+  'docs/DECISIONS.md', 'docs/MEMORY.md',
   'tests/Tezuri.Tests/Tezuri.Tests.csproj',
   'src/Tezuri.App/ClientApp/package-lock.json',
 ]
