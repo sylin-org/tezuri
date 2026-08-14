@@ -55,3 +55,7 @@ docker-bake.override.hcl
 Thumbs.db
 Desktop.ini
 *~
+
+# Local working memory: everything except its README stays off the repository.
+/local/*
+!/local/README.md

@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using Tezuri.Domain.Import;
-using Tezuri.Infrastructure.Import;
-using Tezuri.Infrastructure.Workspace;
+using Tezuri.Import;
+using Tezuri.Workspace;
 
 namespace Tezuri.Controllers;
 

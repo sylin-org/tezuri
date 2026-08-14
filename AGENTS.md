@@ -13,6 +13,11 @@ the start of a new session; do not use it for transient task notes.
 5. [`docs/contracts/README.md`](docs/contracts/README.md) before adding or changing persisted or wire
    shapes.
 6. [`docs/operations/TESTING.md`](docs/operations/TESTING.md) and the nearest existing code/test.
+7. [`docs/MEMORY.md`](docs/MEMORY.md) for standing preferences, durable learnings, and the index of
+   which document owns which subject.
+
+Working notes that must not be committed — environment paths, credential *locations*, session
+handoffs — live in the gitignored `local/NOTES.md`; see [`local/README.md`](local/README.md).
 
 Repository-local instructions closer to a changed file override this guide. At present there are no
 nested `AGENTS.md` files.

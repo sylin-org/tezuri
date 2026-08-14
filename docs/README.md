@@ -4,6 +4,9 @@ This tree separates current product truth from decision history, operator instru
 evidence. When documents disagree, the checked-in code/tests and accepted ADRs outrank old evidence;
 update contradictory product or operations documentation in the same change.
 
+[`MEMORY.md`](MEMORY.md) carries standing preferences and durable learnings, and indexes which
+document owns which subject. Start there when you are not sure where something lives.
+
 ## Product truth
 
 - [Product contract](product/PRODUCT-CONTRACT.md)

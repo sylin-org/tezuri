@@ -5,7 +5,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageVersion Include="Sylin.Koan.App" Version="0.20.7" />
+    <PackageVersion Include="Sylin.Koan.App" Version="1.0.0" />
+    <PackageVersion Include="Sylin.Koan.Data.Core" Version="1.0.0" />
 
     <!-- Test packages stay centralized so every test layer resolves one exact toolchain. -->
     <PackageVersion Include="coverlet.collector" Version="10.0.1" />

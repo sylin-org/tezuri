@@ -1,6 +1,0 @@
-{
-  "schema": "tezuri.editor-hints/v1",
-  "fields": [
-    { "pointer": "/series", "role": "custom", "control": "text" }
-  ]
-}

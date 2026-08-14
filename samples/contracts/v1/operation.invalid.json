@@ -1,8 +1,0 @@
-{
-  "protocol": "tezuri.operation",
-  "version": 1,
-  "operationId": "operation:proof-1",
-  "kind": "site-proof",
-  "state": "succeeded",
-  "createdAt": "2026-08-13T15:00:00Z"
-}

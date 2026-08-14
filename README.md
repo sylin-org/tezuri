@@ -34,8 +34,10 @@ TEZURI_WORKSPACE="$(pwd)/samples/folder-native-workspace" docker compose up --bu
 ```
 
 For the manual POSIX flow, open the exact `http://127.0.0.1:8080/?nonce=...` URL printed in the
-container log. The client removes the nonce from browser history and keeps it only in memory. Stop
-with `Ctrl+C`; remove the disposable container and locally built image with:
+container log. The client removes the nonce from browser history and holds it for the life of that
+browser tab so an ordinary refresh does not lose write access. It is never written to durable
+storage, a cookie, or the repository, and closing the tab discards it. Stop with `Ctrl+C`; remove the
+disposable container and locally built image with:
 
 ```sh
 docker compose down --remove-orphans

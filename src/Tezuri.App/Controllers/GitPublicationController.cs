@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using Tezuri.Domain.Git;
-using Tezuri.Infrastructure.Git;
+using Tezuri.Publishing;
 
 namespace Tezuri.Controllers;
 

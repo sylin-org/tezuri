@@ -1,6 +1,0 @@
-{
-  "remote": ".origin",
-  "branch": "main",
-  "expectedHeadSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "expectedRemoteSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-}

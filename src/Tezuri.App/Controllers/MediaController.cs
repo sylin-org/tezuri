@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using Tezuri.Domain.Media;
-using Tezuri.Infrastructure.Media;
-using Tezuri.Infrastructure.Workspace;
+using Tezuri.Media;
+using Tezuri.Workspace;
 
 namespace Tezuri.Controllers;
 

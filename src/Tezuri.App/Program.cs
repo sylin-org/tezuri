@@ -1,21 +1,22 @@
 using Koan.Core;
+using Microsoft.Extensions.Options;
 using Tezuri.Security;
+using Tezuri.Workspace;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Sylin.Koan.App includes the JSON provider as its zero-configuration data floor.
-// Tezuri does not persist articles through it, so keep its incidental health-probe
-// directory in disposable process temp instead of the app or mounted repository.
-const string koanJsonDirectoryKey = "Koan:Data:Json:DirectoryPath";
-if (string.IsNullOrWhiteSpace(builder.Configuration[koanJsonDirectoryKey]))
-{
-    builder.Configuration[koanJsonDirectoryKey] = Path.Combine(
-        Path.GetTempPath(),
-        "tezuri",
-        "koan-data");
-}
+// The JSON store keeps one document per article folder so a commit can select a single article and
+// its media travel with it (ADR 0015). The directory is resolved from the selected workspace at the
+// moment it is first needed — never at builder time, because the workspace is chosen at runtime and
+// can be switched.
+builder.Configuration["Koan:Data:Sources:Default:Adapter"] = "json";
+builder.Configuration["Koan:Data:Sources:Default:json:Layout"] = "IndividualFiles";
+builder.Configuration["Koan:Data:Sources:Default:json:IndividualFilePath"] = "{id}/article.json";
 
+builder.Services.AddSingleton<SelectedWorkspace>();
 builder.Services.AddKoan();
+builder.Services.AddSingleton<IPostConfigureOptions<Koan.Data.Connector.Json.JsonDataOptions>,
+    WorkspaceJsonDirectory>();
 
 var app = builder.Build();
 

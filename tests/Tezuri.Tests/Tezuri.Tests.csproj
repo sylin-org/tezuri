@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="coverlet.collector">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Tezuri.App/Tezuri.App.csproj" />
+    <!-- A real child process for the proof runner to launch, time out, and cancel. -->
+    <ProjectReference Include="Fixture/Tezuri.Proof.Fixture.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Fixture/**/*.cs" />
+  </ItemGroup>
+
+  <Target Name="CopyProofFixtureRuntimeFiles" AfterTargets="Build">
+    <ItemGroup>
+      <ProofFixtureRuntimeFile Include="$(MSBuildThisFileDirectory)Fixture/bin/$(Configuration)/$(TargetFramework)/Tezuri.Proof.Fixture.dll" />
+      <ProofFixtureRuntimeFile Include="$(MSBuildThisFileDirectory)Fixture/bin/$(Configuration)/$(TargetFramework)/Tezuri.Proof.Fixture.deps.json" />
+      <ProofFixtureRuntimeFile Include="$(MSBuildThisFileDirectory)Fixture/bin/$(Configuration)/$(TargetFramework)/Tezuri.Proof.Fixture.runtimeconfig.json" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ProofFixtureRuntimeFile)"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+</Project>

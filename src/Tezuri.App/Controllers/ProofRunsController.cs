@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using Tezuri.Domain.Proof;
-using Tezuri.Infrastructure.Proof;
+using Tezuri.Proof;
 
 namespace Tezuri.Controllers;
 

@@ -8,10 +8,9 @@
 
   <ItemGroup>
     <PackageReference Include="Sylin.Koan.App" />
+    <PackageReference Include="Sylin.Koan.Data.Core" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Tezuri.Domain\Tezuri.Domain.csproj" />
-    <ProjectReference Include="..\Tezuri.Infrastructure\Tezuri.Infrastructure.csproj" />
   </ItemGroup>
 </Project>

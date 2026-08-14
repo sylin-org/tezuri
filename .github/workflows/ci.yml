@@ -40,7 +40,7 @@ jobs:
           cache-dependency-path: src/Tezuri.App/ClientApp/package-lock.json
 
       - name: Restore locked .NET dependencies
-        run: dotnet restore Tezuri.sln --locked-mode
+        run: dotnet restore Tezuri.slnx --locked-mode
 
       - name: Install locked client dependencies
         working-directory: src/Tezuri.App/ClientApp
@@ -54,14 +54,14 @@ jobs:
           npm run build
 
       - name: Build .NET solution
-        run: dotnet build Tezuri.sln --configuration Release --no-restore
+        run: dotnet build Tezuri.slnx --configuration Release --no-restore
 
       - name: Test .NET solution
-        run: dotnet test Tezuri.sln --configuration Release --no-build --no-restore
+        run: dotnet test Tezuri.slnx --configuration Release --no-build --no-restore
 
       - name: Verify repository contracts and formatting
         run: |
-          dotnet format Tezuri.sln --verify-no-changes --no-restore
+          dotnet format Tezuri.slnx --verify-no-changes --no-restore
           node eng/verify-repository.mjs
           git diff --check
 

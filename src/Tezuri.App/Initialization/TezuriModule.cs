@@ -7,14 +7,12 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Koan.Web.Hosting;
 using Koan.Web.Options;
-using Tezuri.Domain.Workspace;
-using Tezuri.Infrastructure.Configuration;
-using Tezuri.Infrastructure.Documents;
-using Tezuri.Infrastructure.Git;
-using Tezuri.Infrastructure.Import;
-using Tezuri.Infrastructure.Media;
-using Tezuri.Infrastructure.Proof;
-using Tezuri.Infrastructure.Workspace;
+using Tezuri.Workspace;
+using Tezuri.Articles;
+using Tezuri.Publishing;
+using Tezuri.Import;
+using Tezuri.Media;
+using Tezuri.Proof;
 using Tezuri.Security;
 
 namespace Tezuri.Initialization;
@@ -34,7 +32,7 @@ public sealed class TezuriModule : KoanModule
             ServiceDescriptor.Singleton<IKoanWebPipelineContributor, TezuriSecurityPipelineContributor>());
         services.AddSingleton(BootstrapNonce.Create());
         services.AddSingleton(sp => new WorkspacePathGuard(
-            sp.GetRequiredService<IConfiguration>()["TEZURI_WORKSPACE"] ?? "/workspace"));
+            sp.GetRequiredService<Tezuri.Workspace.SelectedWorkspace>().Root));
         services.AddSingleton<WorkspaceConfigurationParser>();
         services.AddSingleton<WorkspaceConfigurationValidator>();
         services.AddSingleton<WorkspaceConfigurationLoader>();
@@ -44,9 +42,8 @@ public sealed class TezuriModule : KoanModule
             .GetAwaiter()
             .GetResult());
         services.AddSingleton(sp => sp.GetRequiredService<WorkspaceConfigurationV1>().ToWorkspaceContract());
-        services.AddSingleton<ArticleDocumentCodec>();
         services.AddSingleton<AtomicFileWriter>();
-        services.AddSingleton<FileArticleWorkspace>();
+        services.AddSingleton<ArticleMarkdownWriter>();
         services.AddSingleton<ArticleMediaStore>();
         services.AddSingleton(sp => new SubstackImporter(
             sp.GetRequiredService<WorkspacePathGuard>(),
@@ -69,6 +66,6 @@ public sealed class TezuriModule : KoanModule
     {
         module.Describe(Version, "Repository-native article workspace");
         module.AddSetting("Workspace", configuration["TEZURI_WORKSPACE"] ?? "/workspace");
-        module.AddNote("Article source remains ordinary UTF-8 files in the mounted repository.");
+        module.AddNote("Articles are JSON entities in the mounted repository; index.md is generated.");
     }
 }

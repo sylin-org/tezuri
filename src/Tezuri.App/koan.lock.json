@@ -2,43 +2,47 @@
   "schema": 2,
   "app": {
     "name": "Tezuri.App",
-    "koan": "0.20",
+    "koan": "1.0",
     "tfm": "net10.0"
   },
   "modules": [
     {
       "id": "Koan.Cache.Abstractions",
-      "version": "0.20"
-    },
-    {
-      "id": "Koan.Communication",
-      "version": "0.20"
+      "version": "1.0"
     },
     {
       "id": "Koan.Core",
-      "version": "0.20"
+      "version": "1.0"
     },
     {
       "id": "Koan.Data.Abstractions",
-      "version": "0.20"
+      "version": "1.0"
     },
     {
       "id": "Koan.Data.Connector.Json",
-      "version": "0.20"
+      "version": "1.0"
     },
     {
       "id": "Koan.Data.Core",
-      "version": "0.20"
+      "version": "1.0"
     },
     {
       "id": "Koan.Web",
-      "version": "0.20"
+      "version": "1.0"
     }
   ],
   "directReferences": [
     {
       "kind": "package",
       "id": "Sylin.Koan.App"
+    },
+    {
+      "kind": "project",
+      "id": "Tezuri.Domain"
+    },
+    {
+      "kind": "project",
+      "id": "Tezuri.Infrastructure"
     }
   ]
 }

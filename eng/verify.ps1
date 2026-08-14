@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot
 try {
-    dotnet restore Tezuri.sln --locked-mode
+    dotnet restore Tezuri.slnx
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     Push-Location src/Tezuri.App/ClientApp
@@ -27,11 +27,11 @@ try {
         Pop-Location
     }
 
-    dotnet format Tezuri.sln --verify-no-changes --no-restore
+    dotnet format Tezuri.slnx --verify-no-changes --no-restore
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    dotnet build Tezuri.sln --configuration Release --no-restore
+    dotnet build Tezuri.slnx --configuration Release --no-restore
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    dotnet test Tezuri.sln --configuration Release --no-build --no-restore
+    dotnet test Tezuri.slnx --configuration Release --no-build --no-restore
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     node eng/verify-repository.mjs
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

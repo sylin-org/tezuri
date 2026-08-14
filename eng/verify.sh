@@ -4,7 +4,7 @@ set -eu
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$repo_root"
 
-dotnet restore Tezuri.sln --locked-mode
+dotnet restore Tezuri.slnx
 (
   cd src/Tezuri.App/ClientApp
   trap 'rm -rf .verification-dist' EXIT
@@ -13,9 +13,9 @@ dotnet restore Tezuri.sln --locked-mode
   npm run check
   npx vite build --outDir=.verification-dist
 )
-dotnet format Tezuri.sln --verify-no-changes --no-restore
-dotnet build Tezuri.sln --configuration Release --no-restore
-dotnet test Tezuri.sln --configuration Release --no-build --no-restore
+dotnet format Tezuri.slnx --verify-no-changes --no-restore
+dotnet build Tezuri.slnx --configuration Release --no-restore
+dotnet test Tezuri.slnx --configuration Release --no-build --no-restore
 node eng/verify-repository.mjs
 git diff --check
 

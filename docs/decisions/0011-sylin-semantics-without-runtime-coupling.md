@@ -1,7 +1,11 @@
 # ADR 0011: Inherit Sylin semantics without runtime coupling
 
-- Status: Accepted
+- Status: Superseded by [ADR 0014](0014-sylin-workstation-design-language.md)
 - Date: 2026-08-13
+
+> This decision's no-runtime-coupling boundary is retained by ADR 0014. Its prose-only description of
+> the visual target is what ADR 0014 replaces: with no pinned values, the implementation drifted and
+> the design contract was reworded to match the drift.
 
 ## Context
 

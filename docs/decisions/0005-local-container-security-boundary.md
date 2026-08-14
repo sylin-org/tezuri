@@ -26,6 +26,11 @@ redact credentials and sensitive content.
 
 - Remote LAN access is outside the default V1 contract.
 - Restarting invalidates the nonce without affecting saved content.
+- The client holds the nonce in tab-scoped session storage rather than a module variable, so an
+  ordinary page refresh does not silently downgrade the editor to read-only. Session storage is
+  origin-scoped and discarded with the tab, and any script able to read it could already have issued
+  requests with an in-memory value, so this does not widen the boundary. The nonce is still never
+  written to durable storage, a cookie, the container layer, or the repository.
 - Trusting configured build commands is a distinct, explicit user action.
 - Security tests must include Host/Origin rejection, CSRF, traversal, symlink escape, CSP, and
   non-root operation.

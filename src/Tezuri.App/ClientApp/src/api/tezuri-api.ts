@@ -1,24 +1,4 @@
-import type {
-  AppliedSourcePatchV1,
-  ArticleListEnvelopeV1,
-  ArticleSourceEnvelopeV1,
-  SourcePatchConflictV1,
-  SourcePatchSetV1,
-} from '../source-protocol'
 import type { SiteProofRunReceiptV1 } from '../proof-protocol'
-
-export interface MediaAssetReceiptV1 {
-  readonly protocol: 'tezuri.media-asset-receipt'
-  readonly version: 1
-  readonly articleId: string
-  readonly originalFileName: string
-  readonly fileName: string
-  readonly relativePath: string
-  readonly mediaType: string
-  readonly sha256: string
-  readonly byteLength: number
-  readonly deduplicated: boolean
-}
 
 export interface GitChangedPathV1 {
   readonly path: string
@@ -97,18 +77,6 @@ export interface GitPushReceiptV1 {
 }
 
 export interface TezuriApi {
-  listArticles(signal?: AbortSignal): Promise<ArticleListEnvelopeV1>
-  getArticleSource(articleId: string, signal?: AbortSignal): Promise<ArticleSourceEnvelopeV1>
-  applySourcePatches(
-    articleId: string,
-    patches: SourcePatchSetV1,
-    signal?: AbortSignal,
-  ): Promise<AppliedSourcePatchV1>
-  uploadArticleMedia(
-    articleId: string,
-    file: File,
-    signal?: AbortSignal,
-  ): Promise<MediaAssetReceiptV1>
   runSiteProof(signal?: AbortSignal): Promise<SiteProofRunReceiptV1>
   inspectGit(signal?: AbortSignal): Promise<GitRepositorySnapshotV1>
   planGitCommit(
@@ -140,16 +108,6 @@ export class TezuriApiError extends Error {
   }
 }
 
-export class SourcePatchConflictError extends TezuriApiError {
-  readonly conflict: SourcePatchConflictV1
-
-  constructor(conflict: SourcePatchConflictV1) {
-    super(conflict.message, 409, conflict)
-    this.name = 'SourcePatchConflictError'
-    this.conflict = conflict
-  }
-}
-
 export class HttpTezuriApi implements TezuriApi {
   readonly #baseUrl: string
   readonly #nonce: string | undefined
@@ -159,57 +117,6 @@ export class HttpTezuriApi implements TezuriApi {
     this.#nonce = options.nonce
   }
 
-  listArticles(signal?: AbortSignal): Promise<ArticleListEnvelopeV1> {
-    return this.#request<ArticleListEnvelopeV1>('/api/v1/articles', { signal: signal ?? null })
-  }
-
-  getArticleSource(articleId: string, signal?: AbortSignal): Promise<ArticleSourceEnvelopeV1> {
-    return this.#request<ArticleSourceEnvelopeV1>(
-      `/api/v1/articles/${encodeURIComponent(articleId)}/source`,
-      { signal: signal ?? null },
-    )
-  }
-
-  async applySourcePatches(
-    articleId: string,
-    patches: SourcePatchSetV1,
-    signal?: AbortSignal,
-  ): Promise<AppliedSourcePatchV1> {
-    try {
-      return await this.#request<AppliedSourcePatchV1>(
-        `/api/v1/articles/${encodeURIComponent(articleId)}/source-patches`,
-        {
-          method: 'POST',
-          body: JSON.stringify(patches),
-          signal: signal ?? null,
-        },
-      )
-    } catch (error) {
-      if (error instanceof TezuriApiError && error.status === 409 && isPatchConflict(error.problem)) {
-        throw new SourcePatchConflictError(error.problem)
-      }
-
-      throw error
-    }
-  }
-
-  uploadArticleMedia(
-    articleId: string,
-    file: File,
-    signal?: AbortSignal,
-  ): Promise<MediaAssetReceiptV1> {
-    const body = new FormData()
-    body.set('file', file, file.name)
-
-    return this.#request<MediaAssetReceiptV1>(
-      `/api/v1/articles/${encodeURIComponent(articleId)}/media`,
-      {
-        method: 'POST',
-        body,
-        signal: signal ?? null,
-      },
-    )
-  }
 
   runSiteProof(signal?: AbortSignal): Promise<SiteProofRunReceiptV1> {
     return this.#request<SiteProofRunReceiptV1>('/api/v1/proof/runs', {
@@ -286,18 +193,3 @@ export class HttpTezuriApi implements TezuriApi {
   }
 }
 
-function isPatchConflict(value: unknown): value is SourcePatchConflictV1 {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-
-  const candidate = value as Partial<SourcePatchConflictV1>
-  return (
-    candidate.protocol === 'tezuri.source-patch-conflict' &&
-    candidate.version === 1 &&
-    typeof candidate.articleId === 'string' &&
-    typeof candidate.message === 'string' &&
-    typeof candidate.current === 'object' &&
-    candidate.current !== null
-  )
-}

@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "vite",
     "check": "tsc --noEmit",
-    "test": "node --experimental-strip-types tests/source-edit.test.ts",
+    "test": "node --test --experimental-strip-types tests/",
     "build": "vite build",
     "preview": "vite preview"
   },

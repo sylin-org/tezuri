@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Tezuri.App/Tezuri.App.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Tezuri.Tests/Tezuri.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Tezuri.Tests/" />
+  <Folder Name="/tests/Tezuri.Tests/Fixture/">
+    <Project Path="tests/Tezuri.Tests/Fixture/Tezuri.Proof.Fixture.csproj" />
+  </Folder>
+</Solution>
