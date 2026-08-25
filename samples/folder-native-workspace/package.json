@@ -1,8 +1,0 @@
-{
-  "name": "tezuri-folder-native-sample",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "node scripts/proof.mjs"
-  }
-}

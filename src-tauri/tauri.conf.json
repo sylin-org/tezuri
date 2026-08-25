@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Tezuri",
+  "version": "0.1.0",
+  "identifier": "org.sylin.tezuri",
+  "build": {
+    "frontendDist": "./ui/dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Tezuri — a desk for your publishing life",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 640,
+        "minHeight": 480
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}

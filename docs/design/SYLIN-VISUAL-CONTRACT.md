@@ -4,13 +4,13 @@ Tezuri is a working room in the same house as sylin.org. This document is the lo
 language and the check against drift. It is normative: if the implementation and this file disagree,
 one of them is a bug.
 
-- Decision of record: [docs/DECISIONS.md](../DECISIONS.md)
+- Product authority: [docs/PRODUCT-BRIEF.md](../PRODUCT-BRIEF.md)
 - Source of truth: `sylin-org/website` `src/assets/site.css` and `src/assets/image-tools.css`
 - **Last reconciled: 2026-08-13**
 
 There is no runtime or build dependency on the website. These values are transcribed by hand and
-revalidated on each dogfood pass. Changing a value here is a deliberate edit with browser evidence,
-never a side effect of styling work.
+revalidated on each dogfood pass. Changing a value here is a deliberate edit with application
+evidence, never a side effect of styling work.
 
 ## Which dialect
 
@@ -18,15 +18,15 @@ sylin.org has two registers. The public site is discovery: generous spacing, lar
 ambient motion, trading cards. **Image Tools is the application register** — dense, instrumented,
 warm-inked, still. Tezuri is an application, so Image Tools is the precedent.
 
-This distinction is the one ADR 0011 got wrong. Aiming at the public site produced a cream paper
-card and serif headings: a public-article pastiche in a workspace where they have no job.
+The public-site register would produce a cream paper card and serif headings: a public-article
+pastiche in a workspace where they have no job.
 
 Carry the grammar; do not carry the landing page. No twinkling stars, card tilt, foil, mascot halo,
 or ambient animation. Those belong to identity, not concentration.
 
 ## Tokens
 
-Implemented in `ClientApp/src/styles.css` as the `--tz-*` custom properties.
+Use these semantic `--tz-*` custom properties in the application frontend.
 
 ### Surfaces
 
@@ -111,34 +111,35 @@ The article text is the visual center of gravity. Rails are subordinate and coll
 no work, following the Image Tools precedent where the intro shrinks and drops its description once
 content exists. Prefer one strong canvas with supporting rails over a mosaic of equal cards.
 
-Rendered Proof inherits the actual target site's CSS and markup. Do not restyle Proof to resemble
-Tezuri, and do not restyle Tezuri's editing chrome to impersonate a published article. The writing
-plane is a calm dark surface that is honestly an editor.
+Proof reports the target build's verdict and evidence; Tezuri does not render or restyle the target
+site. Do not make the editing chrome impersonate a published article. The writing plane is a calm
+dark surface that is honestly an editor.
 
 ## Behavior
 
-- Rich and Source are views of the same file, with persistent focus and unsaved and conflict state.
+- The editor works on the canonical article record. Generated site files are never presented as an
+  editable source or read back into the article.
 - Metadata is progressive disclosure, not a wall of form controls standing between a person and
   their first sentence.
-- Unsupported content appears as a visible protected source block with an explanation and an escape
-  hatch. It is never invisibly removed.
-- Proof shows the exact trusted commands before first execution and keeps the **complete** build
-  output inspectable. A failure is not summarized into a single truncated line.
+- Content the editor cannot safely represent is never invisibly removed. Refuse it or preserve it
+  with a visible explanation and an actionable way forward.
+- Proof shows the named program and argument list before first execution. Its bounded captured output
+  stays inspectable, and any truncation is stated plainly.
 - Publish shows selected paths, diff, branch and remote state, the intended commit, and the
   credential boundary before any mutation.
-- Success is quiet and durable. A commit or deployment receipt stays in the interface; it never
+- Success is quiet and durable. A commit or push receipt stays in the interface; it never
   depends on a disappearing toast.
 - No control ships visible and permanently inert.
 
 ## Voice
 
-`VOICE.md` governs every label, empty state, and validation message. State what the system does,
-what happened, and what a person can do next.
+Every label, empty state, and validation message states what the system does, what happened, and what
+a person can do next.
 
-A status names a property and its evidence — `Saved to src/writing/craft/index.md`, `Proof passed at
-14:32`, `Remote moved by 2 commits` — never a bare `Healthy` or `Synced`. Protocol vocabulary such
-as byte ranges, hashes, envelopes, and patch mechanics lives behind an evidence disclosure, not in
-the writer's line of sight. Preservation is demonstrated by behavior; it is not narrated.
+A status names a property and its evidence — `Saved in this project`, `Proof passed at 14:32`,
+`Remote moved by 2 commits` — never a bare `Healthy` or `Synced`. Implementation vocabulary lives
+behind an evidence disclosure, not in the writer's line of sight. Preservation is demonstrated by
+behavior; it is not narrated.
 
 Name an unfinished boundary candidly and once. No warning theater, apology banners, or copy that
 makes a working pre-1.0 path sound defective.
@@ -153,8 +154,9 @@ Usable at 200% zoom and a true 390px viewport with no horizontal page overflow. 
 
 ## Review gate
 
-Every material UI change is reviewed in a real browser at 1440×900, 1280×720, a height-constrained
-desktop, and true 390×844 — with keyboard, 200% zoom, reduced motion, and a no-console-error check.
+Every material UI change is reviewed in the real Tauri application at 1440×900, 1280×720, a
+height-constrained desktop, and a 390×844 narrow window — with keyboard, 200% zoom, reduced motion,
+and a no-console-error check.
 
 The test is not pixel identity with sylin.org. It is whether typography, hierarchy, color meaning,
 interaction restraint, evidence, and voice unmistakably belong to the same system.

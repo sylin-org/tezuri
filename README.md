@@ -1,122 +1,120 @@
 # Tezuri
 
-A local press. You open the repository you write in, you write, and what comes out is committed
-Markdown your site already knows how to build.
+Tezuri is a local press: a desktop application for people who publish long-form writing from their
+own git repositories.
 
-Tezuri is one executable with a real window. No runtime to install, no container, no service.
+Open a project, write, add images, prove the site's own build, then review and publish exactly the
+files you intend. Nothing leaves the machine unless the user explicitly asks for a git network
+operation.
 
-> **Status: early.** This is a working prototype, not a release. It edits one repository at a time,
-> it has been exercised by hand and by its own tests, and the interfaces below can still change.
+## Status
+
+Tezuri now has a runnable v1 implementation in Rust and Tauri. The application covers the complete
+local workflow: project registry, structured writing and autosave, safe image handling, site proof,
+reviewed Git publication, and previewed Substack archive import.
+
+[`docs/PRODUCT-BRIEF.md`](docs/PRODUCT-BRIEF.md) is the authority for what the product must do and
+must never do. Deleted source and historical implementation choices are not design inputs for the
+new application.
 
 ## Run it
 
-Download the executable for your platform and open it. It asks which repository you write in,
-remembers it, and opens there next time.
+Install a current Rust toolchain (Rust 1.85 or newer), Node.js 24, and the native prerequisites for
+Tauri 2 on your operating system. On Windows, Tezuri uses the installed system WebView2 runtime and
+does not download one at startup.
 
-To open a specific repository directly:
-
-```
-Tezuri.App path/to/repository
-```
-
-To run it headless with no window — for a test host, a remote box, or CI:
-
-```
-Tezuri.App --server path/to/repository
+```powershell
+./start.bat
 ```
 
-Server mode prints a URL carrying a single-use launch nonce. Open that URL and nothing else; the
-nonce is what separates you from any other page on the machine.
+`start.bat` is the Windows source launcher. It installs the locked frontend dependencies when they
+are absent, then opens the real Tauri application. On macOS or Linux, run `npm ci` followed by
+`npm run tauri -- dev`.
 
-## What it does
+The first screen opens the operating system's folder picker. Choose the root of a Git repository;
+Tezuri creates its article folders only when you create or import writing.
 
-**Write.** A document-first editor — Milkdown, with a slash menu, a selection bubble, and drag-and-drop
-images. Dropping an image puts it in the article's own `media/` folder, named by its content hash,
-and links it. The same bytes twice are one file.
+The canonical repository check is:
 
-**Publish.** Select exactly the changed paths you mean, review them, commit, push. Tezuri stages only
-what you selected, uses its own commit identity, disables hooks and signing, and refuses to push if
-the remote moved after you reviewed it. It never stores a credential — it uses the Git your machine
-already has.
-
-**Proof.** Run your repository's own declared build in an isolated copy of the workspace, under a
-timeout, with output bounded and secrets redacted. Your working tree is never touched.
-
-**Import.** Point it at a Substack export. It creates articles, converts the HTML, and brings the
-images the export actually contains. It never fetches from the network, and it never overwrites an
-article that already exists — so re-running it is safe and boring.
-
-## How a repository is laid out
-
-Convention, not configuration. There is no config file to write.
-
-```
-src/writing/<slug>/
-  article.json   the article — this is the canonical copy
-  index.md       generated from it on every save, for your site build
-  media/         images this article owns, named by content hash
+```powershell
+pwsh ./eng/verify.ps1
 ```
 
-`article.json` is what Tezuri edits. `index.md` is an output and is never read back, which is why
-Tezuri cannot disagree with itself about what you wrote. Metadata Tezuri has no control for is
-preserved verbatim and written back into the frontmatter untouched.
+It type-checks and tests the frontend, formats, lints, and tests the Rust crate, builds the embedded
+desktop executable, checks the Tauri authority boundary, and checks the patch for whitespace errors.
+To create platform installers locally, run `npm run tauri -- build`.
 
-The few real choices — media policy, the Proof command, which paths publication may touch — have
-working defaults and can be set through ordinary configuration under a `Tezuri` section.
+## Product model
 
-## Boundary
+Tezuri owns an article's canonical record inside the user's repository and generates the site's
+Markdown from it. Generated content is output, not an editing source. Metadata Tezuri does not
+understand is preserved unchanged.
 
-Tezuri binds loopback only and does not listen on your network. Every mutating request needs the
-launch nonce. Cross-origin mutation and unexpected `Host` headers are refused. Responses carry
-restrictive security headers.
+This gives the writer a calm, structured editing experience without taking ownership of their work:
+content and media remain ordinary repository files that are useful without Tezuri.
 
-It writes inside the repository you chose and nowhere else. Paths are canonicalised and containment
-checked, symlinks and junctions that leave the workspace are refused, and file replacement is atomic.
+## Core experience
 
-To report a vulnerability, see [SECURITY.md](SECURITY.md).
+- **Projects:** add, open, reorder, remove, and relocate repositories through the native interface.
+- **Write:** a document-first, autosaving editor with restrained metadata controls and a searchable
+  body of work.
+- **Media:** paste or drop safe images; Tezuri stores them with the article and deduplicates identical
+  content.
+- **Prove:** run the site's own configured build against an isolated copy with a timeout, bounded
+  output, and credential redaction.
+- **Publish:** review and select changed paths, commit only that selection, and push separately only
+  if the reviewed remote state still holds.
+- **Import:** preview an offline archive import, preserve source metadata, bring local images, and
+  safely skip articles that already exist.
 
-## Build from source
+## Repository contract
 
-You need .NET SDK 10 and Node.js 24.
+Tezuri uses one deliberately fixed article layout:
 
+```text
+content/articles/<article-slug>/
+  article.json    # canonical structured article
+  index.md        # generated on every save; never read as editing input
+  media/          # content-addressed PNG, JPEG, WebP, or GIF images
 ```
-pwsh ./eng/verify.ps1     # the whole gate: client, format, build, tests, repository checks
-pwsh ./eng/publish.ps1    # one executable in artifacts/publish
-```
 
-`verify.ps1` is what CI runs. If it is green, the branch is green.
+`article.json` contains `title`, `standfirst`, `body`, `state`, `publicationDate`, and `tags`.
+`body` is a bounded, versioned rich-document tree. Unknown top-level metadata is retained when the
+modeled fields change. Tezuri creates this layout without a project setup file.
 
-## Layout
+Proof uses the repository's conventional build: a `package.json` `build` script through its matching
+installed package manager, or Hugo when a standard Hugo configuration file is present. It runs in a
+disposable project copy with a timeout, bounded output, offline package-manager settings, and
+credential redaction. The synthetic [`samples/tezuri-site`](samples/tezuri-site) project demonstrates
+the expected layout and build contract.
 
-```
-src/Tezuri.App/     one project, one file per concept
-  Program.cs        host, composition, the desktop window
-  Desktop.cs        native window, folder picker, remembered repositories
-  Article.cs        the entity
-  Articles.cs       CRUD and the revision guard
-  Markdown.cs       entity to index.md
-  Media.cs          ingest, verify, deduplicate, serve
-  Git.cs            inspect, plan, commit, push
-  Proof.cs          isolated build
-  Import.cs         Substack export to articles
-  Html.cs           HTML to Markdown
-  Workspace.cs      layout, settings, path containment, atomic writes
-  Security.cs       nonce, origin checks, headers
-  ClientApp/        the editor
-tests/Tezuri.Tests/ one suite
-```
+## Trust boundary
+
+Tezuri is local, single-user, and offline by default. It has no accounts, telemetry, analytics,
+update checks, crash reporting, hosted service, or implicit fetching. Writes stay inside the chosen
+project, saves are atomic, application settings contain no canonical content, and text entered by a
+user never becomes shell syntax.
+
+Saving and publishing are deliberately separate. Saving never stages, commits, pushes, changes
+branches, or rewrites history.
+
+## Implementation direction
+
+Tezuri is a domain-driven monolith: one Rust crate, one embedded React/Tiptap frontend, and one Tauri
+desktop process. Product operations cross a narrow typed command boundary; the frontend receives no
+generic filesystem, shell, process, or network authority. The cohesive domain modules are projects,
+articles, media, proof, publication, and import.
+
+Consequential choices belong in [`docs/DECISIONS.md`](docs/DECISIONS.md). The visual and interaction
+contract lives in [`docs/design/SYLIN-VISUAL-CONTRACT.md`](docs/design/SYLIN-VISUAL-CONTRACT.md).
 
 ## Documents
 
-- [docs/DECISIONS.md](docs/DECISIONS.md) — every decision in force, and what it replaced
-- [docs/MEMORY.md](docs/MEMORY.md) — standing preferences and durable learnings
-- [docs/design/SYLIN-VISUAL-CONTRACT.md](docs/design/SYLIN-VISUAL-CONTRACT.md) — the visual tokens
-- [AGENTS.md](AGENTS.md) — where an agent should start
-
-## Contributing
-
-Open an issue before a large change. Run `pwsh ./eng/verify.ps1` before opening a pull request, and
-write commit messages that say why. That is the whole process.
+- [Product brief](docs/PRODUCT-BRIEF.md)
+- [Implementation decisions](docs/DECISIONS.md)
+- [Project memory](docs/MEMORY.md)
+- [Sylin visual contract](docs/design/SYLIN-VISUAL-CONTRACT.md)
+- [Agent guide](AGENTS.md)
 
 ## Licence
 
