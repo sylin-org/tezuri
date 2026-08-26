@@ -219,12 +219,39 @@ fn pick_folder() -> Result<Option<String>, CommandError> {
         .map(|f| f.to_string()))
 }
 
+// -- theme -------------------------------------------------------------------
+
+#[derive(serde::Serialize)]
+pub struct PresetView {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub css: String,
+}
+
 #[tauri::command]
-fn read_theme(path: String) -> Result<String, CommandError> {
-    // Only ever the publication's own theme.css; confinement via spine.
-    let root = PathBuf::from(&path);
-    let theme = tezuri::spine::confine(&root, std::path::Path::new("theme.css")).map_err(err)?;
-    std::fs::read_to_string(theme).map_err(err)
+fn theme_presets() -> Vec<PresetView> {
+    tezuri::theme::presets()
+        .into_iter()
+        .map(|p| PresetView {
+            id: p.id,
+            name: p.name,
+            description: p.description,
+            css: p.css,
+        })
+        .collect()
+}
+
+/// The open space's theme CSS; empty means the built-in look.
+#[tauri::command]
+fn read_theme(session: State<Session>) -> Result<String, CommandError> {
+    tezuri::theme::read(&root(&session)?).map_err(err)
+}
+
+/// Persist the theme; an empty string clears it back to the built-in look.
+#[tauri::command]
+fn write_theme(css: String, session: State<Session>) -> Result<(), CommandError> {
+    tezuri::theme::write(&root(&session)?, &css).map_err(err)
 }
 
 #[tauri::command]
@@ -468,6 +495,9 @@ pub fn run() {
             open_about_link,
             read_assistant_catalog,
             save_assistant_catalog,
+            theme_presets,
+            read_theme,
+            write_theme,
             desk,
             read_article,
             save_article,

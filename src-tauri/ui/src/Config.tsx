@@ -7,9 +7,12 @@
 
 import { useEffect, useState } from "react";
 import { invoke } from "./bridge";
-import type { Assistant, Identity } from "./bridge";
+import type { Assistant, Identity, ThemePreset } from "./bridge";
 
 const EMPTY_ID: Identity = { name: "", byline: "", persona: "" };
+
+/** The event the app listens to when the saved theme changes. */
+export const THEME_EVENT = "tezuri:theme-changed";
 
 interface SpaceRow {
   name: string;
@@ -44,6 +47,7 @@ export function Config({
             identity={identity} spacePath={spacePath}
             onSave={onSaveIdentity} busy={saveBusy} error={saveError} />
           <AssistantsSection />
+          <AppearanceSection />
         </>
       ) : (
         <div className="config-section">
@@ -216,6 +220,105 @@ function AssistantsSection() {
       <div className="row" style={{ marginTop: 10 }}>
         <button onClick={addRow}>+ Add assistant</button>
         <button className="primary" onClick={save}>Save assistants</button>
+        {saved && <span className="mono-fact">saved ✓</span>}
+        {error && <span className="detail-error">{error}</span>}
+      </div>
+    </div>
+  );
+}
+
+// ---- this space: appearance ---------------------------------------------------
+
+const SPECIMEN =
+  "The press never touches what you didn't approve. It reads your folder, " +
+  "holds your drafts, and proves the site's own build before anything ships. " +
+  "Every word stays a plain file you could edit with nothing but a text editor.";
+
+function AppearanceSection() {
+  const [presets, setPresets] = useState<ThemePreset[]>([]);
+  const [draft, setDraft] = useState<string | null>(null); // null until loaded
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let live = true;
+    Promise.all([
+      invoke<ThemePreset[]>("theme_presets"),
+      invoke<string>("read_theme"),
+    ])
+      .then(([ps, current]) => { if (live) { setPresets(ps); setDraft(current); } })
+      .catch((e) => { if (live) setError(e.message ?? String(e)); });
+    return () => { live = false; };
+  }, []);
+
+  if (draft === null) {
+    return (
+      <div className="config-section">
+        <h2>This space — appearance</h2>
+        <p className="config-empty">{error || "Loading theme…"}</p>
+      </div>
+    );
+  }
+
+  const save = async (css: string) => {
+    setSaved(false);
+    setError("");
+    try {
+      await invoke("write_theme", { css });
+      setDraft(css);
+      setSaved(true);
+      window.dispatchEvent(new CustomEvent(THEME_EVENT, { detail: css }));
+    } catch (e: any) {
+      setError(e.message ?? String(e));
+    }
+  };
+
+  return (
+    <div className="config-section">
+      <h2>This space — appearance</h2>
+      <p className="config-hint">
+        Lives in <code>theme.css</code>. Presets propose; the specimen shows; saving writes the
+        file. Or compose the CSS yourself — it is your file.
+      </p>
+
+      <div className="preset-row">
+        <button className="preset-card" onClick={() => setDraft("")}>
+          <span className="preset-name">Built-in</span>
+          <span className="preset-desc">No theme file — the app's own look.</span>
+        </button>
+        {presets.map((p) => (
+          <button key={p.id} className="preset-card" onClick={() => setDraft(p.css)}>
+            <span className="preset-name">{p.name}</span>
+            <span className="preset-desc">{p.description}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="appearance-grid">
+        <label className="appearance-editor">
+          theme.css draft
+          <textarea
+            className="theme-text"
+            value={draft}
+            spellCheck={false}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={10}
+          />
+        </label>
+        <div className="theme-specimen theme-scope" aria-label="Specimen preview">
+          <style>{draft}</style>
+          <div className="tiptap">
+            <span className="specimen-kicker">SPECIMEN</span>
+            <span className="specimen-title">On Rust</span>
+            <span className="specimen-standfirst">_A meditation on ownership._</span>
+            <span className="specimen-body">{SPECIMEN}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="row" style={{ marginTop: 10 }}>
+        <button className="primary" onClick={() => save(draft)}>Save appearance</button>
+        <button onClick={() => save("")}>Clear theme</button>
         {saved && <span className="mono-fact">saved ✓</span>}
         {error && <span className="detail-error">{error}</span>}
       </div>

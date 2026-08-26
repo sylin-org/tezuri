@@ -63,6 +63,13 @@ export interface Assistant {
   default: boolean;
 }
 
+export interface ThemePreset {
+  id: string;
+  name: string;
+  description: string;
+  css: string;
+}
+
 export interface ProofResult {
   verdict: string;
   evidence: string;

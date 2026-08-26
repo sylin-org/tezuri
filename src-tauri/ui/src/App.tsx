@@ -6,7 +6,7 @@ import { Writer } from "./Writer";
 import { Landing } from "./Landing";
 import { SpaceRail, type Workspace } from "./Space";
 import { About } from "./About";
-import { Config } from "./Config";
+import { Config, THEME_EVENT } from "./Config";
 import { ModalHost, askForm, askConfirm } from "./prompts";
 import { invoke } from "./bridge";
 import type { Identity, PublicationInfo } from "./bridge";
@@ -323,6 +323,25 @@ export default function App() {
     } catch (e: any) { setNote(e.message ?? String(e)); }
   }
 
+  // The space's own theme.css styles the editor plane — a derived view, so a
+  // publication file may dress it. Injected under the fixed id; a change
+  // event from Configuration replaces it.
+  const [themeCss, setThemeCss] = useState("");
+  useEffect(() => {
+    if (!open) { setThemeCss(""); return; }
+    invoke<string>("read_theme").then(setThemeCss).catch(() => setThemeCss(""));
+  }, [open]);
+
+  useEffect(() => {
+    const h = (e: Event) => setThemeCss((e as CustomEvent<string>).detail);
+    window.addEventListener(THEME_EVENT, h);
+    return () => window.removeEventListener(THEME_EVENT, h);
+  }, []);
+
+  const themeStyle = themeCss
+    ? <style>{themeCss}</style>
+    : null;
+
   // ---- render -----------------------------------------------------------------
   const bandTabs = (
     <nav className="band-tabs" aria-label="Tezuri">
@@ -388,7 +407,8 @@ export default function App() {
             onOpenArticle={loadArticle} onNewArticle={newDoc}
           />
 
-          <section id="editor">
+          <section id="editor" className={themeCss.trim() ? "theme-scope" : undefined}>
+            {themeStyle}
             {workspace?.kind === "article" && doc && (
               <>
                 <div className="pinbar">
