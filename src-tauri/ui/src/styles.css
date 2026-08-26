@@ -260,3 +260,36 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: v
 .writer-column > .doc-standfirst-node {
   max-width: 44em; width: 100%; margin-left: auto; margin-right: auto;
 }
+
+/* unified pinbar + autosave dot */
+.save-dot-wrap { display: inline-flex; align-items: center; gap: 6px; }
+.saved-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+.saved-dot.dirty { background: var(--amber); }
+.saved-dot.saving { background: var(--amber); animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .saved-dot.saving { animation: none; } }
+.save-label { font-size: 12px; color: var(--dim); }
+
+.state-select {
+  background: var(--panel); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font: inherit;
+}
+
+/* settings popover */
+.settings-pop {
+  position: absolute; top: 92px; right: 24px; z-index: 30;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.5);
+}
+.settings-pop h3 { margin: 0 0 2px; font-size: 13px; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; }
+.settings-pop label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--dim); }
+.settings-pop input { margin-top: 2px; }
+
+/* figure captions */
+.figure-wrapper figcaption.fig-caption {
+  text-align: center; color: var(--dim); font-size: 13px; margin-top: -0.8em;
+  outline: none; min-height: 1.2em;
+}
+.fig-caption:focus { background: rgba(240,160,40,.07); border-radius: 4px; }
+.fig-caption:empty::before { content: attr(data-placeholder); opacity: .5; }

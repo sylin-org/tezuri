@@ -28,7 +28,32 @@ export default function App() {
   const [changes, setChanges] = useState<any[]>([]);
   const [selPaths, setSelPaths] = useState<Set<string>>(new Set());
     const [sourceMode, setSourceMode] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "dirty">("saved");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const autosaveTimer = useRef<number | null>(null);
+  const dirtyRef = useRef(false);
 
+  // Mark dirty on any content/meta change; debounce autosave at 2s idle.
+  useEffect(() => {
+    if (!doc) return;
+    dirtyRef.current = true;
+    setSaveStatus("dirty");
+    if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = window.setTimeout(async () => {
+      setSaveStatus("saving");
+      await saveDoc();
+      dirtyRef.current = false;
+      setSaveStatus("saved");
+    }, 2000);
+    return () => { if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current); };
+  });
+
+
+  useEffect(() => {
+    const h = () => setSettingsOpen((v) => !v);
+    window.addEventListener("tezuri:settings", h);
+    return () => window.removeEventListener("tezuri:settings", h);
+  }, []);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -197,22 +222,44 @@ export default function App() {
           {doc && (
             <>
               <div className="pinbar">
-                <span className={`state-pill state-${doc.state}`}>{doc.state}</span>
+                <button title="Back to desk" className="tool-btn"
+                        onClick={() => setDoc(null)}>
+                  ←
+                </button>
                 <select
                   value={doc.state}
                   onChange={(e2) => setDoc({ ...doc, state: e2.target.value })}
                   aria-label="Publication state"
+                  className="state-select"
                 >
                   <option value="draft">draft</option>
                   <option value="review">review</option>
                   <option value="published">published</option>
                 </select>
+                <SaveDot status={saveStatus} />
                 <span style={{ flex: 1 }} />
                 <button onClick={() => setSourceMode(!sourceMode)}>
                   {sourceMode ? "Write" : "Source"}
                 </button>
                 <button className="primary" onClick={saveDoc}>Save</button>
               </div>
+              {settingsOpen && doc && (
+                <div className="settings-pop">
+                  <h3>Post settings</h3>
+                  <label>Cover image URL or media/ path
+                    <input value={doc.cover ?? ""} size={44}
+                      onChange={(e2) => setDoc({ ...doc, cover: e2.target.value || null })} />
+                  </label>
+                  <label>Date
+                    <input type="date" value={doc.date ?? ""}
+                      onChange={(e2) => setDoc({ ...doc, date: e2.target.value || null })} />
+                  </label>
+                  <label>Tags (comma-separated)
+                    <input value={(doc.tags ?? []).join(", ")} size={44}
+                      onChange={(e2) => setDoc({ ...doc, tags: e2.target.value.split(",").map(x => x.trim()).filter(Boolean) })} />
+                  </label>
+                </div>
+              )}
               {sourceMode ? (
                 <div className="cm-host">
                   <CodeMirror
@@ -294,5 +341,15 @@ function CodeMirrorView({ value, onChange }: { value: string; onChange: (v: stri
         basicSetup={{ foldGutter: false }}
       />
     </div>
+  );
+}
+
+function SaveDot({ status }: { status: "saved" | "saving" | "dirty" }) {
+  const label = status === "saved" ? "Saved" : status === "saving" ? "Saving…" : "Unsaved";
+  return (
+    <span className="save-dot-wrap" title={`Autosaves 2s after you stop typing — ${label}`}>
+      <span className={`saved-dot ${status}`} />
+      <span className="save-label">{label}</span>
+    </span>
   );
 }

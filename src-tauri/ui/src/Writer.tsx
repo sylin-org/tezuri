@@ -30,7 +30,7 @@ import { BubbleMenu } from "@tiptap/react/menus";
 import {
   Bold, Italic, Strikethrough, Code, Underline as UnderlineIcon, Highlighter,
   List, ListOrdered, Quote, Link2, Minus, Image as ImageIcon,
-  CheckSquare, Eye,
+  CheckSquare, Eye, Undo2, Redo2, Settings,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -116,15 +116,44 @@ export function Writer({ initialMarkdown, slug, meta, onMetaChange, onChange, wo
                 }
               }
               if (!isFirstOfRun) return <NodeViewWrapper style={{ display: "none" }} />;
+              // Figure pattern: caption = next paragraph wrapped in _…_
+              const $after = doc.resolve(pos + node.nodeSize);
+              const afterNode = $after.parent.childAfter($after.parentOffset).node;
+              let caption = "";
+              const afterText = afterNode?.textContent ?? "";
+              const m = afterText.match(/^_([^_]+)_$/);
+              if (afterNode?.type.name === "paragraph" && m) caption = m[1];
               return (
-                <NodeViewWrapper>
+                <NodeViewWrapper className="figure-wrapper">
                   <img
                     src={node.attrs.src}
-                    alt={node.attrs.alt ?? ""}
+                    alt={caption || node.attrs.alt || ""}
                     className="solo-img"
                     style={{ maxWidth: "100%", maxHeight: "60vh", width: "auto",
                              height: "auto", display: "block", margin: "1.4em auto" }}
                   />
+                  <figcaption
+                    className="fig-caption"
+                    contentEditable
+                    suppressContentEditableWarning
+                    data-placeholder="Add a caption…"
+                    onBlur={(e: any) => {
+                      const v = e.currentTarget.textContent?.trim() ?? "";
+                      if (v === caption) return;
+                      const emd = v ? `_${v}_` : "";
+                      if (afterNode?.type.name === "paragraph" && m) {
+                        props.editor.chain().focus().insertContentAt(
+                          pos + node.nodeSize,
+                          emd ? { type: "paragraph", content: [{ type: "text", text: emd, marks: [{ type: "italic" }] }] } : { type: "paragraph" }
+                        ).run();
+                      } else if (emd) {
+                        props.editor.chain().insertContentAt(pos + node.nodeSize, {
+                          type: "paragraph",
+                          content: [{ type: "text", text: emd, marks: [{ type: "italic" }] }],
+                        }).run();
+                      }
+                    }}
+                  >{caption}</figcaption>
                 </NodeViewWrapper>
               );
             });
@@ -178,6 +207,11 @@ function PinnedBar({ focusMode, setFocusMode, words }: {
   return (
     <div className="pinbar-tools" role="toolbar" aria-label="Formatting">
       <div className="toolbar">
+        <T label="Undo" hint="Ctrl+Z"
+           onClick={() => chain().undo().run()}><Undo2 size={14} /></T>
+        <T label="Redo" hint="Ctrl+Shift+Z"
+           onClick={() => chain().redo().run()}><Redo2 size={14} /></T>
+        <span className="bubble-sep" />
         <T label="Bold" hint="Ctrl+B" active={editor.isActive("bold")}
            onClick={() => chain().toggleBold().run()}><Bold size={14} /></T>
         <T label="Italic" hint="Ctrl+I" active={editor.isActive("italic")}
@@ -227,6 +261,9 @@ function PinnedBar({ focusMode, setFocusMode, words }: {
                 onClick={() => setFocusMode(!focusMode)}>
           <Eye size={14} />
         </button>
+        <T label="Post settings — tags, cover, date"
+           onClick={() => window.dispatchEvent(new CustomEvent("tezuri:settings"))}>
+          <Settings size={14} /></T>
         <span style={{ flex: 1 }} />
         <span className="wordcount">{words} words</span>
       </div>
