@@ -134,3 +134,64 @@ mod tests {
         assert!(s.contains("w=1200"));
     }
 }
+
+use crate::media_id::MediaId;
+use uuid::Uuid;
+
+/// Store bytes under a fresh `{uuid7}-{plug}.{ext}` identity.
+/// Dedup by content hash: identical bytes reuse the existing file and id.
+pub fn store_identified(
+    publication_root: &Path,
+    bytes: &[u8],
+    original_name: &str,
+) -> Result<StoredMedia> {
+    let ext = sniff_image(bytes)
+        .context("that file is not a real image (PNG, JPEG, WebP or GIF)")?;
+    if bytes.len() > 25 * 1024 * 1024 {
+        bail!("image is larger than 25 MB");
+    }
+    let hash = content_hash(bytes);
+
+    // Dedup scan: same content already stored? Reuse it.
+    let media_dir = crate::spine::confine(publication_root, Path::new("media"))?;
+    if media_dir.is_dir() {
+        for entry in fs::read_dir(&media_dir)? {
+            let p = entry?.path();
+            if let Some(name) = p.file_name().and_then(|s| s.to_str()) {
+                // Only compare originals (no recipe suffix).
+                if name.contains('_') { continue; }
+                if let Ok(existing) = fs::read(&p) {
+                    if content_hash(&existing) == hash {
+                        let (id, _) = crate::media_id::split_recipe(name)
+                            .context("stored media has an unrecognized name")?;
+                        return Ok(StoredMedia {
+                            hash,
+                            path: format!("media/{}", id.base_filename()),
+                            ext: id.ext.leak() as &'static str,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    let mut id = MediaId::new(original_name);
+    id.ext = ext.into();
+    let rel = Path::new("media").join(id.base_filename());
+    let target = confine(publication_root, &rel)?;
+    atomic_write(&target, bytes)?;
+    Journal::open(publication_root)?.record(Event::MediaStored {
+        hash: hash.clone(),
+        filename: id.base_filename(),
+    })?;
+    Ok(StoredMedia {
+        hash,
+        path: rel.to_string_lossy().replace('\\', "/"),
+        ext,
+    })
+}
+
+/// The stable base reference for documents (never carries a recipe).
+pub fn base_ref(stored: &StoredMedia) -> String {
+    stored.path.clone()
+}
