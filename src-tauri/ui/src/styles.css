@@ -123,7 +123,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: v
 .toolbar {
   display: flex; gap: 2px; padding: 2px 4px; margin-bottom: 6px;
   border: 1px solid var(--line); border-radius: 6px;
-  background: rgba(36, 26, 54, .5); width: fit-content;
+  background: var(--panel); width: fit-content;
 }
 .tool-btn {
   background: transparent; border: none; color: var(--dim);
@@ -175,7 +175,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: v
 /* selection bubble — appears on selection, Notion/Substack-style */
 .bubble {
   display:flex; gap:2px; align-items:center;
-  background:#2c2144; border:1px solid var(--line); border-radius:8px;
+  background: var(--panel-2); border:1px solid var(--line); border-radius:8px;
   padding:4px; box-shadow:0 6px 24px rgba(0,0,0,.45);
 }
 .bubble-btn {
