@@ -2,10 +2,18 @@
 // live facts assembled from this device, and the reasoning links.
 
 import { useEffect, useState } from "react";
+import type React from "react";
 import { invoke } from "./bridge";
 
 export function About() {
   const facts = useFacts();
+
+  // Links open through the shell's named command — the webview itself has
+  // no opener authority, so a plain href would be a dead control.
+  const openLink = (slug: string) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    invoke("open_about_link", { slug }).catch(() => {});
+  };
 
   return (
     <div className="about">
@@ -50,16 +58,16 @@ export function About() {
         </p>
 
         <div className="about-links">
-          <a href="https://github.com/sylin-org/tezuri" target="_blank" rel="noreferrer">
+          <a href="https://github.com/sylin-org/tezuri" onClick={openLink("source")}>
             <b>Source</b><span>Every line of the press, and its decisions beside it.</span>
           </a>
-          <a href="https://github.com/sylin-org/tezuri/blob/main/docs/PRODUCT-BRIEF.md" target="_blank" rel="noreferrer">
+          <a href="https://github.com/sylin-org/tezuri/blob/main/docs/PRODUCT-BRIEF.md" onClick={openLink("brief")}>
             <b>What it promises</b><span>The product brief: scope, invariants, refusals.</span>
           </a>
-          <a href="https://github.com/sylin-org/tezuri/blob/main/docs/DECISIONS.md" target="_blank" rel="noreferrer">
+          <a href="https://github.com/sylin-org/tezuri/blob/main/docs/DECISIONS.md" onClick={openLink("decisions")}>
             <b>Why it is built this way</b><span>Every consequential decision, kept as written.</span>
           </a>
-          <a href="https://ghostlight.sylin.org" target="_blank" rel="noreferrer">
+          <a href="https://ghostlight.sylin.org" onClick={openLink("ghostlight")}>
             <b>The rest of the toolkit</b><span>Ghostlight, the guardian this one grew up beside.</span>
           </a>
         </div>

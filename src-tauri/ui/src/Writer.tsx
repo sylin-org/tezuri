@@ -26,7 +26,8 @@ import Gapcursor from "@tiptap/extension-gapcursor";
 import { common, createLowlight } from "lowlight";
 import { Markdown } from "tiptap-markdown";
 import GalleryRun from "./Gallery";
-import { BubbleMenu } from "@tiptap/react/menus";import {
+import { BubbleMenu } from "@tiptap/react/menus";
+import { askForm } from "./prompts";import {
   Bold, Italic, Strikethrough, Code, Underline as UnderlineIcon, Highlighter,
   List, ListOrdered, Quote, Link2, Minus, Image as ImageIcon,
   CheckSquare, Eye, Undo2, Redo2, Settings,
@@ -283,17 +284,26 @@ function PinnedBar({ focusMode, setFocusMode, words }: {
            onClick={() => chain().toggleBlockquote().run()}><Quote size={14} /></T>
         <span className="bubble-sep" />
         <T label="Link" active={editor.isActive("link")}
-           onClick={() => {
+           onClick={async () => {
              const prev = editor.getAttributes("link").href ?? "";
-             const url = prompt("URL:", prev);
-             if (url === null) return;
-             url === "" ? chain().unsetLink().run()
-                        : chain().setLink({ href: url }).run();
+             const vals = await askForm({
+               title: "Link",
+               confirmLabel: "Apply",
+               fields: [{ key: "url", label: "URL", initial: prev }],
+             });
+             if (vals === null) return;
+             vals.url === "" ? chain().unsetLink().run()
+                             : chain().setLink({ href: vals.url }).run();
            }}><Link2 size={14} /></T>
         <T label="Image"
-           onClick={() => {
-             const url = prompt("Image URL or media/ path:");
-             if (url) chain().setImage({ src: url }).run();
+           onClick={async () => {
+             const vals = await askForm({
+               title: "Image",
+               hint: "Paste or drop images to store them in the space; here you can reference a media/ path directly.",
+               confirmLabel: "Insert",
+               fields: [{ key: "src", label: "media/ path", placeholder: "media/<id>-<name>.png" }],
+             });
+             if (vals && vals.src) chain().setImage({ src: vals.src }).run();
            }}><ImageIcon size={14} /></T>
         <T label="Divider"
            onClick={() => chain().setHorizontalRule().run()}><Minus size={14} /></T>
@@ -329,12 +339,16 @@ function SelectionBubble() {
               onClick={() => chain().toggleStrike().run()}><Strikethrough size={14} /></button>
       <span className="bubble-sep" />
       <button className={b(editor.isActive("link"))}
-              onClick={() => {
+              onClick={async () => {
                 const prev = editor.getAttributes("link").href ?? "";
-                const url = prompt("URL:", prev);
-                if (url === null) return;
-                url === "" ? chain().unsetLink().run()
-                           : chain().setLink({ href: url }).run();
+                const vals = await askForm({
+                  title: "Link",
+                  confirmLabel: "Apply",
+                  fields: [{ key: "url", label: "URL", initial: prev }],
+                });
+                if (vals === null) return;
+                vals.url === "" ? chain().unsetLink().run()
+                                : chain().setLink({ href: vals.url }).run();
               }}><Link2 size={14} /></button>
     </BubbleMenu>
   );

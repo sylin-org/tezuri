@@ -6,6 +6,7 @@ import { Writer } from "./Writer";
 import { Landing } from "./Landing";
 import { SpaceRail, SpaceDetail, type Workspace } from "./Space";
 import { About } from "./About";
+import { ModalHost, askForm, askConfirm } from "./prompts";
 import { invoke } from "./bridge";
 import type { Identity, PublicationInfo } from "./bridge";
 
@@ -158,26 +159,48 @@ export default function App() {
     try {
       const path = await invoke<string | null>("pick_folder");
       if (!path) return;
-      const name = prompt("Space name:", path.split(/[\\/]/).pop() || "publication") || "";
-      const persona = prompt("Persona / author name:", "") || "";
-      const byline = prompt("Byline (optional):", "") || "";
+      const folderName = path.split(/[\\/]/).pop() || "publication";
+      const vals = await askForm({
+        title: "New space",
+        hint: "These characteristics live in publication.yaml inside the folder — plain files, yours.",
+        confirmLabel: "Add space",
+        fields: [
+          { key: "name", label: "Name", initial: folderName },
+          { key: "persona", label: "Persona", placeholder: "who writes here" },
+          { key: "byline", label: "Byline", placeholder: "e.g. words and photographs by…" },
+        ],
+      });
+      if (!vals) return;
       const reg = await invoke<{ publications: any[] }>("registry_add", {
-        pubData: { name: name || path.split(/[\\/]/).pop() || "publication", persona, path },
+        pubData: { name: vals.name.trim() || folderName, persona: vals.persona.trim(), path },
       });
       setPubList(reg.publications);
       await openSpace(path);
-      // Write the identity the author just typed; files carry the truth.
-      try {
-        const id = await invoke<Identity>("read_identity", { path });
-        await invoke("save_identity", { path, identity: { ...id, name: name || id.name, persona, byline } });
-      } catch { /* identity editing is also available in Details */ }
+      // Persist what the author just typed; the file carries the truth.
+      const id = await invoke<Identity>("read_identity", { path }).catch(() => EMPTY_ID);
+      await invoke("save_identity", {
+        path,
+        identity: {
+          ...id,
+          name: vals.name.trim() || id.name,
+          persona: vals.persona.trim(),
+          byline: vals.byline.trim(),
+        },
+      }).catch(() => {});
     } catch (e: any) {
       setLandingError(e.message ?? String(e));
     }
   }
 
   async function removePublication(root: string) {
-    if (!confirm(`Remove "${root}" from Tezuri? Files on disk are untouched.`)) return;
+    const pub = pubList.find((p2) => p2.root === root);
+    const ok = await askConfirm({
+      title: "Remove space",
+      body: `Remove “${pub?.name ?? root}” from Tezuri? Files on disk are untouched.`,
+      confirmLabel: "Remove",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       const reg = await invoke<{ publications: any[] }>("registry_remove", { path: root });
       setPubList(reg.publications);
@@ -209,9 +232,18 @@ export default function App() {
   }
 
   async function newDoc() {
-    const slug = prompt("Slug: lowercase-kebab, like \"on-rust\"");
-    if (!slug) return;
-    const title = prompt("Title:") || slug;
+    const vals = await askForm({
+      title: "New article",
+      confirmLabel: "Create",
+      fields: [
+        { key: "slug", label: "Slug", placeholder: "lowercase-kebab, like on-rust" },
+        { key: "title", label: "Title", placeholder: "Working title" },
+      ],
+    });
+    if (!vals) return;
+    const slug = vals.slug.trim();
+    const title = vals.title.trim() || slug;
+    if (!slug) { setNote("an article needs a slug"); return; }
     try {
       await invoke("create_article", { slug, title });
       await refreshDesk();
@@ -300,6 +332,7 @@ export default function App() {
 
   return (
     <>
+      <ModalHost />
       <header className="app-band">
         <span className="lamp" aria-hidden="true">
           <span className="lamp-halo" />
