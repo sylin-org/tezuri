@@ -43,12 +43,14 @@ impl Registry {
         crate::spine::atomic_write(&p, serde_json::to_string_pretty(self)?.as_bytes())
     }
 
+    /// Pure domain rule: refuse a root that is already registered. Persisting
+    /// is the caller's separate, explicit act — never a side effect.
     pub fn add(&mut self, publication: Publication) -> Result<()> {
         if self.publications.iter().any(|p| p.root == publication.root) {
             anyhow::bail!("this folder is already registered");
         }
         self.publications.push(publication);
-        self.save()
+        Ok(())
     }
 }
 
@@ -64,14 +66,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn registry_refuses_duplicates() {
+    fn registry_refuses_duplicates_without_touching_disk() {
+        let p = Registry::path().unwrap();
+        let before = std::fs::read(&p).ok();
+
         let mut r = Registry::default();
         r.add(Publication {
             name: "blog".into(),
             persona: "me".into(),
             root: PathBuf::from("/tmp/blog"),
         })
-        .ok();
+        .unwrap();
         assert!(r
             .add(Publication {
                 name: "again".into(),
@@ -79,5 +84,9 @@ mod tests {
                 root: PathBuf::from("/tmp/blog"),
             })
             .is_err());
+
+        // add() is pure domain logic; persistence stays with callers.
+        let after = std::fs::read(&p).ok();
+        assert_eq!(before, after);
     }
 }

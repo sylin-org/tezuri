@@ -8,7 +8,7 @@
 //! block after it when it is a standalone `_…_` line.
 
 use crate::spine::{atomic_write, confine, content_hash, Event, Journal};
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
@@ -112,8 +112,28 @@ pub fn title_of(document: &str, slug: &str) -> String {
         .unwrap_or_else(|| slug.replace('-', " "))
 }
 
+/// A slug is the article's folder name and its identity everywhere. Keep it
+/// boring on purpose: lowercase-kebab, one path component, bounded length.
+pub fn validate_slug(slug: &str) -> Result<()> {
+    let ok = !slug.is_empty()
+        && slug.len() <= 80
+        && slug.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        && !slug.starts_with('-')
+        && !slug.ends_with('-')
+        && !slug.contains("--");
+    if ok {
+        Ok(())
+    } else {
+        bail!(
+            "invalid slug \"{slug}\": use lowercase letters, digits, and \
+             single dashes (like \"on-rust\"), at most 80 characters"
+        );
+    }
+}
+
 impl Article {
     pub fn dir(publication_root: &Path, slug: &str) -> Result<std::path::PathBuf> {
+        validate_slug(slug)?;
         confine(publication_root, &Path::new("articles").join(slug))
     }
 
@@ -233,6 +253,22 @@ mod tests {
     use tempfile::tempdir;
 
     const SAMPLE: &str = "# On Rust\n\n_A meditation on ownership._\n\nHello world.\n";
+
+    #[test]
+    fn slugs_are_boring_by_design() {
+        assert!(validate_slug("on-rust").is_ok());
+        assert!(validate_slug("post2026").is_ok());
+        for bad in [
+            "", "UPPER", "a/b", "../escape", "-lead", "trail-", "dou--ble",
+            "under_score", "space inside", "spàce",
+        ] {
+            assert!(validate_slug(bad).is_err(), "expected refusal: {bad:?}");
+        }
+        // The path gate must flow through dir()/load()/create(), not just
+        // this validator.
+        let dir = tempdir().unwrap();
+        assert!(Article::dir(dir.path(), "a/b").is_err());
+    }
 
     #[test]
     fn parses_title_and_standfirst() {
