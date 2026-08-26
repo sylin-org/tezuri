@@ -55,6 +55,14 @@ export interface AdviceResult {
   output: string;
 }
 
+export interface Assistant {
+  id: string;
+  command: string;
+  args: string[];
+  note: string | null;
+  default: boolean;
+}
+
 export interface ProofResult {
   verdict: string;
   evidence: string;

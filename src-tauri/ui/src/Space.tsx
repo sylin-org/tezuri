@@ -1,28 +1,22 @@
 // The space view: identity rail on the left, workspace as the main plane.
-// The rail carries the space's characteristics, its momentum, and the
-// searchable body of work. Selecting detail/article swaps the workspace,
-// never the whole window.
+// The rail carries the space's identity, its momentum, and the searchable
+// body of work. Characteristics and assistants live in Configuration; this
+// rail reads and navigates.
 
 import { useMemo, useState } from "react";
 import type { DeskEntry, Identity } from "./bridge";
 
-export type Workspace =
-  | { kind: "detail" }
-  | { kind: "article"; slug: string | null } // null = new, unsaved
-  | null;
+export type Workspace = { kind: "article"; slug: string } | null;
 
 export function SpaceRail({
-  identity, desk, activeSlug, workspace,
-  onOpenArticle, onNewArticle, onShowDetail, onSearch,
+  identity, desk, activeSlug,
+  onOpenArticle, onNewArticle,
 }: {
   identity: Identity | null;
   desk: { entries: DeskEntry[] };
   activeSlug: string | null;
-  workspace: Workspace;
   onOpenArticle: (slug: string) => void;
   onNewArticle: () => void;
-  onShowDetail: () => void;
-  onSearch: (q: string) => void;
 }) {
   const [q, setQ] = useState("");
   const entries = useMemo(() => {
@@ -41,7 +35,6 @@ export function SpaceRail({
   }), [desk.entries]);
 
   const name = identity?.name || "This space";
-  const detailActive = workspace?.kind === "detail";
 
   return (
     <section id="desk" aria-label="Space rail">
@@ -52,9 +45,6 @@ export function SpaceRail({
           {(identity?.byline || identity?.persona) &&
             <span className="space-byline">{identity.byline || identity.persona}</span>}
         </div>
-        <button className={`rail-tab${detailActive ? " active" : ""}`} onClick={onShowDetail}>
-          {detailActive ? "Viewing details" : "Details"}
-        </button>
       </div>
 
       <div className="rail-momentum" role="group" aria-label="Momentum">
@@ -69,7 +59,7 @@ export function SpaceRail({
           className="rail-search"
           placeholder="Search this space…"
           value={q}
-          onChange={(e) => { setQ(e.target.value); onSearch(e.target.value); }}
+          onChange={(e) => setQ(e.target.value)}
           aria-label="Search articles"
         />
       </div>
@@ -95,51 +85,5 @@ export function SpaceRail({
 
       <button className="rail-new" onClick={onNewArticle}>+ New article</button>
     </section>
-  );
-}
-
-export function SpaceDetail({
-  identity, onSave, busy, error,
-}: {
-  identity: Identity | null;
-  onSave: (next: Identity) => void;
-  busy: boolean;
-  error: string;
-}) {
-  const [form, setForm] = useState<Identity>(
-    () => identity ?? { name: "", byline: "", persona: "" }
-  );
-  const set = (k: keyof Identity, v: string) => setForm({ ...form, [k]: v });
-
-  return (
-    <div className="detail-plane" role="form" aria-label="Space details">
-      <p className="crumb">SPACE DETAILS</p>
-      <h1 className="detail-title">{identity?.name || "Name this space"}</h1>
-      <p className="detail-sub">
-        These characteristics live in <code>publication.yaml</code> inside the space — plain
-        files, yours. Anything else you keep in that file is preserved untouched.
-      </p>
-      <div className="detail-form">
-        <label>Name
-          <input value={form.name} onChange={(e) => set("name", e.target.value)}
-                 placeholder="Kintsugi" />
-        </label>
-        <label>Byline
-          <input value={form.byline} onChange={(e) => set("byline", e.target.value)}
-                 placeholder="words and photographs by…" />
-        </label>
-        <label>Persona
-          <input value={form.persona} onChange={(e) => set("persona", e.target.value)}
-                 placeholder="who writes here" />
-        </label>
-        <div className="row" style={{ marginTop: 14 }}>
-          <button className="primary" disabled={busy}
-                  onClick={() => onSave(form)}>
-            {busy ? "Saving…" : "Save details"}
-          </button>
-          {error && <span className="detail-error">{error}</span>}
-        </div>
-      </div>
-    </div>
   );
 }

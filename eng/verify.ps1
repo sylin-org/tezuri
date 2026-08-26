@@ -17,6 +17,8 @@ try {
             npm ci --no-fund --no-audit
             if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
         }
+        npx tsc --noEmit
+        if ($LASTEXITCODE -ne 0) { throw 'frontend typecheck failed' }
         npm run build
         if ($LASTEXITCODE -ne 0) { throw 'frontend build failed' }
     }

@@ -4,13 +4,14 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { Writer } from "./Writer";
 import { Landing } from "./Landing";
-import { SpaceRail, SpaceDetail, type Workspace } from "./Space";
+import { SpaceRail, type Workspace } from "./Space";
 import { About } from "./About";
+import { Config } from "./Config";
 import { ModalHost, askForm, askConfirm } from "./prompts";
 import { invoke } from "./bridge";
 import type { Identity, PublicationInfo } from "./bridge";
 
-type Surface = "landing" | "space" | "about";
+type Surface = "landing" | "space" | "config" | "about";
 
 const EMPTY_ID: Identity = { name: "", byline: "", persona: "" };
 
@@ -29,6 +30,7 @@ export default function App() {
   const [workspace, setWorkspace] = useState<Workspace>(null);
   const [detailBusy, setDetailBusy] = useState(false);
   const [detailError, setDetailError] = useState("");
+  const [activeSlug, setActiveSlug] = useState<string | null>(null);
 
   // ---- article state --------------------------------------------------------
   const [doc, setDoc] = useState<{
@@ -225,6 +227,7 @@ export default function App() {
       setText(a.raw);
       setSaveStatus("saved");
       dirtyRef.current = false;
+      setActiveSlug(slug);
       setWorkspace({ kind: "article", slug });
     } catch (e: any) {
       setNote(e.message ?? String(e));
@@ -324,7 +327,9 @@ export default function App() {
   const bandTabs = (
     <nav className="band-tabs" aria-label="Tezuri">
       <button className={`tab${surface === "landing" ? " active" : ""}`}
-              onClick={() => { setSurface("landing"); setWorkspace(null); }}>Spaces</button>
+              onClick={() => { setSurface("landing"); setWorkspace(null); setActiveSlug(null); }}>Spaces</button>
+      <button className={`tab${surface === "config" ? " active" : ""}`}
+              onClick={() => setSurface("config")}>Configuration</button>
       <button className={`tab${surface === "about" ? " active" : ""}`}
               onClick={() => setSurface("about")}>About</button>
     </nav>
@@ -351,41 +356,44 @@ export default function App() {
         </span>
         <span style={{ flex: 1 }} />
         {bandTabs}
-        <button onClick={() => setAssistOpen(!assistOpen)}
-                title="Advisory help: styling, content, formatting">Assistant</button>
       </header>
 
       {surface === "landing" && (
         <Landing
           pubs={pubList} lastOpened={lastOpened} error={landingError}
-          onOpen={openSpace} onAdd={addPublication} onRemove={removePublication}
+          onOpen={openSpace} onAdd={addPublication}
         />
       )}
 
       {surface === "about" && <About />}
 
+      {surface === "config" && (
+        <Config
+          spaceOpen={!!open}
+          spacePath={open?.path ?? null}
+          identity={identity}
+          spaces={pubList}
+          onSaveIdentity={saveIdentity}
+          saveBusy={detailBusy}
+          saveError={detailError}
+          onRemoveSpace={removePublication}
+        />
+      )}
+
       {surface === "space" && open && (
         <main>
           <SpaceRail
-            identity={identity} desk={{ entries }} workspace={workspace}
-            activeSlug={workspace?.kind === "article" ? workspace.slug : null}
+            identity={identity} desk={{ entries }}
+            activeSlug={activeSlug}
             onOpenArticle={loadArticle} onNewArticle={newDoc}
-            onShowDetail={() => setWorkspace({ kind: "detail" })}
-            onSearch={() => {}}
           />
 
           <section id="editor">
-            {workspace?.kind === "detail" && (
-              <SpaceDetail
-                identity={identity} onSave={saveIdentity}
-                busy={detailBusy} error={detailError}
-              />
-            )}
             {workspace?.kind === "article" && doc && (
               <>
                 <div className="pinbar">
                   <button title="Back to the rail" className="tool-btn"
-                          onClick={() => { if (saveStatus !== "saving") setWorkspace(null); setDoc(null); }}>
+                          onClick={() => { if (saveStatus !== "saving") { setWorkspace(null); setDoc(null); setActiveSlug(null); } }}>
                     ←
                   </button>
                   <select
@@ -399,6 +407,8 @@ export default function App() {
                   </select>
                   <SaveDot status={saveStatus} />
                   <span style={{ flex: 1 }} />
+                  <button onClick={() => setAssistOpen(!assistOpen)}
+                          title="Advisory help: polish, voice, facts">Assistant</button>
                   <button onClick={() => setSourceMode(!sourceMode)}>
                     {sourceMode ? "Write" : "Source"}
                   </button>
@@ -447,7 +457,13 @@ export default function App() {
               <div className="detail-plane">
                 <p className="crumb">WORKSPACE</p>
                 <h1 className="detail-title">{identity?.name || "This space"}</h1>
-                <p className="detail-sub">Open an article from the rail, start a new one, or view the space's details.</p>
+                <p className="detail-sub">Open an article from the rail, or start a new one.</p>
+                <div className="row" style={{ marginTop: 18 }}>
+                  <button onClick={() => setAssistOpen(!assistOpen)}>
+                    {assistOpen ? "Hide assistant" : "Assistant"}
+                  </button>
+                  <span className="mono-fact">advisory help — polish, voice, facts; nothing enters the document unaccepted</span>
+                </div>
               </div>
             )}
           </section>

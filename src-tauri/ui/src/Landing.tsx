@@ -14,13 +14,12 @@ interface SpaceCard {
 }
 
 export function Landing({
-  pubs, lastOpened, onOpen, onAdd, onRemove, error,
+  pubs, lastOpened, onOpen, onAdd, error,
 }: {
   pubs: { name: string; persona: string; root: string }[];
   lastOpened: string | null;
   onOpen: (root: string) => void;
   onAdd: () => void;
-  onRemove: (root: string) => void;
   error: string;
 }) {
   const [cards, setCards] = useState<SpaceCard[]>([]);
@@ -91,12 +90,6 @@ export function Landing({
           </span>
         </button>
       </div>
-
-      {featured && (
-        <button className="link-danger" onClick={() => onRemove(featured.root)}>
-          Remove “{nameOf(featured)}” from this list…
-        </button>
-      )}
     </div>
   );
 }

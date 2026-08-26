@@ -82,7 +82,8 @@ export function ModalHost() {
     if (!req) return;
     const h = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        req.resolve(req.kind === "confirm" ? false : null);
+        if (req.kind === "confirm") req.resolve(false);
+        else req.resolve(null);
         setReq(null);
       }
     };
@@ -93,7 +94,8 @@ export function ModalHost() {
   if (!req) return null;
 
   const cancel = () => {
-    req.resolve(req.kind === "confirm" ? false : null);
+    if (req.kind === "confirm") req.resolve(false);
+    else req.resolve(null);
     setReq(null);
   };
 

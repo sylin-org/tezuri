@@ -46,8 +46,9 @@ The canonical repository check is:
 pwsh ./eng/verify.ps1
 ```
 
-It builds the frontend bundle, checks rustfmt, runs clippy with warnings denied, runs the whole
-test suite, compiles the desktop executable, and audits the working patch for whitespace errors.
+It type-checks and builds the frontend bundle, checks rustfmt, runs clippy with warnings denied,
+runs the whole test suite, compiles the desktop executable, and audits the working patch for
+whitespace errors.
 Platform installer bundling is not wired up yet; once installers exist, release checks will cover
 the artifact a person actually downloads.
 
