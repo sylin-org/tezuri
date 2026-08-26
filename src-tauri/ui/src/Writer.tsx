@@ -7,9 +7,9 @@
 // remains the source of truth via tiptap-markdown.
 
 import React from "react";
-import { EditorProvider, useCurrentEditor } from "@tiptap/react";
+import { EditorProvider, useCurrentEditor, ReactNodeViewRenderer, NodeViewWrapper } from "@tiptap/react";
+import type { NodeViewProps } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
-import { Node, mergeAttributes } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
@@ -25,6 +25,7 @@ import Dropcursor from "@tiptap/extension-dropcursor";
 import Gapcursor from "@tiptap/extension-gapcursor";
 import { common, createLowlight } from "lowlight";
 import { Markdown } from "tiptap-markdown";
+import GalleryRun from "./Gallery";
 import { BubbleMenu } from "@tiptap/react/menus";
 import {
   Bold, Italic, Strikethrough, Code, Underline as UnderlineIcon, Highlighter,
@@ -36,31 +37,6 @@ import {
 // Document title / standfirst as real TipTap nodes: part of the content flow,
 // serialized to frontmatter on save (never into the body markdown).
 // ---------------------------------------------------------------------------
-
-const DocTitle = Node.create({
-  name: "docTitle",
-  group: "block",
-  defining: true,
-  parseHTML() {
-    // Not parsed from markdown — injected programmatically on load.
-    return [{ tag: 'div[data-doc-title]' }];
-  },
-  renderHTML({ HTMLAttributes }) {
-    return ["div", mergeAttributes(HTMLAttributes, { "data-doc-title": "", class: "doc-title-node" }), 0];
-  },
-});
-
-const DocStandfirst = Node.create({
-  name: "docStandfirst",
-  group: "block",
-  defining: true,
-  parseHTML() {
-    return [{ tag: 'div[data-doc-standfirst]' }];
-  },
-  renderHTML({ HTMLAttributes }) {
-    return ["div", mergeAttributes(HTMLAttributes, { "data-doc-standfirst": "", class: "doc-standfirst-node" }), 0];
-  },
-});
 
 export interface WriterProps {
   initialMarkdown: string;
@@ -82,15 +58,78 @@ export function Writer({ initialMarkdown, slug, meta, onMetaChange, onChange, wo
   const suppressUpdate = React.useRef(false);
 
   return (
+    <div className="writer-column">
+      <h1
+        className="doc-title-node"
+        contentEditable
+        suppressContentEditableWarning
+        onBlur={(e) => {
+          const v = e.currentTarget.textContent?.trim() ?? "";
+          if (v && v !== meta.title) onMetaChange({ title: v });
+        }}
+      >{meta.title}</h1>
+      <p
+        className="doc-standfirst-node"
+        contentEditable
+        data-placeholder="Add a standfirst…"
+        suppressContentEditableWarning
+        onBlur={(e) => {
+          const v = e.currentTarget.textContent?.trim() ?? "";
+          if (v !== (meta.standfirst ?? "")) onMetaChange({ standfirst: v || null });
+        }}
+      >{meta.standfirst ?? ""}</p>
     <EditorProvider
       key={slug}
       immediatelyRender={false}
       extensions={[
         StarterKit.configure({ heading: { levels: [2, 3] } }),
-        DocTitle,
-        DocStandfirst,
         Link.configure({ openOnClick: false, autolink: true }),
-        Image.configure({ inline: false, allowBase64: true }),
+        Image.extend({
+          addNodeView() {
+            return ReactNodeViewRenderer((props: NodeViewProps) => {
+              const doc = props.editor.state.doc;
+              const pos = props.getPos();
+              if (typeof pos !== "number") return <NodeViewWrapper />;
+              const $pos = doc.resolve(pos);
+              const node = $pos.parent.childAfter($pos.parentOffset).node;
+              if (!node || node.type.name !== "image") return <NodeViewWrapper />;
+              const collect: { src: string; alt?: string }[] = [];
+              let isFirstOfRun = !$pos.nodeBefore || $pos.nodeBefore.type.name !== "image";
+              if (isFirstOfRun) {
+                collect.push({ src: node.attrs.src as string, alt: node.attrs.alt as string });
+                let scan = pos + node.nodeSize;
+                for (;;) {
+                  const $scan = doc.resolve(scan);
+                  const next = $scan.parent.childAfter($scan.parentOffset);
+                  if (next.node?.type.name === "image" && next.offset === 0) {
+                    collect.push({ src: next.node.attrs.src as string, alt: next.node.attrs.alt as string });
+                    scan += next.node.nodeSize;
+                  } else break;
+                  if (collect.length > 12) break;
+                }
+                if (collect.length >= 2) {
+                  return (
+                    <NodeViewWrapper className="gallery-wrapper">
+                      <GalleryRun images={collect} />
+                    </NodeViewWrapper>
+                  );
+                }
+              }
+              if (!isFirstOfRun) return <NodeViewWrapper style={{ display: "none" }} />;
+              return (
+                <NodeViewWrapper>
+                  <img
+                    src={node.attrs.src}
+                    alt={node.attrs.alt ?? ""}
+                    className="solo-img"
+                    style={{ maxWidth: "100%", maxHeight: "60vh", width: "auto",
+                             height: "auto", display: "block", margin: "1.4em auto" }}
+                  />
+                </NodeViewWrapper>
+              );
+            });
+          },
+        }).configure({ inline: false, allowBase64: true }),
         Placeholder.configure({
           placeholder: ({ node }: any) =>
             node.type.name === "docTitle" ? "Article title"
@@ -109,55 +148,13 @@ export function Writer({ initialMarkdown, slug, meta, onMetaChange, onChange, wo
         Markdown.configure({ html: false, tightLists: true, linkify: true, breaks: false }),
       ]}
       content={initialMarkdown}
-      onCreate={({ editor }) => {
-        // Inject title + standfirst at the top of the document flow.
-        suppressUpdate.current = true;
-        editor
-          .chain()
-          .insertContentAt(0, { type: "docStandfirst", content: meta.standfirst ? [{ type: "text", text: meta.standfirst }] : [] })
-          .insertContentAt(0, { type: "docTitle", content: [{ type: "text", text: meta.title }] })
-          .run();
-        setTimeout(() => { suppressUpdate.current = false; }, 50);
-      }}
-      onUpdate={({ editor }) => {
-        if (suppressUpdate.current) return;
-        // Title/standfirst changes route to meta callbacks; body to markdown.
-        const json = editor.getJSON();
-        let bodyStarted = false;
-        const bodyNodes: any[] = [];
-        let newTitle = meta.title;
-        let newStandfirst: string | null = null;
-        for (const n of json.content ?? []) {
-          if (n.type === "docTitle") {
-            newTitle = (n.content ?? []).map((c: any) => c.text ?? "").join("");
-          } else if (n.type === "docStandfirst") {
-            newStandfirst = (n.content ?? []).map((c: any) => c.text ?? "").join("") || null;
-          } else {
-            bodyStarted = true;
-            bodyNodes.push(n);
-          }
-        }
-        void bodyStarted;
-        if (newTitle !== meta.title || newStandfirst !== meta.standfirst) {
-          onMetaChange({ title: newTitle, standfirst: newStandfirst });
-        }
-        // Reconstruct markdown of the body only. tiptap-markdown serializes
-        // from a full doc; build a temp doc view by serializing each node is
-        // heavy — instead serialize the whole doc and strip nothing: our
-        // custom nodes render as divs which tiptap-markdown emits as HTML we
-        // don't want in the body. Simplest correct path: keep body markdown
-        // state separate — serialize only when doc has no header nodes by
-        // using the serializer on bodyNodes through a temporary editor is
-        // overkill; so we ask the storage for full markdown and rely on the
-        // header nodes being excluded by their serializers emitting nothing.
-        onChange((editor.storage as any).markdown.getMarkdown());
-      }}
+      onUpdate={({ editor }) => onChange((editor.storage as any).markdown.getMarkdown())}
       editorProps={{ attributes: { class: "writer", spellcheck: "true" } }}
       slotBefore={<PinnedBar focusMode={focusMode} setFocusMode={setFocusMode} words={words} />}
     >
       <SelectionBubble />
-      <CharCount />
     </EditorProvider>
+    </div>
   );
 }
 
