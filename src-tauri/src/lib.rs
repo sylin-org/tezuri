@@ -134,6 +134,31 @@ pub struct PublicationsInfo {
     pub words: usize,
 }
 
+// -- identity ----------------------------------------------------------------
+
+#[tauri::command]
+fn read_identity(path: String) -> Result<tezuri::identity::Identity, CommandError> {
+    let p = PathBuf::from(&path);
+    if !p.is_dir() {
+        return Err(err("that folder does not exist"));
+    }
+    tezuri::identity::Identity::load(&p).map_err(err)
+}
+
+#[tauri::command]
+fn save_identity(
+    path: String,
+    identity: tezuri::identity::Identity,
+    session: State<Session>,
+) -> Result<(), CommandError> {
+    // Only the open session's own publication may be rewritten.
+    let current = root(&session)?;
+    if current != PathBuf::from(&path) {
+        return Err(err("that publication is not the open session"));
+    }
+    identity.save(&current).map_err(err)
+}
+
 // -- desk ------------------------------------------------------------------
 
 static APP_HANDLE: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
@@ -367,6 +392,8 @@ pub fn run() {
             pick_folder,
             open_publication,
             read_theme,
+            read_identity,
+            save_identity,
             desk,
             read_article,
             save_article,
