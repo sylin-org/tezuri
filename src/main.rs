@@ -40,11 +40,11 @@ fn cmd_write(root: &std::path::Path, rest: &[String]) -> Result<()> {
     };
     println!(
         "{} [{}] ({} words)",
-        article.meta.title,
+        article.title(),
         article.meta.state.as_str(),
-        article.body.split_whitespace().count()
+        article.word_count()
     );
-    println!("edit articles/{}/index.md, then: tezuri prove", slug);
+    println!("edit articles/{}/article.md, then: tezuri prove", slug);
     Ok(())
 }
 

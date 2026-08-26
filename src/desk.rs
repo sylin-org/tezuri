@@ -41,16 +41,16 @@ impl Desk {
                     Some(s) => s.to_string(),
                     None => continue,
                 };
-                let index = p.join("index.md");
+                let index = p.join("article.md");
                 if !index.is_file() {
                     continue;
                 }
                 let a = Article::load(publication_root, &slug)?;
                 entries.push(DeskEntry {
-                    words: count_words(&a.body),
+                    words: a.word_count(),
                     links: a.links(),
                     slug: a.meta.slug.clone(),
-                    title: a.meta.title.clone(),
+                    title: a.title(),
                     state: a.meta.state.clone(),
                     date: a.meta.date.clone(),
                     dangling_links: vec![],
@@ -148,7 +148,7 @@ mod tests {
         Article::create(dir.path(), "alpha", "Alpha").unwrap();
         Article::create(dir.path(), "beta", "Beta").unwrap();
         let mut b = Article::load(dir.path(), "beta").unwrap();
-        b.body = "see [[alpha]] and [[ghost]]\n".into();
+        b.document = "# Beta\n\nsee [[alpha]] and [[ghost]]\n".into();
         b.save(dir.path()).unwrap();
 
         let desk = Desk::rebuild(dir.path()).unwrap();

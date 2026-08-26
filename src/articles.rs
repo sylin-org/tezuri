@@ -1,10 +1,11 @@
-//! Articles: the Markdown file is truth.
+//! Articles: the document is prose; metadata is a sibling record.
 //!
-//! An article is `articles/<slug>/index.md` — YAML frontmatter plus a
-//! CommonMark body. Tezuri manages a small set of frontmatter keys and writes
-//! them *surgically*: every other line of the file is preserved byte-exactly.
-//! Unknown metadata survives untouched by construction, because it is never
-//! parsed into a model at all — it is skipped text.
+//! `articles/<slug>/article.md` — H1 title, optional standfirst line, body.
+//! One Markdown flow, nothing else. `articles/<slug>/meta.yaml` — state,
+//! date, tags, cover reference, provenance. Content and data never mix.
+//!
+//! Title is derived from the first `# ` heading; standfirst from the first
+//! block after it when it is a standalone `_…_` line.
 
 use crate::spine::{atomic_write, confine, content_hash, Event, Journal};
 use anyhow::{Context, Result};
@@ -12,10 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-/// The keys Tezuri understands. Finite, on purpose.
-pub const MANAGED_KEYS: [&str; 6] = ["title", "state", "date", "tags", "standfirst", "cover"];
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum State {
     Draft,
@@ -33,146 +31,153 @@ impl State {
     }
 }
 
-#[derive(Debug, Clone, Serialize, serde::Deserialize)]
+/// The sidecar record. Deliberately tiny; unknown fields survive via
+/// serde's ignore-by-default and are preserved by surgical text handling
+/// in save (we only rewrite keys we know).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ArticleMeta {
     pub slug: String,
-    pub title: String,
+    #[serde(default = "default_state")]
     pub state: State,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub date: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tags: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub standfirst: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// Reference to a media base id used as the hero image.
+    #[serde(default)]
     pub cover: Option<String>,
+    #[serde(default)]
+    pub standfirst: Option<String>,
+    /// Provenance: where this article came from (e.g. substack-import).
+    #[serde(flatten)]
+    pub extra: std::collections::BTreeMap<String, serde_yaml::Value>,
+}
+
+fn default_state() -> State {
+    State::Draft
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Article {
     pub meta: ArticleMeta,
-    /// Raw body text (everything after the closing fence). Never round-tripped
-    /// through an AST — what the author wrote is what this holds.
-    pub body: String,
-    /// Byte length of the original frontmatter block, for surgical writes.
-    pub frontmatter_raw: Vec<String>,
+    /// The full document flow: H1 + standfirst line + body. This IS the file.
+    pub document: String,
 }
 
-/// Split a markdown file into (frontmatter lines, body).
-fn split_document(text: &str) -> (Vec<String>, String) {
-    let mut lines = text.lines();
-    let first = lines.next().unwrap_or("");
-    if first.trim() != "---" {
-        return (vec![], text.to_string());
+// ---------------------------------------------------------------------------
+// Parsing the dialect.
+// ---------------------------------------------------------------------------
+
+/// Split a document into (title, standfirst, body-start-offset).
+/// Title = first `# ` heading. Standfirst = first block after it that is a
+/// single-line `_…_`. Body starts right after whichever came last.
+pub fn parse_flow(document: &str) -> (Option<String>, Option<String>) {
+    let mut lines = document.lines().peekable();
+    let mut title = None;
+    let mut standfirst = None;
+
+    // Skip leading blanks.
+    while let Some(l) = lines.peek() {
+        if l.trim().is_empty() { lines.next(); } else { break; }
     }
-    let mut fm = vec!["---".to_string()];
-    let mut body_start = 1usize;
-    for (i, l) in lines.enumerate() {
-        if l.trim() == "---" {
-            fm.push(l.to_string());
-            body_start = i + 2;
-            break;
-        } else {
-            fm.push(l.to_string());
+    if let Some(l) = lines.peek() {
+        if let Some(rest) = l.strip_prefix("# ") {
+            title = Some(rest.trim().to_string());
+            lines.next();
         }
     }
-    let rest: Vec<&str> = text.lines().skip(body_start).collect();
-    let mut body = rest.join("\n");
-    if text.ends_with('\n') {
-        body.push('\n');
+    // Skip one blank between title and possible standfirst.
+    if let Some(l) = lines.peek() {
+        if l.trim().is_empty() { lines.next(); }
     }
-    (fm, body)
+    if let Some(l) = lines.peek() {
+        let trimmed = l.trim();
+        if trimmed.starts_with('_') && trimmed.ends_with('_') && trimmed.len() > 2 {
+            standfirst = Some(trimmed[1..trimmed.len() - 1].to_string());
+        }
+    }
+    (title, standfirst)
 }
 
-fn get_fm<'a>(fm: &'a [String], key: &str) -> Option<String> {
-    let prefix = format!("{key}:");
-    fm.iter()
-        .find(|l| l.starts_with(&prefix))
-        .map(|l| l[prefix.len()..].trim().trim_matches('"').to_string())
-}
-
-/// Set a managed key in place if present; otherwise insert before the closing
-/// fence. All other lines are moved verbatim — that is the whole trick.
-fn set_fm(fm: &mut Vec<String>, key: &str, value: &str) {
-    let prefix = format!("{key}:");
-    let new_line = format!("{key}: {value}");
-    if let Some(pos) = fm.iter().position(|l| l.starts_with(&prefix)) {
-        fm[pos] = new_line;
-    } else {
-        // Insert before the closing fence (last "---").
-        let insert_at = fm.len().saturating_sub(1);
-        fm.insert(insert_at, new_line);
-    }
+/// Derive the display title of a document, with fallback to the slug.
+pub fn title_of(document: &str, slug: &str) -> String {
+    parse_flow(document).0.unwrap_or_else(|| slug.replace('-', " "))
 }
 
 impl Article {
+    pub fn dir(publication_root: &Path, slug: &str) -> Result<std::path::PathBuf> {
+        confine(publication_root, &Path::new("articles").join(slug))
+    }
+
+    pub fn doc_path(publication_root: &Path, slug: &str) -> Result<std::path::PathBuf> {
+        Ok(Self::dir(publication_root, slug)?.join("article.md"))
+    }
+
+    pub fn meta_path(publication_root: &Path, slug: &str) -> Result<std::path::PathBuf> {
+        Ok(Self::dir(publication_root, slug)?.join("meta.yaml"))
+    }
+
     pub fn load(publication_root: &Path, slug: &str) -> Result<Article> {
-        let path = confine(
-            publication_root,
-            &Path::new("articles").join(slug).join("index.md"),
-        )?;
-        let text =
-            fs::read_to_string(&path).with_context(|| format!("article not found: {slug}"))?;
-        Self::parse(slug, &text).with_context(|| format!("could not parse article: {slug}"))
-    }
-
-    pub fn parse(slug: &str, text: &str) -> Result<Article> {
-        let (fm, body) = split_document(text);
-        let title = get_fm(&fm, "title").unwrap_or_else(|| slug.to_string());
-        let state = match get_fm(&fm, "state").as_deref() {
-            Some("published") => State::Published,
-            Some("review") => State::Review,
-            _ => State::Draft,
-        };
-        let date = get_fm(&fm, "date");
-        let tags =
-            get_fm(&fm, "tags").map(|t| t.split(',').map(|s| s.trim().to_string()).collect());
-        let standfirst = get_fm(&fm, "standfirst");
-        let cover = get_fm(&fm, "cover");
-        Ok(Article {
-            meta: ArticleMeta {
+        let doc_path = Self::doc_path(publication_root, slug)?;
+        let document =
+            fs::read_to_string(&doc_path).with_context(|| format!("article not found: {slug}"))?;
+        let meta_path = Self::meta_path(publication_root, slug)?;
+        let meta: ArticleMeta = if meta_path.exists() {
+            serde_yaml::from_str(&fs::read_to_string(&meta_path)?)
+                .with_context(|| format!("malformed meta.yaml for {slug}"))?
+        } else {
+            ArticleMeta {
                 slug: slug.to_string(),
-                title,
-                state,
-                date,
-                tags,
-                standfirst,
-                cover,
-            },
-            body,
-            frontmatter_raw: fm,
-        })
+                state: State::Draft,
+                date: None,
+                tags: vec![],
+                cover: None,
+                standfirst: None,
+                extra: Default::default(),
+            }
+        };
+        Ok(Article { meta, document })
     }
 
-    /// Render the canonical file text: managed keys updated surgically,
-    /// everything else byte-identical to what was loaded.
-    fn render(&self) -> String {
-        let mut fm = self.frontmatter_raw.clone();
-        if fm.is_empty() {
-            fm = vec!["---".into(), "---".into()];
-        }
-        set_fm(&mut fm, "title", &self.meta.title);
-        set_fm(&mut fm, "state", self.meta.state.as_str());
-        if let Some(d) = &self.meta.date {
-            set_fm(&mut fm, "date", d);
-        }
-        if let Some(t) = &self.meta.tags {
-            let v = t.join(", ");
-            set_fm(&mut fm, "tags", &v);
-        }
-        format!("{}\n{}\n", fm.join("\n"), self.body)
+    pub fn title(&self) -> String {
+        title_of(&self.document, &self.meta.slug)
     }
 
-    /// Propose -> show -> accept collapses here for the human's own edits:
-    /// saving is unremarkable, atomic, journaled.
+    pub fn standfirst(&self) -> Option<String> {
+        parse_flow(&self.document).1.or_else(|| self.meta.standfirst.clone())
+    }
+
+    /// Persist both files atomically and journal the write.
     pub fn save(&self, publication_root: &Path) -> Result<String> {
-        let path = confine(
-            publication_root,
-            &Path::new("articles").join(&self.meta.slug).join("index.md"),
-        )?;
-        let bytes = self.render().into_bytes();
-        let hash = content_hash(&bytes);
-        atomic_write(&path, &bytes)?;
+        let dir = Self::dir(publication_root, &self.meta.slug)?;
+        fs::create_dir_all(&dir)?;
+        let doc_path = dir.join("article.md");
+        atomic_write(&doc_path, self.document.as_bytes())?;
+
+        // Preserve unknown extra keys: merge our knowns over the existing file.
+        let meta_path = dir.join("meta.yaml");
+        let mut out_meta = self.meta.clone();
+        if meta_path.exists() {
+            if let Ok(existing) =
+                serde_yaml::from_str::<serde_yaml::Value>(&fs::read_to_string(&meta_path)?)
+            {
+                if let Some(map) = existing.as_mapping() {
+                    for (k, v) in map {
+                        let key = k.as_str().unwrap_or_default().to_string();
+                        if !matches!(
+                            key.as_str(),
+                            "slug" | "state" | "date" | "tags" | "cover" | "standfirst"
+                        ) {
+                            out_meta.extra.entry(key).or_insert_with(|| v.clone());
+                        }
+                    }
+                }
+            }
+        }
+        let yaml = serde_yaml::to_string(&out_meta)?;
+        atomic_write(&meta_path, yaml.as_bytes())?;
+
+        let hash = content_hash(self.document.as_bytes());
         Journal::open(publication_root)?.record(Event::ArticleWritten {
             slug: self.meta.slug.clone(),
             content_hash: hash.clone(),
@@ -186,37 +191,29 @@ impl Article {
         let a = Article {
             meta: ArticleMeta {
                 slug: slug.to_string(),
-                title: title.to_string(),
                 state: State::Draft,
                 date: Some(today),
-                tags: None,
-                standfirst: None,
+                tags: vec![],
                 cover: None,
+                standfirst: None,
+                extra: Default::default(),
             },
-            body: "\n".to_string(),
-            frontmatter_raw: vec!["---".into(), "---".into()],
+            document: format!("# {title}\n\n"),
         };
         a.save(publication_root)?;
         Ok(a)
     }
 
-    /// Unknown frontmatter keys, preserved verbatim (for receipts and tests).
-    pub fn unknown_frontmatter(&self) -> Vec<String> {
-        self.frontmatter_raw
-            .iter()
-            .filter(|l| {
-                l != &"---" && !MANAGED_KEYS.iter().any(|k| l.starts_with(&format!("{k}:")))
-            })
-            .cloned()
+    /// Wiki-links for the desk graph.
+    pub fn links(&self) -> Vec<String> {
+        let re = regex::Regex::new(r"\[\[([^\]]+)\]\]").unwrap();
+        re.captures_iter(&self.document)
+            .map(|c| c[1].to_string())
             .collect()
     }
 
-    /// Extract wiki-links ([[target]]) and standard links for the desk graph.
-    pub fn links(&self) -> Vec<String> {
-        let re = regex::Regex::new(r"\[\[([^\]]+)\]\]").unwrap();
-        re.captures_iter(&self.body)
-            .map(|c| c[1].to_string())
-            .collect()
+    pub fn word_count(&self) -> usize {
+        self.document.split_whitespace().count()
     }
 }
 
@@ -225,48 +222,57 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
-    const SAMPLE: &str = "---\ntitle: On Rust\nunknown-key: keep me verbatim\ncustom:\n  nested: true\nstate: draft\ndate: 2026-08-25\ntags: rust, systems\n---\n\nHello [[world]].\n";
+    const SAMPLE: &str = "# On Rust\n\n_A meditation on ownership._\n\nHello world.\n";
 
     #[test]
-    fn parses_managed_and_preserves_unknown() {
-        let a = Article::parse("on-rust", SAMPLE).unwrap();
-        assert_eq!(a.meta.title, "On Rust");
-        assert_eq!(a.meta.state, State::Draft);
-        assert_eq!(
-            a.unknown_frontmatter(),
-            vec![
-                "unknown-key: keep me verbatim".to_string(),
-                "custom:".to_string(),
-                "  nested: true".to_string()
-            ]
-        );
-        assert_eq!(a.links(), vec!["world".to_string()]);
+    fn parses_title_and_standfirst() {
+        let (title, sf) = parse_flow(SAMPLE);
+        assert_eq!(title.as_deref(), Some("On Rust"));
+        assert_eq!(sf.as_deref(), Some("A meditation on ownership."));
     }
 
     #[test]
-    fn surgical_write_keeps_unknown_bytes() {
+    fn load_save_roundtrip_with_sidecar() {
         let dir = tempdir().unwrap();
-        let root = dir.path();
-        fs::create_dir_all(root.join("articles/on-rust")).unwrap();
-        fs::write(root.join("articles/on-rust/index.md"), SAMPLE).unwrap();
+        Article::create(dir.path(), "fresh", "Fresh Thoughts").unwrap();
+        let mut a = Article::load(dir.path(), "fresh").unwrap();
+        assert_eq!(a.title(), "Fresh Thoughts");
 
-        let mut a = Article::load(root, "on-rust").unwrap();
         a.meta.state = State::Published;
-        a.save(root).unwrap();
+        a.meta.tags = vec!["rust".into()];
+        a.document = format!("# Fresh Thoughts\n\n_It begins._\n\nBody here.\n");
+        a.save(dir.path()).unwrap();
 
-        let after = fs::read_to_string(root.join("articles/on-rust/index.md")).unwrap();
-        assert!(after.contains("unknown-key: keep me verbatim"));
-        assert!(after.contains("nested: true"));
-        assert!(after.contains("state: published"));
-        assert!(after.contains("[[world]]"));
+        let b = Article::load(dir.path(), "fresh").unwrap();
+        assert_eq!(b.meta.state, State::Published);
+        assert_eq!(b.meta.tags, vec!["rust".to_string()]);
+        assert_eq!(b.standfirst().as_deref(), Some("It begins."));
+
+        // meta.yaml exists as a sibling and holds no prose
+        let meta_text = fs::read_to_string(Article::meta_path(dir.path(), "fresh").unwrap())
+            .unwrap();
+        assert!(meta_text.contains("state: published"));
+        assert!(!meta_text.contains("Body here"));
     }
 
     #[test]
-    fn create_then_load_roundtrip() {
+    fn unknown_extra_keys_survive_save() {
         let dir = tempdir().unwrap();
-        let a = Article::create(dir.path(), "fresh", "Fresh Thoughts").unwrap();
-        let b = Article::load(dir.path(), "fresh").unwrap();
-        assert_eq!(a.meta.title, b.meta.title);
-        assert_eq!(b.meta.state, State::Draft);
+        Article::create(dir.path(), "x", "X").unwrap();
+        let meta_path = Article::meta_path(dir.path(), "x").unwrap();
+        fs::write(
+            &meta_path,
+            "slug: x\nsource-url: https://example.com\ncustom:\n  nested: 1\n",
+        )
+        .unwrap();
+
+        let mut a = Article::load(dir.path(), "x").unwrap();
+        a.meta.state = State::Review;
+        a.save(dir.path()).unwrap();
+
+        let after = fs::read_to_string(&meta_path).unwrap();
+        assert!(after.contains("source-url"));
+        assert!(after.contains("custom"));
+        assert!(after.contains("state: review"));
     }
 }

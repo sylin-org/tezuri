@@ -88,35 +88,46 @@ pub struct ArticleFull {
 fn read_article(slug: String, session: State<Session>) -> Result<ArticleFull, CommandError> {
     let root_path = root(&session)?;
     let a = Article::load(&root_path, &slug).map_err(err)?;
-    let raw = std::fs::read_to_string(tezuri::spine::confine(
-        &root_path,
-        std::path::Path::new("articles").join(&slug).join("index.md"),
-    ).map_err(err)?).map_err(err)?;
+    let doc_path =
+        tezuri::articles::Article::doc_path(&root_path, &slug).map_err(err)?;
+    let raw = std::fs::read_to_string(doc_path).map_err(err)?;
     Ok(ArticleFull { article: a, raw })
 }
 
 #[derive(serde::Deserialize)]
 pub struct ArticleInput {
     pub meta: ArticleMeta,
-    pub body: String,
+    pub document: String,
 }
 
 #[tauri::command]
 fn save_article(article: ArticleInput, session: State<Session>) -> Result<String, CommandError> {
     let root_path = root(&session)?;
-    let existing = Article::load(&root_path, &article.meta.slug).ok();
-    let a = Article {
-        meta: article.meta,
-        body: article.body,
-        frontmatter_raw: existing.map(|e| e.frontmatter_raw).unwrap_or_default(),
-    };
+    let a = Article { meta: article.meta, document: article.document };
     a.save(&root_path).map_err(err)
 }
 
 #[tauri::command]
-fn save_article_raw(slug: String, text: String, session: State<Session>) -> Result<String, CommandError> {
+fn save_document(slug: String, title: String, standfirst: Option<String>, document: String, session: State<Session>) -> Result<String, CommandError> {
+    // The flow is the source of truth for title/standfirst; meta carries the rest.
     let root_path = root(&session)?;
-    let a = Article::parse(&slug, &text).map_err(err)?;
+    let mut a = Article::load(&root_path, &slug).map_err(err)?;
+    a.document = document;
+    if let Some(sf) = &standfirst {
+        a.meta.standfirst = Some(sf.clone());
+    }
+    void_title(&title);
+    a.save(&root_path).map_err(err)
+}
+
+fn void_title(_t: &str) {}
+
+/// Source-mode save: the document flow is written verbatim; meta.yaml untouched.
+#[tauri::command]
+fn save_article_raw(slug: String, document: String, session: State<Session>) -> Result<String, CommandError> {
+    let root_path = root(&session)?;
+    let mut a = Article::load(&root_path, &slug).map_err(err)?;
+    a.document = document;
     a.save(&root_path).map_err(err)
 }
 
