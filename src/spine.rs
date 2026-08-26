@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
-use std::time::SystemTime;
 use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
@@ -212,7 +211,6 @@ impl JobOutcome {
 /// program name is resolved by the OS against PATH, arguments stay separate.
 pub fn run_job(spec: &JobSpec) -> Result<JobOutcome> {
     use std::process::{Command, Stdio};
-    let started = SystemTime::now();
     let mut child = Command::new(&spec.program)
         .args(&spec.args)
         .current_dir(&spec.cwd)
@@ -226,57 +224,86 @@ pub fn run_job(spec: &JobSpec) -> Result<JobOutcome> {
         .spawn()
         .with_context(|| format!("could not start {}", spec.program))?;
 
-    // Deliver stdin before waiting: a large prompt must not deadlock the pipe.
+    // Readers start before any stdin is delivered: if the child fills its
+    // output pipes while we are still writing the prompt, both sides deadlock
+    // unless someone is already draining.
+    let out_bound = spec.max_output_bytes;
+    let out_h = {
+        let h = child.stdout.take();
+        std::thread::spawn(move || read_bounded(h, out_bound))
+    };
+    let err_h = {
+        let h = child.stderr.take();
+        std::thread::spawn(move || read_bounded(h, out_bound))
+    };
+
     if let Some(payload) = &spec.stdin {
-        use std::io::Write;
-        if let Some(mut si) = child.stdin.take() {
-            si.write_all(payload.as_bytes())?;
-            si.flush()?;
+        let payload = payload.clone();
+        let mut si = child.stdin.take().context("stdin pipe vanished")?;
+        // Writing on its own thread keeps the parent free to reap/kill on
+        // timeout even while a huge prompt is still flowing.
+        let feed = std::thread::spawn(move || {
+            let _ = si.write_all(payload.as_bytes());
+            let _ = si.flush();
             drop(si); // closing stdin signals EOF to the child
+        });
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(spec.timeout_secs);
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    let _ = feed.join();
+                    return Ok(finish(out_h, err_h, status.success(), false));
+                }
+                Ok(None) => {
+                    if std::time::Instant::now() >= deadline {
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+                Err(_) => {
+                    let _ = feed.join();
+                    return Ok(finish(out_h, err_h, false, false));
+                }
+            }
         }
+        let _ = child.kill();
+        let _ = child.wait();
+        let _ = feed.join(); // broken pipe once the child is dead is fine
+        return Ok(finish(out_h, err_h, false, true));
     }
 
-    let deadline = spec.timeout_secs;
-    let handle = child.stdout.take();
-    let ehandle = child.stderr.take();
-    let out_h = std::thread::spawn(move || read_bounded(handle, spec_max()));
-    let err_h = std::thread::spawn(move || read_bounded(ehandle, spec_max()));
-
-    let (exit_ok, timed_out) = match wait_with_timeout(&mut child, deadline) {
-        Some(status) => (status.success(), false),
+    match wait_with_timeout(&mut child, spec.timeout_secs) {
+        Some(status) => Ok(finish(out_h, err_h, status.success(), false)),
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            (false, true)
+            Ok(finish(out_h, err_h, false, true))
         }
-    };
-    let stdout = out_h.join().unwrap_or_default();
-    let stderr = err_h.join().unwrap_or_default();
-
-    let mut truncated = false;
-    let mut combined = stdout;
-    if stderr.len() > 64 * 1024 {
-        combined.push_str(&stderr[..64 * 1024]);
-        truncated = true;
-    } else {
-        combined.push_str(&stderr);
     }
+}
 
-    let _ = started.elapsed();
-    Ok(JobOutcome {
+fn finish(
+    out_h: std::thread::JoinHandle<(String, bool)>,
+    err_h: std::thread::JoinHandle<(String, bool)>,
+    exit_ok: bool,
+    timed_out: bool,
+) -> JobOutcome {
+    let (stdout, out_trunc) = out_h.join().unwrap_or_default();
+    let (stderr, err_trunc) = err_h.join().unwrap_or((String::new(), false));
+    let mut combined = stdout;
+    combined.push_str(&stderr);
+    JobOutcome {
         exit_ok,
         timed_out,
+        truncated: out_trunc || err_trunc,
         output: combined,
-        truncated,
-    })
+    }
 }
 
-fn spec_max() -> usize {
-    4 * 1024 * 1024
-}
-
-fn read_bounded<R: std::io::Read>(r: Option<R>, max: usize) -> String {
+/// Read at most `max` bytes, reporting whether anything was cut off.
+fn read_bounded<R: std::io::Read>(r: Option<R>, max: usize) -> (String, bool) {
     let mut buf = Vec::new();
+    let mut truncated = false;
     if let Some(mut r) = r {
         let mut chunk = [0u8; 8192];
         loop {
@@ -285,6 +312,7 @@ fn read_bounded<R: std::io::Read>(r: Option<R>, max: usize) -> String {
                 Ok(n) => {
                     if buf.len() + n > max {
                         buf.extend_from_slice(&chunk[..max - buf.len()]);
+                        truncated = true;
                         break;
                     }
                     buf.extend_from_slice(&chunk[..n]);
@@ -292,7 +320,7 @@ fn read_bounded<R: std::io::Read>(r: Option<R>, max: usize) -> String {
             }
         }
     }
-    String::from_utf8_lossy(&buf).into_owned()
+    (String::from_utf8_lossy(&buf).into_owned(), truncated)
 }
 
 fn wait_with_timeout(
@@ -430,6 +458,68 @@ mod tests {
         };
         let out = run_job(&spec).unwrap();
         assert!(out.timed_out);
+    }
+
+    #[test]
+    fn jobs_honor_the_output_bound() {
+        let dir = tempdir().unwrap();
+        // Emit far more than the cap on both streams.
+        let script = "echo stdout-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+                      & echo stderr-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let shell_args = if cfg!(windows) {
+            vec!["/c".to_string(), script.to_string()]
+        } else {
+            vec!["-c".to_string(), script.to_string()]
+        };
+        let spec = JobSpec {
+            program: if cfg!(windows) { "cmd".into() } else { "sh".into() },
+            args: shell_args,
+            cwd: dir.path().to_path_buf(),
+            timeout_secs: 10,
+            max_output_bytes: 16,
+            stdin: None,
+        };
+        let out = run_job(&spec).unwrap();
+        assert!(
+            out.output.chars().count() <= 64,
+            "output must be bounded, got {} bytes",
+            out.output.len()
+        );
+        assert!(out.truncated, "truncation must be reported");
+    }
+
+    #[test]
+    fn jobs_feed_stdin_and_reap_even_when_child_is_slow() {
+        let dir = tempdir().unwrap();
+        // Child reads all of stdin then echoes it. A large payload (bigger
+        // than a pipe buffer) proves delivery and drain run concurrently.
+        let spec = JobSpec {
+            program: if cfg!(windows) { "cmd".into() } else { "sh".into() },
+            args: vec![
+                if cfg!(windows) {
+                    "/c".into()
+                } else {
+                    "-c".into()
+                },
+                if cfg!(windows) {
+                    "more".to_string()
+                } else {
+                    "cat".to_string()
+                },
+            ],
+            cwd: dir.path().to_path_buf(),
+            timeout_secs: 15,
+            max_output_bytes: 1024 * 1024,
+            stdin: Some("prompt-".repeat(40_000)),
+        };
+        let out = run_job(&spec).unwrap();
+        assert!(out.exit_ok);
+        if cfg!(windows) {
+            // `more` adds platform text noise; delivery, not byte fidelity.
+            assert!(out.output.contains("prompt-"));
+        } else {
+            assert_eq!(out.output.len(), "prompt-".len() * 40_000);
+        }
     }
 
     #[test]
