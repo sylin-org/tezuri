@@ -1,33 +1,47 @@
+:root {
+  color-scheme: dark;
+
+  /* Tezuri's published accent (amber) — carried as --a/--al/--argb */
+  --a: #f0a028;
+  --al: #f5be66;
+  --argb: 240, 160, 40;
+
+  /* Night-garden ground and ink ramp */
+  --ground: #0f0e12;
+  --bg: #0f0e12;
+  --ink: #c9c9d1;
+  --ink-2: #c9c9d1;
+  --faint: #52525b;
+  --muted: #71717a;
+  --dim: #71717a;
+
+  /* Surfaces are washes over the ground */
+  --panel: rgba(255, 255, 255, .022);
+  --line: rgba(255, 255, 255, .06);
+  --line-2: rgba(255, 255, 255, .1);
+
+  /* status */
+  --amber: #f0a028;
+  --green: #4ade80;
+  --ok: #4ade80;
+  --danger: #f87171;
+
+  --mono: 'Cascadia Code', 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  --sans: 'Segoe UI', system-ui, Arial, sans-serif;
+  --serif-display: Georgia, "Times New Roman", serif;
+  --measure: 44em;
+
+  --spring: cubic-bezier(.22, 1, .36, 1);
+  --calm: cubic-bezier(.4, 0, .2, 1);
+}
+
 /* ==========================================================================
    sylin family night-garden tokens (harvested from koi-desktop/Ghostlight).
    One accent per project, carried as --a/--al/--argb. Accent is a signal,
    not a theme: chrome is neutral at rest.
    ========================================================================== */
-:root {
-  --bg: #0f0e12;            /* was #1a1226 — family ground */
-  --panel: rgba(255, 255, 255, .022);
-  --ink: var(--ink-2);
-  --dim: var(--muted);
-  --amber: var(--a);
-  --green: var(--ok);
-  --line: rgba(255, 255, 255, .06);
-  --serif-display: Georgia, "Times New Roman", serif;
-  --measure: 44em;
-}
 
 /* ---- legacy aliases → family tokens (rules below predate the migration) --- */
-:root {
-  --bg: var(--ground);
-  --panel: rgba(255, 255, 255, .022);
-  --line: rgba(255, 255, 255, .06);
-  --line-2: rgba(255, 255, 255, .1);
-  --ink: #c9c9d1;
-  --dim: #71717a;
-  --amber: #f0a028;
-  --green: #4ade80;
-  --serif-display: Georgia, "Times New Roman", serif;
-  --measure: 44em;
-}
 
 * { box-sizing: border-box; }
 body {
