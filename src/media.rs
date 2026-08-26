@@ -90,7 +90,11 @@ pub fn store_identified(
     if media_dir.is_dir() {
         for entry in fs::read_dir(&media_dir)? {
             let p = entry?.path();
-            if !p.is_file() || p.metadata().map(|m| m.len() as usize) != Ok(bytes.len()) {
+            let same_size = p
+                .metadata()
+                .map(|m| m.len() as usize == bytes.len())
+                .unwrap_or(false);
+            if !p.is_file() || !same_size {
                 continue;
             }
             let name = p
