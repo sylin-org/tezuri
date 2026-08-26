@@ -26,8 +26,7 @@ import Gapcursor from "@tiptap/extension-gapcursor";
 import { common, createLowlight } from "lowlight";
 import { Markdown } from "tiptap-markdown";
 import GalleryRun from "./Gallery";
-import { BubbleMenu } from "@tiptap/react/menus";
-import {
+import { BubbleMenu } from "@tiptap/react/menus";import {
   Bold, Italic, Strikethrough, Code, Underline as UnderlineIcon, Highlighter,
   List, ListOrdered, Quote, Link2, Minus, Image as ImageIcon,
   CheckSquare, Eye, Undo2, Redo2, Settings,
@@ -43,6 +42,49 @@ export interface WriterProps {
   slug: string;
   onChange: (md: string) => void;
   words: number;
+}
+
+// The live editor instance, reachable from editorProps handlers (which fire
+// before any hook context exists for a given paste event).
+let activeEditor: Editor | null = null;
+function EditorBinder() {
+  const { editor } = useCurrentEditor();
+  React.useEffect(() => {
+    activeEditor = (editor as Editor) ?? null;
+    return () => { activeEditor = null; };
+  }, [editor]);
+  return null;
+}
+
+function tauri(): any {
+  const t = (window as any).__TAURI__;
+  if (!t?.core?.invoke) throw new Error("Tauri bridge not ready");
+  return t.core;
+}
+
+/** Store image files through the app's media command, then insert references
+ *  into the document. Data URIs never enter article.md. */
+async function importImageFiles(files: File[], editor: Editor | null): Promise<void> {
+  if (!editor) {
+    window.dispatchEvent(new CustomEvent("tezuri:media-error", {
+      detail: "editor is not ready yet — try again",
+    }));
+    return;
+  }
+  for (const f of files) {
+    try {
+      const buf = new Uint8Array(await f.arrayBuffer());
+      const ref = await tauri().invoke("add_media", {
+        bytes: Array.from(buf),
+        originalName: f.name || "pasted-image.png",
+      });
+      activeEditor?.chain().focus().setImage({ src: ref }).run();
+    } catch (e: any) {
+      window.dispatchEvent(new CustomEvent("tezuri:media-error", {
+        detail: e.message ?? String(e),
+      }));
+    }
+  }
 }
 
 export function Writer({ initialMarkdown, slug, onChange, words }: WriterProps) {
@@ -131,7 +173,7 @@ export function Writer({ initialMarkdown, slug, onChange, words }: WriterProps) 
               );
             });
           },
-        }).configure({ inline: false, allowBase64: true }),
+        }).configure({ inline: false, allowBase64: false }),
         Placeholder.configure({
           placeholder: ({ node }: any) =>
             node.type.name === "docTitle" ? "Article title"
@@ -151,9 +193,26 @@ export function Writer({ initialMarkdown, slug, onChange, words }: WriterProps) 
       ]}
       content={initialMarkdown}
       onUpdate={({ editor }) => onChange((editor.storage as any).markdown.getMarkdown())}
-      editorProps={{ attributes: { class: "writer", spellcheck: "true" } }}
+      editorProps={{
+        attributes: { class: "writer", spellcheck: "true" },
+        handlePaste: (_view, event) => {
+          const files = Array.from(event.clipboardData?.files ?? [])
+            .filter((f) => f.type.startsWith("image/"));
+          if (files.length === 0) return false;
+          void importImageFiles(files, activeEditor);
+          return true; // never let base64 land in the Markdown flow
+        },
+        handleDrop: (_view, event) => {
+          const files = Array.from(event.dataTransfer?.files ?? [])
+            .filter((f) => f.type.startsWith("image/"));
+          if (files.length === 0) return false;
+          void importImageFiles(files, activeEditor);
+          return true;
+        },
+      }}
       slotBefore={<PinnedBar focusMode={focusMode} setFocusMode={setFocusMode} words={words} />}
     >
+      <EditorBinder />
       <SelectionBubble />
     </EditorProvider>
     </div>
@@ -268,10 +327,4 @@ function SelectionBubble() {
               }}><Link2 size={14} /></button>
     </BubbleMenu>
   );
-}
-
-function CharCount() {
-  const { editor } = useCurrentEditor();
-  void editor;
-  return null; // word count moved to pinned bar
 }

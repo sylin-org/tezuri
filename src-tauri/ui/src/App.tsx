@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
@@ -10,10 +10,9 @@ function tauri(): any {
   return t.core;
 }
 
-type Doc = { slug: string; title: string; state: string; body: string;
-  standfirst?: string | null; cover?: string | null; date?: string | null; tags?: string[] | null };
+type Doc = { slug: string; title: string; state: string; standfirst?: string | null;
+  cover?: string | null; date?: string | null; tags?: string[] | null };
 
-class BridgeError extends Error {}
 export default function App() {
   const [opened, setOpened] = useState(false);
   const [pubInfo, setPubInfo] = useState("");
@@ -28,53 +27,90 @@ export default function App() {
   const [proof, setProof] = useState<{ verdict: string; evidence: string } | null>(null);
   const [changes, setChanges] = useState<any[]>([]);
   const [selPaths, setSelPaths] = useState<Set<string>>(new Set());
-    const [sourceMode, setSourceMode] = useState(false);
+  const [sourceMode, setSourceMode] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "dirty">("saved");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Durable receipts for ship actions — never a vanishing toast (contract).
+  const [note, setNote] = useState("");
+
   const autosaveTimer = useRef<number | null>(null);
   const dirtyRef = useRef(false);
 
-  // Mark dirty on any content/meta change; debounce autosave at 2s idle.
-  useEffect(() => {
-    if (!doc) return;
-    dirtyRef.current = true;
-    setSaveStatus("dirty");
-    if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current);
-    autosaveTimer.current = window.setTimeout(async () => {
-      setSaveStatus("saving");
-      await saveDoc();
-      dirtyRef.current = false;
-      setSaveStatus("saved");
-    }, 2000);
-    return () => { if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current); };
-  });
+  // Latest values, reachable from stable callbacks without effect churn.
+  const docRef = useRef(doc);
+  docRef.current = doc;
+  const textRef = useRef(text);
+  textRef.current = text;
 
-
-  useEffect(() => {
-    const h = () => setSettingsOpen((v) => !v);
-    window.addEventListener("tezuri:settings", h);
-    return () => window.removeEventListener("tezuri:settings", h);
-  }, []);
-
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
-        e.preventDefault(); saveDoc();
-      }
-    };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  });
-
-  // ---- desk ---------------------------------------------------------------
   const refreshDesk = useCallback(async () => {
     const d = await tauri().invoke("desk");
     setEntries(d.entries);
   }, []);
 
+  /** Persist the article verbatim (the flow IS the file). */
+  const flush = useCallback(async () => {
+    const d = docRef.current;
+    if (!d) return;
+    setSaveStatus("saving");
+    try {
+      await tauri().invoke("save_article", {
+        article: {
+          meta: {
+            slug: d.slug,
+            state: d.state,
+            date: d.date ?? null,
+            tags: d.tags ?? [],
+            cover: d.cover ?? null,
+            standfirst: null,
+          },
+          document: textRef.current,
+        },
+      });
+      dirtyRef.current = false;
+      setSaveStatus("saved");
+      await refreshDesk();
+    } catch (e: any) {
+      // A failed save leaves the draft open and marked unsaved — never lost.
+      setSaveStatus("dirty");
+      setNote(e.message ?? String(e));
+    }
+  }, [refreshDesk]);
+
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+
+  /** Mark dirty and schedule the idle autosave. Call from user edits only. */
+  const touch = useCallback(() => {
+    if (!docRef.current) return;
+    dirtyRef.current = true;
+    setSaveStatus("dirty");
+    if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = window.setTimeout(() => void flushRef.current(), 2000);
+  }, []);
+
+  // Ctrl/Cmd+S forces the flush; mounted once, reads the live callback by ref.
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current);
+        void flushRef.current();
+      }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
+
+  // Media import failures surface here too (from Writer paste/drop).
+  useEffect(() => {
+    const h = (e: Event) => setNote((e as CustomEvent<string>).detail);
+    window.addEventListener("tezuri:media-error", h);
+    return () => window.removeEventListener("tezuri:media-error", h);
+  }, []);
+
   // ---- session ----------------------------------------------------------
-  // Launch opens the last publication automatically. The typed-path opener
-  // is gone; adding publications happens through the native folder picker.
+  // Launch opens the last publication automatically. Adding publications
+  // happens through the native folder picker.
   const [pubList, setPubList] = useState<{name:string; persona:string; root:string}[]>([]);
 
   const openByPath = useCallback(async (path: string) => {
@@ -135,25 +171,34 @@ export default function App() {
 
   async function removePublication(root: string) {
     if (!confirm(`Remove "${root}" from Tezuri? Files on disk are untouched.`)) return;
-    const reg = await tauri().invoke("registry_remove", { path: root });
-    setPubList(reg.publications.map((p2: any) => ({ name: p2.name, persona: p2.persona, root: p2.root })));
-    if (doc && pubInfo.includes(root)) { setDoc(null); setOpened(false); }
+    try {
+      const reg = await tauri().invoke("registry_remove", { path: root });
+      setPubList(reg.publications.map((p2: any) => ({ name: p2.name, persona: p2.persona, root: p2.root })));
+      if (doc && pubInfo.startsWith(root)) { setDoc(null); setOpened(false); }
+    } catch (e: any) {
+      setNote(e.message ?? String(e));
+    }
   }
 
   // ---- articles -------------------------------------------------------------
   async function loadArticle(slug: string) {
-    const a = await tauri().invoke("read_article", { slug });
-    setDoc({
-      slug: a.article.meta.slug,
-      title: titleOfDocument(a.raw, slug),
-      state: String(a.article.meta.state).toLowerCase(),
-      body: a.raw,
-      standfirst: null,
-      cover: a.article.meta.cover ?? null,
-      date: a.article.meta.date ?? null,
-      tags: a.article.meta.tags ?? [],
-    });
-    setText(a.raw);
+    try {
+      const a = await tauri().invoke("read_article", { slug });
+      setDoc({
+        slug: a.article.meta.slug,
+        title: titleOfDocument(a.raw, slug),
+        state: String(a.article.meta.state).toLowerCase(),
+        standfirst: null,
+        cover: a.article.meta.cover ?? null,
+        date: a.article.meta.date ?? null,
+        tags: a.article.meta.tags ?? [],
+      });
+      setText(a.raw);
+      setSaveStatus("saved");
+      dirtyRef.current = false;
+    } catch (e: any) {
+      setNote(e.message ?? String(e));
+    }
   }
 
   // Title is the first H1 of the document (the dialect's rule).
@@ -162,39 +207,22 @@ export default function App() {
     return m ? m[1] : slug.replace(/-/g, " ");
   }
 
-  async function saveDoc() {
-    if (!doc) return;
-    // Title/standfirst live in the flow (H1 + italic line) — the document is
-    // saved verbatim. Meta sidecar keeps state/date/tags/cover.
-    const m = text.match(/^# (.+)$/m);
-    await tauri().invoke("save_article", {
-      article: {
-        meta: {
-          slug: doc.slug,
-          state: doc.state,
-          date: doc.date ?? null,
-          tags: doc.tags ?? [],
-          cover: doc.cover ?? null,
-          standfirst: null,
-        },
-        document: text,
-      },
-    });
-    setDoc({ ...doc, title: m ? m[1] : doc.title });
-    await refreshDesk();
-  }
-
   async function newDoc() {
-    const slug = prompt("Slug:");
+    const slug = prompt("Slug: lowercase-kebab, like \"on-rust\"");
     if (!slug) return;
     const title = prompt("Title:") || slug;
-    await tauri().invoke("create_article", { slug, title });
-    await refreshDesk();
-    await loadArticle(slug);
+    try {
+      await tauri().invoke("create_article", { slug, title });
+      await refreshDesk();
+      await loadArticle(slug.replace(/[^a-z0-9-]/g, ""));
+    } catch (e: any) {
+      setNote(e.message ?? String(e));
+    }
   }
 
-
-  useEffect(() => { if (assistOpen) { refreshAssistants(); reviewChanges(); } }, [assistOpen]);
+  useEffect(() => { if (assistOpen) { refreshAssistants(); reviewChanges(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assistOpen]);
 
   async function refreshAssistants() {
     try { setAssistantList(await tauri().invoke("list_assistants")); } catch {}
@@ -213,26 +241,38 @@ export default function App() {
   }
 
   async function doProve() {
-    try { setProof(await tauri().invoke("prove")); }
+    try { setProof(await tauri().invoke("prove")); setNote(""); }
     catch (e: any) { setProof({ verdict: "failed", evidence: e.message ?? String(e) }); }
   }
 
   async function reviewChanges() {
-    try { setChanges(await tauri().invoke("review_changes")); selPaths.clear(); }
-    catch {}
+    try { setChanges(await tauri().invoke("review_changes")); setSelPaths(new Set()); }
+    catch (e: any) { setNote(e.message ?? String(e)); }
   }
 
   async function commitSel() {
-    const msg = (document.getElementById("msg") as HTMLInputElement).value.trim();
-    if (!msg) return alert("A commit needs your message.");
-    await tauri().invoke("commit_selected", { paths: [...selPaths], message: msg });
-    await reviewChanges();
+    const msgEl = document.getElementById("msg") as HTMLInputElement;
+    const msg = msgEl.value.trim();
+    if ([...selPaths].length === 0) { setNote("select the changed paths you want in this commit"); return; }
+    if (!msg) { setNote("a commit needs your message"); return; }
+    try {
+      const r = await tauri().invoke("commit_selected", { paths: [...selPaths], message: msg });
+      setNote(`committed ${r.hash} — ${[...selPaths].length} path(s)`);
+      msgEl.value = "";
+      await reviewChanges();
+    } catch (e: any) {
+      setNote(e.message ?? String(e));
+    }
   }
 
   async function doPush() {
-    const expected = await tauri().invoke("remote_head");
-    try { await tauri().invoke("push_published", { expected }); alert("pushed."); }
-    catch (e: any) { alert(e.message ?? String(e)); }
+    try {
+      const expected = await tauri().invoke("remote_head");
+      await tauri().invoke("push_published", { expected });
+      setNote("pushed — the remote now holds your reviewed state.");
+    } catch (e: any) {
+      setNote(e.message ?? String(e));
+    }
   }
 
   // ---- render ------------------------------------------------------------------
@@ -289,12 +329,12 @@ export default function App() {
             <>
               <div className="pinbar">
                 <button title="Back to desk" className="tool-btn"
-                        onClick={() => setDoc(null)}>
+                        onClick={() => { if (saveStatus !== "saving") setDoc(null); }}>
                   ←
                 </button>
                 <select
                   value={doc.state}
-                  onChange={(e2) => setDoc({ ...doc, state: e2.target.value })}
+                  onChange={(e2) => { setDoc({ ...doc, state: e2.target.value }); touch(); }}
                   aria-label="Publication state"
                   className="state-select"
                 >
@@ -309,7 +349,7 @@ export default function App() {
                 </button>
                 <button
                   className={saveStatus === "dirty" ? "primary" : ""}
-                  onClick={saveDoc}
+                  onClick={() => { if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current); void flush(); }}
                   disabled={saveStatus === "saving"}
                 >{saveStatus === "saving" ? "Saving…" : "Save"}</button>
               </div>
@@ -318,15 +358,15 @@ export default function App() {
                   <h3>Post settings</h3>
                   <label>Cover image URL or media/ path
                     <input value={doc.cover ?? ""} size={44}
-                      onChange={(e2) => setDoc({ ...doc, cover: e2.target.value || null })} />
+                      onChange={(e2) => { setDoc({ ...doc, cover: e2.target.value || null }); touch(); }} />
                   </label>
                   <label>Date
                     <input type="date" value={doc.date ?? ""}
-                      onChange={(e2) => setDoc({ ...doc, date: e2.target.value || null })} />
+                      onChange={(e2) => { setDoc({ ...doc, date: e2.target.value || null }); touch(); }} />
                   </label>
                   <label>Tags (comma-separated)
                     <input value={(doc.tags ?? []).join(", ")} size={44}
-                      onChange={(e2) => setDoc({ ...doc, tags: e2.target.value.split(",").map(x => x.trim()).filter(Boolean) })} />
+                      onChange={(e2) => { setDoc({ ...doc, tags: e2.target.value.split(",").map(x => x.trim()).filter(Boolean) }); touch(); }} />
                   </label>
                 </div>
               )}
@@ -336,7 +376,7 @@ export default function App() {
                     value={text}
                     height="100%"
                     extensions={[markdown({ base: markdownLanguage, codeLanguages: languages })]}
-                    onChange={setText}
+                    onChange={(v) => { setText(v); touch(); }}
                     theme="dark"
                     basicSetup={{ foldGutter: false }}
                   />
@@ -346,7 +386,7 @@ export default function App() {
                   key={doc.slug}
                   initialMarkdown={text}
                   slug={doc.slug}
-                  onChange={(md) => setText(md)}
+                  onChange={(md) => { setText(md); touch(); }}
                   words={text.split(/\s+/).filter(Boolean).length}
                 />
               )}
@@ -384,25 +424,10 @@ export default function App() {
             ))}
           <div className="row"><input id="msg" placeholder="commit message" size={22} />
             <button onClick={commitSel}>Commit</button><button onClick={doPush}>Push</button></div>
+          {note && <p className="receipt">{note}</p>}
         </aside>
       </main>
     </>
-  );
-}
-
-
-function CodeMirrorView({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return (
-    <div className="cm-host">
-      <CodeMirror
-        value={value}
-        height="100%"
-        extensions={[markdown({ base: markdownLanguage, codeLanguages: languages })]}
-        onChange={onChange}
-        theme="dark"
-        basicSetup={{ foldGutter: false }}
-      />
-    </div>
   );
 }
 
