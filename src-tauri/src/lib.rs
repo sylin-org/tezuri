@@ -360,6 +360,31 @@ fn list_assistants(session: State<Session>) -> Result<Vec<String>, CommandError>
         .collect())
 }
 
+/// The full assistant catalog for the Configuration editor. `list_assistants`
+/// serves the recipe dropdown; this serves editing.
+#[tauri::command]
+fn read_assistant_catalog(
+    session: State<Session>,
+) -> Result<Vec<consult::Assistant>, CommandError> {
+    Ok(consult::Catalog::load(&root(&session)?)
+        .map_err(err)?
+        .assistants)
+}
+
+/// Persist the edited catalog back to assistants.md. Notes and any YAML the
+/// author keeps beside the entries are rebuilt by consult's save; entries are
+/// replaced wholesale because this form owns the list.
+#[tauri::command]
+fn save_assistant_catalog(
+    entries: Vec<consult::Assistant>,
+    session: State<Session>,
+) -> Result<(), CommandError> {
+    let catalog = consult::Catalog {
+        assistants: entries,
+    };
+    catalog.save(&root(&session)?).map_err(err)
+}
+
 // -- ship --------------------------------------------------------------------
 
 #[derive(Serialize)]
@@ -441,6 +466,8 @@ pub fn run() {
             save_identity,
             app_version,
             open_about_link,
+            read_assistant_catalog,
+            save_assistant_catalog,
             desk,
             read_article,
             save_article,
