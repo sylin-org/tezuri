@@ -21,8 +21,14 @@ new application.
 
 ## Run it
 
-Install a current stable Rust toolchain and Node.js 20 or newer (24 recommended). On Windows,
-Tezuri uses the installed system WebView2 runtime and does not download one at startup.
+Prerequisites: a current stable Rust toolchain and Node.js 20 or newer. On Windows, Tezuri uses the
+installed system WebView2 runtime and does not download one at startup.
+
+On Windows, double-click or run `launch.bat` — it installs the locked frontend dependencies and
+builds the interface bundle on first use, then opens the desktop application. Missing Node.js or
+Rust are reported with instructions instead of failing silently.
+
+Manual equivalent, and the path for macOS or Linux:
 
 ```powershell
 npm --prefix src-tauri/ui ci
