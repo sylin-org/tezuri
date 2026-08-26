@@ -24,8 +24,9 @@ The current working-tree deletions are intentional. Preserve them and all other 
 
 ## Product invariants
 
-- **Tezuri's article record is canonical and lives in the chosen repository.** Site-facing Markdown
-  is generated on save and is never read back as an editing source.
+- **Files are truth; the desk is a lens.** The article's Markdown file and its small `meta.yaml`
+  sidecar are canonical inside the chosen publication. Indexes, journals, previews, and renditions
+  are derived caches Tezuri may delete and rebuild at any time.
 - **Metadata Tezuri does not model is preserved verbatim** and written back untouched.
 - **Publishing is explicit.** Saving must never commit, push, switch branches, or rewrite history.
 - **The target repository's build is authoritative.** Do not build a competing renderer.
@@ -35,12 +36,12 @@ The current working-tree deletions are intentional. Preserve them and all other 
   capability, path, symlink, command, log-redaction, and credential boundaries intact.
 - **User input never becomes executable shell text.** Programs and argument arrays stay separate,
   nothing is passed through a shell, and a proof program may not be a shell interpreter.
-- **Writes stay inside the chosen project.** Never request a home directory, credential store, or
-  git's internal directory.
+- **Writes stay inside the chosen publication.** Never request a home directory, credential store,
+  or git's internal directory.
 - **No canonical content in application settings.** Losing Tezuri's own state may lose preferences
-  and the project registry, but never writing.
-- **Projects are isolated.** Supporting several projects must not permit state or writes from one to
-  contaminate another.
+  and the publication registry, but never writing.
+- **Publications are isolated.** Supporting several publications must not permit state or writes
+  from one to contaminate another.
 
 ## Layout and ownership
 

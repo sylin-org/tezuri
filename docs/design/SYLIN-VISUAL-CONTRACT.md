@@ -117,8 +117,9 @@ dark surface that is honestly an editor.
 
 ## Behavior
 
-- The editor works on the canonical article record. Generated site files are never presented as an
-  editable source or read back into the article.
+- The editor works on the Markdown article itself, which is canonical. Derived views — desk
+  entries, previews, renditions, journal receipts — are never presented as an editable source or
+  read back into the article.
 - Metadata is progressive disclosure, not a wall of form controls standing between a person and
   their first sentence.
 - Content the editor cannot safely represent is never invisibly removed. Refuse it or preserve it

@@ -24,11 +24,12 @@ gitignored. See [`local/README.md`](../local/README.md).
 
 - **Interrogate the premise before optimising its machinery.** Disproportionate complexity is a
   reason to re-check the requirement and model, not merely to add another abstraction.
-- **A generator owns its output.** Site-facing Markdown is one-way output from the canonical article
-  record. Designs that require rich content to round-trip through generated text violate the product
-  model.
+- **Every view is downstream of the file.** Editor surfaces render projections of the source
+  Markdown and write back only to source files; the desk index and action journal stay derived
+  caches Tezuri may drop and rebuild at any time. A feature that cannot express itself as plain
+  files does not ship.
 - **Idempotence can replace a protocol.** Prefer operations that are naturally safe to repeat, such
-  as skipping an import destination that already exists.
+  as rebuilding the desk from files on every open, or re-storing identical media to no effect.
 - **A refusal is a feature.** Unsafe media, escaping paths, ambiguous publication state, hidden
   network work, and executable shell text must be declined clearly and actionably.
 - **A compile-error list is not a delivery plan.** Check completed work against the product outcome
