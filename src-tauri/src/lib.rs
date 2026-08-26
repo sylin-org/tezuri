@@ -78,9 +78,21 @@ fn desk(session: State<Session>) -> Result<Desk, CommandError> {
 
 // -- articles ----------------------------------------------------------------
 
+#[derive(serde::Serialize)]
+pub struct ArticleFull {
+    pub article: Article,
+    pub raw: String,
+}
+
 #[tauri::command]
-fn read_article(slug: String, session: State<Session>) -> Result<Article, CommandError> {
-    Article::load(&root(&session)?, &slug).map_err(err)
+fn read_article(slug: String, session: State<Session>) -> Result<ArticleFull, CommandError> {
+    let root_path = root(&session)?;
+    let a = Article::load(&root_path, &slug).map_err(err)?;
+    let raw = std::fs::read_to_string(tezuri::spine::confine(
+        &root_path,
+        std::path::Path::new("articles").join(&slug).join("index.md"),
+    ).map_err(err)?).map_err(err)?;
+    Ok(ArticleFull { article: a, raw })
 }
 
 #[derive(serde::Deserialize)]
@@ -98,6 +110,13 @@ fn save_article(article: ArticleInput, session: State<Session>) -> Result<String
         body: article.body,
         frontmatter_raw: existing.map(|e| e.frontmatter_raw).unwrap_or_default(),
     };
+    a.save(&root_path).map_err(err)
+}
+
+#[tauri::command]
+fn save_article_raw(slug: String, text: String, session: State<Session>) -> Result<String, CommandError> {
+    let root_path = root(&session)?;
+    let a = Article::parse(&slug, &text).map_err(err)?;
     a.save(&root_path).map_err(err)
 }
 
@@ -223,6 +242,7 @@ pub fn run() {
             desk,
             read_article,
             save_article,
+            save_article_raw,
             create_article,
             set_article_state,
             add_media,

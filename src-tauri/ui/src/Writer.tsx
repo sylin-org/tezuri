@@ -59,25 +59,6 @@ export function Writer({ initialMarkdown, slug, meta, onMetaChange, onChange, wo
 
   return (
     <div className="writer-column">
-      <h1
-        className="doc-title-node"
-        contentEditable
-        suppressContentEditableWarning
-        onBlur={(e) => {
-          const v = e.currentTarget.textContent?.trim() ?? "";
-          if (v && v !== meta.title) onMetaChange({ title: v });
-        }}
-      >{meta.title}</h1>
-      <p
-        className="doc-standfirst-node"
-        contentEditable
-        data-placeholder="Add a standfirst…"
-        suppressContentEditableWarning
-        onBlur={(e) => {
-          const v = e.currentTarget.textContent?.trim() ?? "";
-          if (v !== (meta.standfirst ?? "")) onMetaChange({ standfirst: v || null });
-        }}
-      >{meta.standfirst ?? ""}</p>
     <EditorProvider
       key={slug}
       immediatelyRender={false}
@@ -179,7 +160,32 @@ export function Writer({ initialMarkdown, slug, meta, onMetaChange, onChange, wo
       content={initialMarkdown}
       onUpdate={({ editor }) => onChange((editor.storage as any).markdown.getMarkdown())}
       editorProps={{ attributes: { class: "writer", spellcheck: "true" } }}
-      slotBefore={<PinnedBar focusMode={focusMode} setFocusMode={setFocusMode} words={words} />}
+      slotBefore={
+        <>
+          <PinnedBar focusMode={focusMode} setFocusMode={setFocusMode} words={words} />
+          <div className="doc-headers">
+            <h1
+              className="doc-title-node"
+              contentEditable
+              suppressContentEditableWarning
+              onBlur={(e) => {
+                const v = e.currentTarget.textContent?.trim() ?? "";
+                if (v && v !== meta.title) onMetaChange({ title: v });
+              }}
+            >{meta.title}</h1>
+            <p
+              className="doc-standfirst-node"
+              contentEditable
+              data-placeholder="Add a standfirst…"
+              suppressContentEditableWarning
+              onBlur={(e) => {
+                const v = e.currentTarget.textContent?.trim() ?? "";
+                if (v !== (meta.standfirst ?? "")) onMetaChange({ standfirst: v || null });
+              }}
+            >{meta.standfirst ?? ""}</p>
+          </div>
+        </>
+      }
     >
       <SelectionBubble />
     </EditorProvider>
