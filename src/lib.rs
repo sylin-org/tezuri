@@ -17,3 +17,4 @@ pub mod media_id;
 pub mod publications;
 pub mod ship;
 pub mod spine;
+pub mod theme;

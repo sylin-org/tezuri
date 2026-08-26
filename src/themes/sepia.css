@@ -1,0 +1,14 @@
+/* Sepia press — paper-warm, print-flavored. */
+.theme-scope {
+  --paper: #211a12;
+  --body-ink: #d8c7a8;
+  --title-ink: #efe3c8;
+  --accent: #c98f3d;
+  --rule: rgba(216, 199, 168, .18);
+}
+.theme-scope .tiptap { color: var(--body-ink); }
+.theme-scope .tiptap > h1:first-child { color: var(--title-ink); }
+.theme-scope .tiptap blockquote { border-left-color: var(--accent); }
+.theme-scope .tiptap a { color: var(--accent); }
+.theme-scope .tiptap code { background: rgba(216, 199, 168, .08); }
+.theme-scope .tiptap hr { border-top-color: var(--rule); }

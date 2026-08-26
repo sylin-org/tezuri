@@ -84,6 +84,8 @@ pub enum Event {
     ArticleWritten { slug: String, content_hash: String },
     /// The publication's own identity file was written.
     IdentityWritten,
+    /// The space's theme.css was written or cleared.
+    ThemeWritten,
     /// Media was stored under its content address.
     #[serde(rename_all = "camelCase")]
     MediaStored { hash: String, filename: String },
@@ -106,6 +108,7 @@ impl Event {
         match self {
             Event::ArticleWritten { .. } => "article-written",
             Event::IdentityWritten => "identity-written",
+            Event::ThemeWritten => "theme-written",
             Event::MediaStored { .. } => "media-stored",
             Event::ConsultAdvised { .. } => "consult-advised",
             Event::ProofRan { .. } => "proof-ran",

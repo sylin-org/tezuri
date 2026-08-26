@@ -1,0 +1,13 @@
+/* Night garden — the built-in look, made explicit. */
+.theme-scope {
+  --paper: transparent;
+  --body-ink: #c9c9d1;
+  --title-ink: #f4f4f5;
+  --accent: #bef264;
+  --rule: rgba(255, 255, 255, .06);
+}
+.theme-scope .tiptap { color: var(--body-ink); }
+.theme-scope .tiptap > h1:first-child { color: var(--title-ink); }
+.theme-scope .tiptap blockquote { border-left-color: var(--accent); }
+.theme-scope .tiptap a { color: color-mix(in srgb, var(--accent) 55%, #7ab7ff); }
+.theme-scope .tiptap hr { border-top-color: var(--rule); }

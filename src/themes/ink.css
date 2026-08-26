@@ -1,0 +1,16 @@
+/* Working ink — maximum contrast, nothing ornamental. */
+.theme-scope {
+  --paper: #000000;
+  --body-ink: #ffffff;
+  --title-ink: #ffffff;
+  --accent: #ffffff;
+  --rule: rgba(255, 255, 255, .4);
+}
+.theme-scope .tiptap {
+  color: var(--body-ink);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+.theme-scope .tiptap > h1:first-child { color: var(--title-ink); }
+.theme-scope .tiptap blockquote { border-left-color: var(--rule); }
+.theme-scope .tiptap a { color: var(--body-ink); text-decoration: underline; }
+.theme-scope .tiptap hr { border-top-color: var(--rule); }
