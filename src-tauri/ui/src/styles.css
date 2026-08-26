@@ -348,3 +348,38 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: v
 .writer-host .tiptap > em:only-child:first-of-type {
   font-style: italic; color: var(--muted); font-size: 1.15em;
 }
+
+/* ==========================================================================
+   Night-garden anatomy (harvested from koi-desktop): lampband header,
+   ground/card content, washes over boxes. Accent is a signal — at rest the
+   window is neutral ink; amber appears only when Tezuri is acting.
+   ========================================================================== */
+
+/* the band: 46px app strip, hairline bottom */
+.app-band {
+  display: flex; align-items: center; gap: 14px;
+  height: 46px; padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(255,255,255,.014), transparent);
+}
+.app-band h1 { font-size: 13px; font-weight: 400; letter-spacing: .01em; color: var(--ink-2); }
+.app-band .path { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
+
+/* cards sit on the ground as washes */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+/* document title/standfirst in-flow typography (markdown H1 / em line) */
+.writer-host .tiptap > h1:first-child {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 2.2em; line-height: 1.15; font-weight: 700;
+  color: var(--ink); margin: .2em 0 .15em;
+}
+.writer-host .tiptap > em:first-child {
+  display: block;
+  font-family: Georgia, serif; font-style: italic;
+  font-size: 1.18em; color: var(--ink-3); margin: .1em 0 1.2em;
+}

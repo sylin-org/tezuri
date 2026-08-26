@@ -209,7 +209,7 @@ export default function App() {
 
   return (
     <>
-      <header>
+      <header className="app-band">
         <h1>Tezuri</h1>
         <span className="path">{pubInfo}</span>
         <button onClick={() => setAssistOpen(!assistOpen)}>Consult / Ship</button>
@@ -250,7 +250,11 @@ export default function App() {
                 <button onClick={() => setSourceMode(!sourceMode)}>
                   {sourceMode ? "Write" : "Source"}
                 </button>
-                <button className="primary" onClick={saveDoc}>Save</button>
+                <button
+                  className={saveStatus === "dirty" ? "primary" : ""}
+                  onClick={saveDoc}
+                  disabled={saveStatus === "saving"}
+                >{saveStatus === "saving" ? "Saving…" : "Save"}</button>
               </div>
               {settingsOpen && doc && (
                 <div className="settings-pop">
