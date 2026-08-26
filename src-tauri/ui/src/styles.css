@@ -293,3 +293,31 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: v
 }
 .fig-caption:focus { background: rgba(240,160,40,.07); border-radius: 4px; }
 .fig-caption:empty::before { content: attr(data-placeholder); opacity: .5; }
+
+/* ---- pinning fix: the scroll container is .writer-column ---- */
+.writer-column {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;          /* THIS scrolls, not the page */
+  padding: 0 24px 40vh;      /* breathing room at the end of the doc */
+}
+.writer-column .tiptap {
+  flex: 0 0 auto;
+  max-width: var(--measure, 44em);
+  margin: 0 auto;
+}
+/* pinbar-tools belongs to Writer's provider slotBefore — keep it visible by
+   moving it OUT of the scroll flow: it must be a sibling ABOVE the scroller.
+   Since slotBefore renders inside the provider (inside the column), we pin
+   it with sticky instead. */
+.pinbar-tools {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  padding: 6px 10px;
+  margin: 0 -24px;           /* stretch across the padded column */
+}
