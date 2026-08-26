@@ -41,19 +41,11 @@ import {
 export interface WriterProps {
   initialMarkdown: string;
   slug: string;
-  meta: {
-    title: string;
-    standfirst: string | null;
-    cover: string | null;
-    date: string | null;
-    tags: string[] | null;
-  };
-  onMetaChange: (patch: { title?: string; standfirst?: string | null }) => void;
   onChange: (md: string) => void;
   words: number;
 }
 
-export function Writer({ initialMarkdown, slug, meta, onMetaChange, onChange, words }: WriterProps) {
+export function Writer({ initialMarkdown, slug, onChange, words }: WriterProps) {
   const [focusMode, setFocusMode] = React.useState(false);
   const suppressUpdate = React.useRef(false);
 
@@ -160,32 +152,7 @@ export function Writer({ initialMarkdown, slug, meta, onMetaChange, onChange, wo
       content={initialMarkdown}
       onUpdate={({ editor }) => onChange((editor.storage as any).markdown.getMarkdown())}
       editorProps={{ attributes: { class: "writer", spellcheck: "true" } }}
-      slotBefore={
-        <>
-          <PinnedBar focusMode={focusMode} setFocusMode={setFocusMode} words={words} />
-          <div className="doc-headers">
-            <h1
-              className="doc-title-node"
-              contentEditable
-              suppressContentEditableWarning
-              onBlur={(e) => {
-                const v = e.currentTarget.textContent?.trim() ?? "";
-                if (v && v !== meta.title) onMetaChange({ title: v });
-              }}
-            >{meta.title}</h1>
-            <p
-              className="doc-standfirst-node"
-              contentEditable
-              data-placeholder="Add a standfirst…"
-              suppressContentEditableWarning
-              onBlur={(e) => {
-                const v = e.currentTarget.textContent?.trim() ?? "";
-                if (v !== (meta.standfirst ?? "")) onMetaChange({ standfirst: v || null });
-              }}
-            >{meta.standfirst ?? ""}</p>
-          </div>
-        </>
-      }
+      slotBefore={<PinnedBar focusMode={focusMode} setFocusMode={setFocusMode} words={words} />}
     >
       <SelectionBubble />
     </EditorProvider>

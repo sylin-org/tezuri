@@ -1,3 +1,19 @@
+/* ==========================================================================
+   sylin family night-garden tokens (harvested from koi-desktop/Ghostlight).
+   One accent per project, carried as --a/--al/--argb. Accent is a signal,
+   not a theme: chrome is neutral at rest.
+   ========================================================================== */
+:root {
+  --bg: #0f0e12;            /* was #1a1226 — family ground */
+  --panel: rgba(255, 255, 255, .022);
+  --ink: var(--ink-2);
+  --dim: var(--muted);
+  --amber: var(--a);
+  --green: var(--ok);
+  --line: rgba(255, 255, 255, .06);
+  --serif-display: Georgia, "Times New Roman", serif;
+  --measure: 44em;
+}
 :root {
   --bg: #1a1226;
   --panel: #241a36;
@@ -323,3 +339,12 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: v
 }
 
 .doc-headers { max-width: 44em; margin: 0 auto; width: 100%; }
+
+/* document flow: first h1 is the article title */
+.writer-host .tiptap > h1:first-child,
+.writer-host .tiptap h1 {
+  font-size: 2.2em; line-height: 1.15; font-weight: 700; margin: .3em 0 .2em;
+}
+.writer-host .tiptap > em:only-child:first-of-type {
+  font-style: italic; color: var(--muted); font-size: 1.15em;
+}

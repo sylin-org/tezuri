@@ -100,34 +100,43 @@ export default function App() {
   async function loadArticle(slug: string) {
     const a = await tauri().invoke("read_article", { slug });
     setDoc({
-      slug: a.meta.slug,
-      title: a.meta.title,
-      state: String(a.meta.state).toLowerCase(),
-      body: a.body,
-      standfirst: a.meta.standfirst ?? null,
-      cover: a.meta.cover ?? null,
-      date: a.meta.date ?? null,
-      tags: a.meta.tags ?? null,
+      slug: a.article.meta.slug,
+      title: titleOfDocument(a.raw, slug),
+      state: String(a.article.meta.state).toLowerCase(),
+      body: a.raw,
+      standfirst: null,
+      cover: a.article.meta.cover ?? null,
+      date: a.article.meta.date ?? null,
+      tags: a.article.meta.tags ?? [],
     });
-    setText(a.body);
+    setText(a.raw);
+  }
+
+  // Title is the first H1 of the document (the dialect's rule).
+  function titleOfDocument(docText: string, slug: string): string {
+    const m = docText.match(/^# (.+)$/m);
+    return m ? m[1] : slug.replace(/-/g, " ");
   }
 
   async function saveDoc() {
     if (!doc) return;
+    // Title/standfirst live in the flow (H1 + italic line) — the document is
+    // saved verbatim. Meta sidecar keeps state/date/tags/cover.
+    const m = text.match(/^# (.+)$/m);
     await tauri().invoke("save_article", {
       article: {
         meta: {
           slug: doc.slug,
-          title: doc.title,
           state: doc.state,
           date: doc.date ?? null,
-          tags: doc.tags ?? null,
-          standfirst: doc.standfirst ?? null,
+          tags: doc.tags ?? [],
           cover: doc.cover ?? null,
+          standfirst: null,
         },
-        body: text,
+        document: text,
       },
     });
+    setDoc({ ...doc, title: m ? m[1] : doc.title });
     await refreshDesk();
   }
 
@@ -277,14 +286,6 @@ export default function App() {
                   initialMarkdown={text}
                   slug={doc.slug}
                   onChange={(md) => setText(md)}
-                  meta={{
-                    title: doc.title,
-                    standfirst: doc.standfirst ?? null,
-                    cover: doc.cover ?? null,
-                    date: doc.date ?? null,
-                    tags: doc.tags ?? null,
-                  }}
-                  onMetaChange={(patch) => setDoc({ ...doc, ...patch })}
                   words={text.split(/\s+/).filter(Boolean).length}
                 />
               )}
