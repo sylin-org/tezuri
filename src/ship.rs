@@ -217,10 +217,12 @@ pub fn commit_selection(
         .output()
         .context("git is not available or this folder is not a repository")?;
     if !out.status.success() {
-        bail!("git failed: {}", redact(&String::from_utf8_lossy(&out.stderr)));
+        bail!(
+            "git failed: {}",
+            redact(&String::from_utf8_lossy(&out.stderr))
+        );
     }
-    let selected: std::collections::BTreeSet<&str> =
-        paths.iter().map(|s| s.as_str()).collect();
+    let selected: std::collections::BTreeSet<&str> = paths.iter().map(|s| s.as_str()).collect();
     let foreign: Vec<String> = String::from_utf8_lossy(&out.stdout)
         .lines()
         .map(str::trim)
@@ -253,7 +255,10 @@ pub fn commit_selection(
         .current_dir(publication_root)
         .output()?;
     if !out.status.success() {
-        bail!("commit failed: {}", redact(&String::from_utf8_lossy(&out.stderr)));
+        bail!(
+            "commit failed: {}",
+            redact(&String::from_utf8_lossy(&out.stderr))
+        );
     }
     let hash_out = Command::new("git")
         .args(["rev-parse", "--short", "HEAD"])
@@ -277,7 +282,10 @@ pub fn push(publication_root: &Path, expected_remote_head: Option<&str>) -> Resu
         .output()
         .context("git fetch failed")?;
     if !out.status.success() {
-        bail!("fetch failed: {}", redact(&String::from_utf8_lossy(&out.stderr)));
+        bail!(
+            "fetch failed: {}",
+            redact(&String::from_utf8_lossy(&out.stderr))
+        );
     }
 
     if let Some(expected) = expected_remote_head {
@@ -305,7 +313,10 @@ pub fn push(publication_root: &Path, expected_remote_head: Option<&str>) -> Resu
         .current_dir(publication_root)
         .output()?;
     if !out.status.success() {
-        bail!("push failed: {}", redact(&String::from_utf8_lossy(&out.stderr)));
+        bail!(
+            "push failed: {}",
+            redact(&String::from_utf8_lossy(&out.stderr))
+        );
     }
     Journal::open(publication_root)?.record(Event::PublishedPushed)?;
     Ok(())

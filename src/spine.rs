@@ -247,7 +247,8 @@ pub fn run_job(spec: &JobSpec) -> Result<JobOutcome> {
             let _ = si.flush();
             drop(si); // closing stdin signals EOF to the child
         });
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(spec.timeout_secs);
+        let deadline =
+            std::time::Instant::now() + std::time::Duration::from_secs(spec.timeout_secs);
         loop {
             match child.try_wait() {
                 Ok(Some(status)) => {
@@ -472,7 +473,11 @@ mod tests {
             vec!["-c".to_string(), script.to_string()]
         };
         let spec = JobSpec {
-            program: if cfg!(windows) { "cmd".into() } else { "sh".into() },
+            program: if cfg!(windows) {
+                "cmd".into()
+            } else {
+                "sh".into()
+            },
             args: shell_args,
             cwd: dir.path().to_path_buf(),
             timeout_secs: 10,
@@ -494,7 +499,11 @@ mod tests {
         // Child reads all of stdin then echoes it. A large payload (bigger
         // than a pipe buffer) proves delivery and drain run concurrently.
         let spec = JobSpec {
-            program: if cfg!(windows) { "cmd".into() } else { "sh".into() },
+            program: if cfg!(windows) {
+                "cmd".into()
+            } else {
+                "sh".into()
+            },
             args: vec![
                 if cfg!(windows) {
                     "/c".into()

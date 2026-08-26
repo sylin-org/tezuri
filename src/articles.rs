@@ -117,7 +117,9 @@ pub fn title_of(document: &str, slug: &str) -> String {
 pub fn validate_slug(slug: &str) -> Result<()> {
     let ok = !slug.is_empty()
         && slug.len() <= 80
-        && slug.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        && slug
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
         && !slug.starts_with('-')
         && !slug.ends_with('-')
         && !slug.contains("--");
@@ -259,8 +261,16 @@ mod tests {
         assert!(validate_slug("on-rust").is_ok());
         assert!(validate_slug("post2026").is_ok());
         for bad in [
-            "", "UPPER", "a/b", "../escape", "-lead", "trail-", "dou--ble",
-            "under_score", "space inside", "spàce",
+            "",
+            "UPPER",
+            "a/b",
+            "../escape",
+            "-lead",
+            "trail-",
+            "dou--ble",
+            "under_score",
+            "space inside",
+            "spàce",
         ] {
             assert!(validate_slug(bad).is_err(), "expected refusal: {bad:?}");
         }
