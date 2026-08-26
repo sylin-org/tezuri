@@ -71,9 +71,13 @@ interface Props {
   words: number;
   /** Rendered body HTML with TOC ids injected (from useToc's processing). */
   children: ReactNode;
+  /** Called when title or standfirst are edited in place. */
+  onMetaChange?: (patch: Partial<LayoutMeta>) => void;
+  /** Editable surfaces only make sense while writing (not source view). */
+  editable?: boolean;
 }
 
-export function ArticleLayout({ meta, words, children }: Props) {
+export function ArticleLayout({ meta, words, children, onMetaChange, editable = true }: Props) {
   const minutes = readTime(words);
   const dateStr = meta.date
     ? new Date(meta.date + "T00:00:00").toLocaleDateString(undefined, {
@@ -92,8 +96,25 @@ export function ArticleLayout({ meta, words, children }: Props) {
       <div className="article-columns">
         <article className="article-main">
           <header className="title-block">
-            <h1 className="doc-title">{meta.title}</h1>
-            {meta.standfirst && <p className="standfirst">{meta.standfirst}</p>}
+            <h1
+              className="doc-title"
+              contentEditable={editable}
+              suppressContentEditableWarning
+              onBlur={(e) => {
+                const v = e.currentTarget.textContent?.trim() ?? "";
+                if (v && v !== meta.title) onMetaChange?.({ title: v });
+              }}
+            >{meta.title}</h1>
+            <p
+              className="standfirst"
+              contentEditable={editable}
+              data-placeholder="Add a standfirst…"
+              suppressContentEditableWarning
+              onBlur={(e) => {
+                const v = e.currentTarget.textContent?.trim() ?? "";
+                if (v !== (meta.standfirst ?? "")) onMetaChange?.({ standfirst: v || null });
+              }}
+            >{meta.standfirst ?? ""}</p>
             <div className="metaline">
               {dateStr && <span>{dateStr}</span>}
               <span className="dot">·</span>

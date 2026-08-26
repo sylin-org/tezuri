@@ -90,10 +90,19 @@ export default function App() {
 
   async function saveDoc() {
     if (!doc) return;
-    const title = (document.getElementById("title") as HTMLInputElement).value;
-    const state = (document.getElementById("state") as HTMLSelectElement).value;
     await tauri().invoke("save_article", {
-      article: { meta: { slug: doc.slug, title, state, date: null, tags: null }, body: text },
+      article: {
+        meta: {
+          slug: doc.slug,
+          title: doc.title,
+          state: doc.state,
+          date: doc.date ?? null,
+          tags: doc.tags ?? null,
+          standfirst: doc.standfirst ?? null,
+          cover: doc.cover ?? null,
+        },
+        body: text,
+      },
     });
     await refreshDesk();
   }
@@ -193,6 +202,8 @@ export default function App() {
                 cover: doc.cover, date: doc.date, tags: doc.tags,
               }}
               words={text.split(/\s+/).filter(Boolean).length}
+              editable={!sourceMode}
+              onMetaChange={(patch) => setDoc({ ...doc, ...patch })}
             >
               <div className="docmeta">
                 <span className={`state-pill state-${doc.state}`}>{doc.state}</span>

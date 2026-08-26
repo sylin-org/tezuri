@@ -212,3 +212,19 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: v
 .toc-link.toc-l3 { padding-left: 22px; font-size: 12px; }
 
 @media (max-width: 1100px) { .toc-sidebar { display: none; } }
+
+/* editable title/standfirst — quiet affordance, amber caret focus */
+.doc-title[contenteditable="true"], .standfirst[contenteditable="true"] {
+  cursor: text; border-radius: 4px; padding: 0 4px; margin-left: -4px;
+  outline: none;
+}
+.doc-title[contenteditable="true"]:hover,
+.standfirst[contenteditable="true"]:hover { background: rgba(240,160,40,.05); }
+.doc-title[contenteditable="true"]:focus,
+.standfirst[contenteditable="true"]:focus {
+  background: rgba(240,160,40,.08);
+  box-shadow: 0 1px 0 var(--amber);
+}
+.standfirst[contenteditable="true"]:empty::before {
+  content: attr(data-placeholder); color: var(--dim); opacity: .6;
+}
