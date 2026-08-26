@@ -175,10 +175,8 @@ mod tests {
     #[test]
     fn refuses_oversized_images() {
         let dir = tempdir().unwrap();
-        let big = vec![0x89u8, b'P', b'N', b'G']
-            .into_iter()
-            .chain(std::iter::repeat(0).take(26 * 1024 * 1024))
-            .collect::<Vec<u8>>();
+        let mut big = vec![0x89u8, b'P', b'N', b'G'];
+        big.resize(26 * 1024 * 1024, 0);
         assert!(store_identified(dir.path(), &big, "huge.png").is_err());
     }
 

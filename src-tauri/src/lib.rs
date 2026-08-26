@@ -256,21 +256,6 @@ fn add_media(
     Ok(media::base_ref(&stored))
 }
 
-/// Fetch a remote image at explicit user request (import flow), store it
-/// under a local identity, and return the base reference.
-#[tauri::command]
-fn fetch_media(url: String, session: State<Session>) -> Result<String, CommandError> {
-    let root_path = root(&session)?;
-    let resp = reqwest::blocking::get(&url).map_err(err)?;
-    if !resp.status().is_success() {
-        return Err(err(format!("fetch failed: {}", resp.status())));
-    }
-    let bytes = resp.bytes().map_err(err)?;
-    let name = url.rsplit('/').next().unwrap_or("image");
-    let stored = media::store_identified(&root_path, &bytes, name).map_err(err)?;
-    Ok(media::base_ref(&stored))
-}
-
 // -- consult -----------------------------------------------------------------
 
 #[derive(Serialize)]
@@ -389,7 +374,6 @@ pub fn run() {
             create_article,
             set_article_state,
             add_media,
-            fetch_media,
             consult_recipe,
             list_assistants,
             prove,
