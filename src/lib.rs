@@ -11,6 +11,7 @@
 pub mod articles;
 pub mod consult;
 pub mod desk;
+pub mod identity;
 pub mod media;
 pub mod media_id;
 pub mod publications;

@@ -10,6 +10,34 @@ replacements.
 
 ---
 
+## 2026-08-26 — Adopt the Sylin workbench dialect from Ghostlight
+
+Tezuri's interface speaks the same visual grammar as Ghostlight's orchestrator window
+(`sylin-org/browser-mcp` `crates/orchestrator/ui`): the night-garden token block adopted verbatim —
+ground, five-step ink ramp, hairlines, panel washes, one accent carried as `--a`/`--al`/`--argb`,
+mono for labels and facts, the 58px lamp band with a state word, and the capability colors
+(read dim, action blue, write amber, execute violet). The accent is a signal, not a theme: the
+window is neutral at rest and the accent brightens only while Tezuri writes, proves, or consults.
+
+Tezuri's accent is a placeholder — moonlit leaf `#bef264` — until the deck entry and icon land;
+Ghostlight wears teal, and the reskin's earlier amber is retired because the family reserves amber
+for writes and held states. Landing, space view, assistant rail, and the deck card arrive as later
+slices under this decision.
+
+This supersedes the 2025-08-25 reskin's amber accent choice. It replaces no product behavior.
+
+## 2026-08-26 — Keep space identity inside the publication
+
+A publication's own characteristics — display name, byline, persona — will live in a small
+`publication.yaml` inside the publication folder, following the `meta.yaml` pattern: Tezuri models
+a few keys and preserves unknown ones verbatim. The registry keeps its entry names as a display
+cache so the landing renders without opening each space; the yaml inside the publication is
+canonical whenever present. The last-opened pointer stays application-side. Space detail editing
+writes the file through the one atomic path and journals it. Implementation lands with the space-view slice; this entry fixes the
+direction so no intermediate work invests in registry-held identity.
+
+This upholds "no canonical content in application settings" for the coming landing and space views.
+
 ## 2026-08-25 — Make the Markdown file the article
 
 An article is `articles/<slug>/article.md`: its first `# ` heading is the title, an optional

@@ -82,6 +82,8 @@ pub enum Event {
     /// An article was created or its canonical file changed through Tezuri.
     #[serde(rename_all = "camelCase")]
     ArticleWritten { slug: String, content_hash: String },
+    /// The publication's own identity file was written.
+    IdentityWritten,
     /// Media was stored under its content address.
     #[serde(rename_all = "camelCase")]
     MediaStored { hash: String, filename: String },
@@ -103,6 +105,7 @@ impl Event {
     pub fn kind(&self) -> &'static str {
         match self {
             Event::ArticleWritten { .. } => "article-written",
+            Event::IdentityWritten => "identity-written",
             Event::MediaStored { .. } => "media-stored",
             Event::ConsultAdvised { .. } => "consult-advised",
             Event::ProofRan { .. } => "proof-ran",
