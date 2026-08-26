@@ -65,6 +65,8 @@ fn registry_add(pub_data: NewPublication) -> Result<Registry, CommandError> {
         root: PathBuf::from(&pub_data.path),
     })
     .map_err(err)?;
+    // add() is pure domain logic; persistence is this caller's explicit act.
+    reg.save().map_err(err)?;
     Ok(reg)
 }
 
@@ -141,6 +143,42 @@ fn app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+/// Open one of the About page's known destinations in the system browser.
+/// The URL list is hardcoded — the webview never hands us arbitrary URLs,
+/// and the launch is argv-only, never a shell.
+#[tauri::command]
+fn open_about_link(slug: String) -> Result<(), CommandError> {
+    let url = match slug.as_str() {
+        "source" => "https://github.com/sylin-org/tezuri",
+        "brief" => "https://github.com/sylin-org/tezuri/blob/main/docs/PRODUCT-BRIEF.md",
+        "decisions" => "https://github.com/sylin-org/tezuri/blob/main/docs/DECISIONS.md",
+        "ghostlight" => "https://ghostlight.sylin.org",
+        other => return Err(err(format!("unknown link: {other}"))),
+    };
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(url)
+            .spawn()
+            .map_err(err)?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(url)
+            .spawn()
+            .map_err(err)?;
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(url)
+            .spawn()
+            .map_err(err)?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn read_identity(path: String) -> Result<tezuri::identity::Identity, CommandError> {
     let p = PathBuf::from(&path);
@@ -168,7 +206,9 @@ fn save_identity(
 
 static APP_HANDLE: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
 
-#[tauri::command]
+/// Runs off the main thread on purpose: a synchronous command would block the
+/// very event loop the native dialog needs, hanging the window forever.
+#[tauri::command(async)]
 fn pick_folder() -> Result<Option<String>, CommandError> {
     use tauri_plugin_dialog::DialogExt;
     let handle = APP_HANDLE.get().ok_or_else(|| err("app not ready"))?;
@@ -400,6 +440,7 @@ pub fn run() {
             read_identity,
             save_identity,
             app_version,
+            open_about_link,
             desk,
             read_article,
             save_article,
