@@ -31,10 +31,11 @@ conventions were dropped rather than ported.
 
 Proof detects the destination repository's conventional build — a `package.json` build script via
 an installed package manager, or Hugo given a standard configuration file — and runs it on a
-disposable copy of the publication with a fixed timeout, capped captured output, process-tree
-cleanup, and redacted evidence. Publishing stays human-gated: review changed paths, select exact
-paths, commit only that selection, then push only while the reviewed remote head still matches.
-Saving never touches git.
+disposable copy of the publication with a fixed timeout, capped captured output, a kill of the
+direct child process on expiry (grandchildren are not reaped yet), and redacted evidence.
+Publishing stays human-gated: review changed paths, select exact paths, commit only that selection,
+then push only while the reviewed remote head still matches. Other changes already staged in the
+index are refused rather than swept into the selection's commit. Saving never touches git.
 
 Consult keeps agent help local and bounded. Recipes (`recipes/<name>.md`, plus five built-in verbs:
 polish, align-to-voice, fact-check, suggest-tags, summarize-scratch) assemble the prompt; an
