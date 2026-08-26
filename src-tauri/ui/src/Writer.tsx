@@ -97,7 +97,18 @@ export function Writer({ initialMarkdown, slug, onChange, words }: WriterProps) 
       key={slug}
       immediatelyRender={false}
       extensions={[
-        StarterKit.configure({ heading: { levels: [2, 3] } }),
+        StarterKit.configure({
+          // The dialect's title is the document's first H1; the schema must
+          // accept it or tiptap-markdown demotes it to a paragraph.
+          heading: { levels: [1, 2, 3] },
+          // Added explicitly below with richer configuration; disabled here so
+          // nothing ships twice.
+          link: false,
+          underline: false,
+          codeBlock: false,
+          dropcursor: false,
+          gapcursor: false,
+        }),
         Link.configure({ openOnClick: false, autolink: true }),
         Image.extend({
           addNodeView() {

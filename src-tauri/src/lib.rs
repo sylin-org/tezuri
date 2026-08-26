@@ -137,6 +137,11 @@ pub struct PublicationsInfo {
 // -- identity ----------------------------------------------------------------
 
 #[tauri::command]
+fn app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+#[tauri::command]
 fn read_identity(path: String) -> Result<tezuri::identity::Identity, CommandError> {
     let p = PathBuf::from(&path);
     if !p.is_dir() {
@@ -153,7 +158,7 @@ fn save_identity(
 ) -> Result<(), CommandError> {
     // Only the open session's own publication may be rewritten.
     let current = root(&session)?;
-    if current != PathBuf::from(&path) {
+    if current != std::path::Path::new(&path) {
         return Err(err("that publication is not the open session"));
     }
     identity.save(&current).map_err(err)
@@ -394,6 +399,7 @@ pub fn run() {
             read_theme,
             read_identity,
             save_identity,
+            app_version,
             desk,
             read_article,
             save_article,

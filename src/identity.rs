@@ -109,9 +109,11 @@ mod tests {
     #[test]
     fn roundtrip_via_load() {
         let dir = tempdir().unwrap();
-        let mut id = Identity::default();
-        id.name = "Field Notes".into();
-        id.byline = "written afield".into();
+        let id = Identity {
+            name: "Field Notes".into(),
+            byline: "written afield".into(),
+            ..Default::default()
+        };
         id.save(dir.path()).unwrap();
         let loaded = Identity::load(dir.path()).unwrap();
         assert_eq!(loaded, id);
