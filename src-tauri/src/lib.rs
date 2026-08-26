@@ -36,6 +36,70 @@ fn root(session: &Session) -> Result<PathBuf, CommandError> {
         })
 }
 
+// -- registry ----------------------------------------------------------------
+
+use tezuri::publications::Registry;
+
+#[tauri::command]
+fn registry_load() -> Result<Registry, CommandError> {
+    Registry::load().map_err(err)
+}
+
+#[derive(serde::Deserialize)]
+pub struct NewPublication {
+    pub name: String,
+    pub persona: String,
+    pub path: String,
+}
+
+#[tauri::command]
+fn registry_add(pub_data: NewPublication) -> Result<Registry, CommandError> {
+    let mut reg = Registry::load().map_err(err)?;
+    reg.add(publications::Publication {
+        name: pub_data.name,
+        persona: pub_data.persona,
+        root: PathBuf::from(&pub_data.path),
+    })
+    .map_err(err)?;
+    Ok(reg)
+}
+
+#[tauri::command]
+fn registry_remove(path: String) -> Result<Registry, CommandError> {
+    let mut reg = Registry::load().map_err(err)?;
+    reg.publications.retain(|p| p.root != PathBuf::from(&path));
+    reg.save().map_err(err)?;
+    Ok(reg)
+}
+
+/// Last-opened publication, remembered outside the registry file.
+#[tauri::command]
+fn set_last_opened(path: String) -> Result<(), CommandError> {
+    let base = dirs_home().ok_or_else(|| err("no home directory"))?;
+    let p = base.join(".tezuri").join("last-opened.txt");
+    if let Some(parent) = p.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| err(e))?;
+    }
+    tezuri::spine::atomic_write(&p, path.as_bytes()).map_err(err)
+}
+
+#[tauri::command]
+fn get_last_opened() -> Result<Option<String>, CommandError> {
+    let base = dirs_home().ok_or_else(|| err("no home directory"))?;
+    let p = base.join(".tezuri").join("last-opened.txt");
+    if p.exists() {
+        Ok(Some(std::fs::read_to_string(p).map_err(|e| err(e))?.trim().to_string()))
+    } else {
+        Ok(None)
+    }
+}
+
+fn dirs_home() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+}
+
 // -- session ---------------------------------------------------------------
 
 #[tauri::command]
@@ -61,6 +125,19 @@ pub struct PublicationsInfo {
 }
 
 // -- desk ------------------------------------------------------------------
+
+static APP_HANDLE: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
+
+#[tauri::command]
+fn pick_folder() -> Result<Option<String>, CommandError> {
+    use tauri_plugin_dialog::DialogExt;
+    let handle = APP_HANDLE.get().ok_or_else(|| err("app not ready"))?;
+    Ok(handle
+        .dialog()
+        .file()
+        .blocking_pick_folder()
+        .map(|f| f.to_string()))
+}
 
 #[tauri::command]
 fn read_theme(path: String) -> Result<String, CommandError> {
@@ -262,8 +339,19 @@ fn main() {
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            let _ = APP_HANDLE.set(app.handle().clone());
+            Ok(())
+        })
         .manage(Session(std::sync::Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
+            registry_load,
+            registry_add,
+            registry_remove,
+            set_last_opened,
+            get_last_opened,
+            pick_folder,
             open_publication,
             read_theme,
             desk,

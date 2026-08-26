@@ -6,6 +6,7 @@ description = "Tezuri desktop shell"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+tauri-plugin-dialog = "2.7.2"
 
 [dependencies]
 tezuri = { path = ".." }
@@ -14,3 +15,4 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
 reqwest = { version = "0.12", features = ["blocking"] }
+tauri-plugin-dialog = "2.7.2"

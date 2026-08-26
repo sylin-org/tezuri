@@ -19,6 +19,7 @@ export default function App() {
   const [pubInfo, setPubInfo] = useState("");
   const [pubError, setPubError] = useState("");
   const [assistantList, setAssistantList] = useState<string[]>([]);
+  const [showFirstRun, setShowFirstRun] = useState(false);
   const [entries, setEntries] = useState<any[]>([]);
   const [doc, setDoc] = useState<Doc | null>(null);
   const [text, setText] = useState("");
@@ -71,29 +72,72 @@ export default function App() {
     setEntries(d.entries);
   }, []);
 
-  // ---- session ------------------------------------------------------------
-  async function openPub() {
-    const path = (document.getElementById("pubPath") as HTMLInputElement).value.trim();
+  // ---- session ----------------------------------------------------------
+  // Launch opens the last publication automatically. The typed-path opener
+  // is gone; adding publications happens through the native folder picker.
+  const [pubList, setPubList] = useState<{name:string; persona:string; root:string}[]>([]);
+
+  const openByPath = useCallback(async (path: string) => {
     try {
       const info = await tauri().invoke("open_publication", { path });
       setPubInfo(`${info.path} — ${info.articles} articles · ${info.words} words`);
-      // Publication-owned theme: plain CSS file in the repo, loaded as tokens.
-      try {
-        const css = await tauri().invoke("read_theme", { path });
-        let el = document.getElementById("pub-theme") as HTMLStyleElement | null;
-        if (!el) {
-          el = document.createElement("style");
-          el.id = "pub-theme";
-          document.head.appendChild(el);
-        }
-        el.textContent = css;
-      } catch { /* no theme.css — defaults apply */ }
       setOpened(true);
       await refreshDesk();
       setAssistantList(await tauri().invoke("list_assistants"));
+      return true;
     } catch (e: any) {
       setPubError(e.message ?? String(e));
+      return false;
     }
+  }, [refreshDesk]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const reg = await tauri().invoke("registry_load");
+        setPubList(reg.publications.map((p2: any) => ({ name: p2.name, persona: p2.persona, root: p2.root })));
+        if (reg.publications.length === 0) { setShowFirstRun(true); return; }
+        const last = await tauri().invoke("get_last_opened");
+        const target = reg.publications.find((p2: any) => p2.root === last) ?? reg.publications[0];
+        await openByPath(target.root);
+      } catch (e: any) {
+        setShowFirstRun(true);
+        setPubError(e.message ?? String(e));
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function addPublication() {
+    try {
+      const path = await tauri().invoke("pick_folder");
+      if (!path) return;
+      const name = prompt("Publication name:", path.split(/[\\/]/).pop() || "publication");
+      if (!name) return;
+      const persona = prompt("Persona / author name:", "") || "";
+      const reg = await tauri().invoke("registry_add", { pubData: { name, persona, path } });
+      setPubList(reg.publications.map((p2: any) => ({ name: p2.name, persona: p2.persona, root: p2.root })));
+      await openByPath(path);
+      await tauri().invoke("set_last_opened", { path });
+    } catch (e: any) {
+      setPubError(e.message ?? String(e));
+      setShowFirstRun(true);
+    }
+  }
+
+  async function switchTo(root: string) {
+    setOpened(false);
+    setDoc(null);
+    if (await openByPath(root)) {
+      await tauri().invoke("set_last_opened", { path: root });
+    }
+  }
+
+  async function removePublication(root: string) {
+    if (!confirm(`Remove "${root}" from Tezuri? Files on disk are untouched.`)) return;
+    const reg = await tauri().invoke("registry_remove", { path: root });
+    setPubList(reg.publications.map((p2: any) => ({ name: p2.name, persona: p2.persona, root: p2.root })));
+    if (doc && pubInfo.includes(root)) { setDoc(null); setOpened(false); }
   }
 
   // ---- articles -------------------------------------------------------------
@@ -194,24 +238,37 @@ export default function App() {
   // ---- render ------------------------------------------------------------------
   if (!opened) {
     return (
-      <div id="opener">
+      <div id="firstrun">
         <h1>Tezuri</h1>
-        <p>A desk for your publishing life. Point Tezuri at a publication folder.</p>
-        <div className="row">
-          <input id="pubPath" size={52} placeholder="F:\path\to\publication" defaultValue="F:\Replica\NAS\Files\repo\github\lbotinelly\kintsugi-architecture" />
-          <button className="primary" onClick={openPub}>Open</button>
-        </div>
-        <p style={{ color: "#e06c75" }}>{pubError}</p>
-        <p style={{ color: "#9a8bb0", fontSize: 12 }}>If the Open button does nothing, the Tauri bridge failed to load.</p>
+        <p>Point Tezuri at a publication folder — a folder of Markdown articles.</p>
+        <button className="primary" onClick={addPublication}>Choose a folder…</button>
+        {pubError && <p style={{ color: "#f87171" }}>{pubError}</p>}
       </div>
     );
   }
+
 
   return (
     <>
       <header className="app-band">
         <h1>Tezuri</h1>
-        <span className="path">{pubInfo}</span>
+        <select
+          className="pub-switch"
+          value={pubList.find(p2 => pubInfo.startsWith(p2.root))?.root ?? ""}
+          onChange={(e2) => switchTo(e2.target.value)}
+          aria-label="Publication"
+        >
+          {pubList.map((p2) => (
+            <option key={p2.root} value={p2.root}>{p2.name}</option>
+          ))}
+        </select>
+        <span className="path">{pubInfo.split(" — ").slice(1).join(" — ")}</span>
+        <button onClick={() => {
+          const root = pubList.find(p2 => pubInfo.startsWith(p2.root))?.root;
+          if (root) removePublication(root);
+        }}>Remove</button>
+        <button onClick={addPublication}>+ Add</button>
+        <span style={{ flex: 1 }} />
         <button onClick={() => setAssistOpen(!assistOpen)}>Consult / Ship</button>
       </header>
       <main>
