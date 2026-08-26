@@ -52,7 +52,7 @@ fn cmd_media(root: &std::path::Path, rest: &[String]) -> Result<()> {
     let file = rest.first().context("usage: media <file> [alt]")?;
     let bytes = std::fs::read(file)?;
     let alt = rest.get(1).cloned().unwrap_or_default();
-    let stored = media::store(root, &bytes, &alt)?;
+    let stored = media::store_identified(root, &bytes, file)?;
     println!("{}", media::link_snippet(&stored, &alt));
     Ok(())
 }
