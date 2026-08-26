@@ -3,7 +3,6 @@ import CodeMirror from "@uiw/react-codemirror";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { Writer } from "./Writer";
-import { ArticleLayout } from "./ArticleLayout";
 
 function tauri(): any {
   const t = (window as any).__TAURI__;
@@ -196,18 +195,18 @@ export default function App() {
 
         <section id="editor">
           {doc && (
-            <ArticleLayout
-              meta={{
-                slug: doc.slug, title: doc.title, standfirst: doc.standfirst,
-                cover: doc.cover, date: doc.date, tags: doc.tags,
-              }}
-              words={text.split(/\s+/).filter(Boolean).length}
-              editable={!sourceMode}
-              onMetaChange={(patch) => setDoc({ ...doc, ...patch })}
-            >
-              <div className="docmeta">
+            <>
+              <div className="pinbar">
                 <span className={`state-pill state-${doc.state}`}>{doc.state}</span>
-                <span className="saved-dot" />
+                <select
+                  value={doc.state}
+                  onChange={(e2) => setDoc({ ...doc, state: e2.target.value })}
+                  aria-label="Publication state"
+                >
+                  <option value="draft">draft</option>
+                  <option value="review">review</option>
+                  <option value="published">published</option>
+                </select>
                 <span style={{ flex: 1 }} />
                 <button onClick={() => setSourceMode(!sourceMode)}>
                   {sourceMode ? "Write" : "Source"}
@@ -226,10 +225,23 @@ export default function App() {
                   />
                 </div>
               ) : (
-                <Writer key={doc.slug} initialMarkdown={text} slug={doc.slug}
-                        onChange={(md) => setText(md)} />
+                <Writer
+                  key={doc.slug}
+                  initialMarkdown={text}
+                  slug={doc.slug}
+                  onChange={(md) => setText(md)}
+                  meta={{
+                    title: doc.title,
+                    standfirst: doc.standfirst ?? null,
+                    cover: doc.cover ?? null,
+                    date: doc.date ?? null,
+                    tags: doc.tags ?? null,
+                  }}
+                  onMetaChange={(patch) => setDoc({ ...doc, ...patch })}
+                  words={text.split(/\s+/).filter(Boolean).length}
+                />
               )}
-            </ArticleLayout>
+            </>
           )}
         </section>
 

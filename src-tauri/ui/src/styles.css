@@ -228,3 +228,26 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: v
 .standfirst[contenteditable="true"]:empty::before {
   content: attr(data-placeholder); color: var(--dim); opacity: .6;
 }
+
+/* title & standfirst are TipTap nodes IN the flow — same column, same measure */
+.writer-host .tiptap .doc-title-node {
+  font-family: var(--serif-display, Georgia, serif);
+  font-size: 2.2em; line-height: 1.15; font-weight: 700;
+  margin: .3em 0 0; outline: none;
+}
+.writer-host .tiptap .doc-standfirst-node {
+  font-family: var(--serif-display, Georgia, serif); font-style: italic;
+  color: var(--dim); font-size: 1.2em; margin: .2em 0 1em; outline: none;
+}
+.writer-host .tiptap .doc-title-node + p { margin-top: 1.4em; }
+/* placeholders for the header nodes */
+.writer-host .tiptap .doc-title-node p.is-editor-empty:first-child::before,
+.writer-host .tiptap .doc-standfirst-node p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder); color: var(--dim); float: left; height: 0;
+  pointer-events: none;
+}
+/* pinned bar: tools strip above the scrolling document */
+.pinbar { display:flex; gap:8px; align-items:center; padding: 6px 10px;
+  border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.pinbar-tools { flex-shrink: 0; padding: 6px 10px 0; }
+.wordcount { color: var(--dim); font-size: 12px; padding-right: 4px; }
