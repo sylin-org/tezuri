@@ -161,3 +161,54 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: v
 .writer-host .tiptap.focus-mode > *:not(.has-focus) { opacity: .45; }
 /* lowlight code blocks inherit panel colors */
 .writer-host .tiptap pre code.hljs { background: transparent; padding: 0; }
+
+/* gallery runs */
+.gallery-wrapper { margin: 1.4em 0; }
+.gallery-wrapper.loading img { max-height: 200px; border-radius: 6px; display: block; }
+.solo-img { max-width: 100%; width: auto; max-height: 60vh; display: block; margin: 1.4em auto; border-radius: 6px; }
+
+/* ---- ArticleLayout: hero, title block, metaline, TOC sidebar ---- */
+.article-layout { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
+.hero {
+  height: 280px; background-size: cover; background-position: center;
+  position: relative; flex-shrink: 0;
+}
+.hero-fade {
+  position: absolute; inset: 0;
+  background: linear-gradient(to bottom, rgba(26,18,38,.25) 0%, var(--bg) 96%);
+}
+.article-columns { flex: 1; display: flex; gap: 0; align-items: stretch; }
+.article-main { flex: 1; min-width: 0; padding: 0 32px 80px; max-width: calc(46em + 64px); margin: 0 auto; }
+
+.title-block { margin-bottom: 1.6em; }
+.doc-title {
+  font-family: var(--serif-display, Georgia, serif);
+  font-size: 2.3em; line-height: 1.15; margin: .4em 0 .3em; color: var(--ink);
+}
+.standfirst {
+  font-family: var(--serif-display, Georgia, serif); font-style: italic;
+  color: var(--dim); font-size: 1.15em; margin: 0 0 .8em;
+}
+.metaline {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  color: var(--dim); font-size: 13px;
+}
+.metaline .dot { opacity: .5; }
+.tag-pill {
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 1px 10px; font-size: 12px; color: var(--dim);
+}
+
+/* TOC sidebar — gposingway-style */
+.toc-sidebar { width: 240px; flex-shrink: 0; padding: 0 16px; }
+.toc-inner { position: sticky; top: 24px; }
+.toc-inner h2 { font-size: 11px; letter-spacing: .1em; }
+.toc-link {
+  display: block; padding: 4px 10px; font-size: 13px; color: var(--dim);
+  text-decoration: none; border-left: 2px solid transparent; border-radius: 0 4px 4px 0;
+}
+.toc-link:hover { color: var(--ink); }
+.toc-link.current { color: var(--accent, #7ab7ff); border-left-color: currentColor; }
+.toc-link.toc-l3 { padding-left: 22px; font-size: 12px; }
+
+@media (max-width: 1100px) { .toc-sidebar { display: none; } }

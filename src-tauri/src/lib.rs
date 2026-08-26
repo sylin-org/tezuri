@@ -63,6 +63,15 @@ pub struct PublicationsInfo {
 // -- desk ------------------------------------------------------------------
 
 #[tauri::command]
+fn read_theme(path: String) -> Result<String, CommandError> {
+    // Only ever the publication's own theme.css; confinement via spine.
+    let root = PathBuf::from(&path);
+    let theme = tezuri::spine::confine(&root, std::path::Path::new("theme.css"))
+        .map_err(err)?;
+    std::fs::read_to_string(theme).map_err(|e| err(e))
+}
+
+#[tauri::command]
 fn desk(session: State<Session>) -> Result<Desk, CommandError> {
     Desk::rebuild(&root(&session)?).map_err(err)
 }
@@ -210,6 +219,7 @@ pub fn run() {
         .manage(Session(std::sync::Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             open_publication,
+            read_theme,
             desk,
             read_article,
             save_article,

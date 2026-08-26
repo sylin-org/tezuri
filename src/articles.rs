@@ -13,7 +13,7 @@ use std::fs;
 use std::path::Path;
 
 /// The keys Tezuri understands. Finite, on purpose.
-pub const MANAGED_KEYS: [&str; 5] = ["title", "state", "date", "tags", "standfirst"];
+pub const MANAGED_KEYS: [&str; 6] = ["title", "state", "date", "tags", "standfirst", "cover"];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -42,6 +42,10 @@ pub struct ArticleMeta {
     pub date: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub standfirst: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cover: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -123,6 +127,8 @@ impl Article {
         let date = get_fm(&fm, "date");
         let tags =
             get_fm(&fm, "tags").map(|t| t.split(',').map(|s| s.trim().to_string()).collect());
+        let standfirst = get_fm(&fm, "standfirst");
+        let cover = get_fm(&fm, "cover");
         Ok(Article {
             meta: ArticleMeta {
                 slug: slug.to_string(),
@@ -130,6 +136,8 @@ impl Article {
                 state,
                 date,
                 tags,
+                standfirst,
+                cover,
             },
             body,
             frontmatter_raw: fm,
@@ -182,6 +190,8 @@ impl Article {
                 state: State::Draft,
                 date: Some(today),
                 tags: None,
+                standfirst: None,
+                cover: None,
             },
             body: "\n".to_string(),
             frontmatter_raw: vec!["---".into(), "---".into()],

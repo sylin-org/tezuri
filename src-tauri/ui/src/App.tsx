@@ -3,6 +3,7 @@ import CodeMirror from "@uiw/react-codemirror";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { Writer } from "./Writer";
+import { ArticleLayout } from "./ArticleLayout";
 
 function tauri(): any {
   const t = (window as any).__TAURI__;
@@ -10,7 +11,8 @@ function tauri(): any {
   return t.core;
 }
 
-type Doc = { slug: string; title: string; state: string; body: string };
+type Doc = { slug: string; title: string; state: string; body: string;
+  standfirst?: string | null; cover?: string | null; date?: string | null; tags?: string[] | null };
 
 class BridgeError extends Error {}
 export default function App() {
@@ -51,6 +53,17 @@ export default function App() {
     try {
       const info = await tauri().invoke("open_publication", { path });
       setPubInfo(`${info.path} — ${info.articles} articles · ${info.words} words`);
+      // Publication-owned theme: plain CSS file in the repo, loaded as tokens.
+      try {
+        const css = await tauri().invoke("read_theme", { path });
+        let el = document.getElementById("pub-theme") as HTMLStyleElement | null;
+        if (!el) {
+          el = document.createElement("style");
+          el.id = "pub-theme";
+          document.head.appendChild(el);
+        }
+        el.textContent = css;
+      } catch { /* no theme.css — defaults apply */ }
       setOpened(true);
       await refreshDesk();
       setAssistantList(await tauri().invoke("list_assistants"));
@@ -62,7 +75,16 @@ export default function App() {
   // ---- articles -------------------------------------------------------------
   async function loadArticle(slug: string) {
     const a = await tauri().invoke("read_article", { slug });
-    setDoc({ slug: a.meta.slug, title: a.meta.title, state: String(a.meta.state).toLowerCase(), body: a.body });
+    setDoc({
+      slug: a.meta.slug,
+      title: a.meta.title,
+      state: String(a.meta.state).toLowerCase(),
+      body: a.body,
+      standfirst: a.meta.standfirst ?? null,
+      cover: a.meta.cover ?? null,
+      date: a.meta.date ?? null,
+      tags: a.meta.tags ?? null,
+    });
     setText(a.body);
   }
 
@@ -164,30 +186,40 @@ export default function App() {
         </section>
 
         <section id="editor">
-          <div className="docmeta">
-            <span className={`state-pill state-${doc?.state ?? "draft"}`}>{doc?.state ?? "draft"}</span>
-            <span className="saved-dot" title={doc ? "saved to files on Save (Ctrl+S)" : ""} />
-            <span style={{flex:1}} />
-            <button onClick={() => setSourceMode(!sourceMode)}>
-              {sourceMode ? "Write" : "Source"}
-            </button>
-            <button className="primary" onClick={saveDoc}>Save</button>
-          </div>
-          {sourceMode ? (
-            <div className="cm-host">
-              <CodeMirror
-                value={text}
-                height="100%"
-                extensions={[markdown({ base: markdownLanguage, codeLanguages: languages })]}
-                onChange={setText}
-                theme="dark"
-                basicSetup={{ foldGutter: false }}
-              />
-            </div>
-          ) : doc ? (
-            <Writer key={doc.slug} initialMarkdown={text} slug={doc.slug}
-                    onChange={(md) => setText(md)} />
-          ) : null}
+          {doc && (
+            <ArticleLayout
+              meta={{
+                slug: doc.slug, title: doc.title, standfirst: doc.standfirst,
+                cover: doc.cover, date: doc.date, tags: doc.tags,
+              }}
+              words={text.split(/\s+/).filter(Boolean).length}
+            >
+              <div className="docmeta">
+                <span className={`state-pill state-${doc.state}`}>{doc.state}</span>
+                <span className="saved-dot" />
+                <span style={{ flex: 1 }} />
+                <button onClick={() => setSourceMode(!sourceMode)}>
+                  {sourceMode ? "Write" : "Source"}
+                </button>
+                <button className="primary" onClick={saveDoc}>Save</button>
+              </div>
+              {sourceMode ? (
+                <div className="cm-host">
+                  <CodeMirror
+                    value={text}
+                    height="100%"
+                    extensions={[markdown({ base: markdownLanguage, codeLanguages: languages })]}
+                    onChange={setText}
+                    theme="dark"
+                    basicSetup={{ foldGutter: false }}
+                  />
+                </div>
+              ) : (
+                <Writer key={doc.slug} initialMarkdown={text} slug={doc.slug}
+                        onChange={(md) => setText(md)} />
+              )}
+            </ArticleLayout>
+          )}
         </section>
 
         <aside id="assist" className={assistOpen ? "on" : ""}>

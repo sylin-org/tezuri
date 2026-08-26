@@ -5,11 +5,12 @@
 // The Markdown file remains the source of truth via tiptap-markdown.
 
 import React from "react";
-import { EditorProvider, EditorContent, useCurrentEditor } from "@tiptap/react";
-import type { Editor } from "@tiptap/react";
+import { EditorProvider, useCurrentEditor, ReactNodeViewRenderer, NodeViewWrapper } from "@tiptap/react";
+import type { Editor, NodeViewProps } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
+import GalleryRun from "./Gallery";
 import Placeholder from "@tiptap/extension-placeholder";
 import TaskList from "@tiptap/extension-task-list";
 import Focus from "@tiptap/extension-focus";
@@ -151,7 +152,48 @@ export function Writer({ initialMarkdown, slug, onChange, onReady }: WriterProps
       extensions={[
         StarterKit.configure({ heading: { levels: [2, 3] } }),
         Link.configure({ openOnClick: false, autolink: true }),
-        Image.configure({ inline: false, allowBase64: true }),
+        Image.extend({
+        addNodeView() {
+          return ReactNodeViewRenderer((props: NodeViewProps) => {
+            const doc = props.editor.state.doc;
+            const pos = props.getPos();
+            if (typeof pos !== "number") return <NodeViewWrapper />;
+            const $pos = doc.resolve(pos);
+            const node = $pos.parent.childAfter($pos.parentOffset).node;
+            if (!node || node.type.name !== "image") return <NodeViewWrapper />;
+
+            const collect: { src: string; alt?: string }[] = [];
+            let isFirstOfRun = !$pos.nodeBefore || $pos.nodeBefore.type.name !== "image";
+
+            if (isFirstOfRun) {
+              collect.push({ src: node.attrs.src as string, alt: node.attrs.alt as string });
+              let scan = pos + node.nodeSize;
+              for (;;) {
+                const $scan = doc.resolve(scan);
+                const next = $scan.parent.childAfter($scan.parentOffset);
+                if (next.node?.type.name === "image" && next.offset === 0) {
+                  collect.push({ src: next.node.attrs.src as string, alt: next.node.attrs.alt as string });
+                  scan += next.node.nodeSize;
+                } else break;
+                if (collect.length > 12) break;
+              }
+              if (collect.length >= 2) {
+                return (
+                  <NodeViewWrapper className="gallery-wrapper">
+                    <GalleryRun images={collect} />
+                  </NodeViewWrapper>
+                );
+              }
+            }
+            if (!isFirstOfRun) return <NodeViewWrapper style={{ display: "none" }} />;
+            return (
+              <NodeViewWrapper>
+                <img src={node.attrs.src} alt={node.attrs.alt ?? ""} className="solo-img" />
+              </NodeViewWrapper>
+            );
+          });
+        },
+      }).configure({ inline: false, allowBase64: true }),
         Placeholder.configure({ placeholder: "Start writing…" }),
         TaskList,
         TaskItem.configure({ nested: true }),
