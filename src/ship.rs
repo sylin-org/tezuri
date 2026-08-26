@@ -153,6 +153,26 @@ pub struct Change {
     pub status: char, // M / A / D / R from porcelain v1
 }
 
+/// Parse one porcelain-v1 status line into a (status, path) pair, keeping the
+/// *destination* of renames so commits touch the name that now exists.
+fn parse_porcelain(line: &str) -> Option<(char, String)> {
+    if line.len() < 4 {
+        return None;
+    }
+    let status = line[..2].trim().chars().next().unwrap_or('M');
+    let rest = &line[3..];
+    let unquoted = |s: &str| s.trim().trim_matches('"').to_string();
+    // Rename/copy lines carry both ends: "old -> new".
+    let path = match rest.split_once(" -> ") {
+        Some((_old, new)) => unquoted(new),
+        None => unquoted(rest),
+    };
+    if path.is_empty() || path.starts_with(".tezuri/") {
+        return None;
+    }
+    Some((status, path))
+}
+
 /// Read working-tree changes (porcelain), excluding Tezuri's own journal dir.
 pub fn review(publication_root: &Path) -> Result<Vec<Change>> {
     let out = Command::new("git")
@@ -166,26 +186,16 @@ pub fn review(publication_root: &Path) -> Result<Vec<Change>> {
             redact(&String::from_utf8_lossy(&out.stderr))
         );
     }
-    let mut changes = Vec::new();
-    for line in String::from_utf8_lossy(&out.stdout).lines() {
-        if line.len() < 4 {
-            continue;
-        }
-        let status = line[..2].trim();
-        let path = line[3..].trim().trim_matches('"').to_string();
-        if path.starts_with(".tezuri/") {
-            continue;
-        }
-        changes.push(Change {
-            path,
-            status: status.chars().next().unwrap_or('M'),
-        });
-    }
-    Ok(changes)
+    Ok(String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(parse_porcelain)
+        .map(|(status, path)| Change { path, status })
+        .collect())
 }
 
 /// Commit exactly the selected paths. Unrelated work stays untouched and
-/// unstaged. The message is the author's.
+/// unstaged — including anything the author had already staged for their own
+/// reasons; that situation is refused outright rather than swept along.
 pub fn commit_selection(
     publication_root: &Path,
     paths: &[String],
@@ -201,13 +211,40 @@ pub fn commit_selection(
         confine(publication_root, Path::new(p))?; // never stage outside the repo
     }
 
+    let out = Command::new("git")
+        .args(["diff", "--cached", "--name-only"])
+        .current_dir(publication_root)
+        .output()
+        .context("git is not available or this folder is not a repository")?;
+    if !out.status.success() {
+        bail!("git failed: {}", redact(&String::from_utf8_lossy(&out.stderr)));
+    }
+    let selected: std::collections::BTreeSet<&str> =
+        paths.iter().map(|s| s.as_str()).collect();
+    let foreign: Vec<String> = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .filter(|l| !selected.contains(*l))
+        .map(String::from)
+        .collect();
+    if !foreign.is_empty() {
+        bail!(
+            "other changes are already staged ({} and {} more). \
+             Unstage them or select them too — I will not sweep them \
+             into your commit.",
+            foreign.first().unwrap_or(&String::new()),
+            foreign.len() - 1
+        );
+    }
+
     let mut cmd = Command::new("git");
     cmd.arg("add").arg("--").args(paths);
     let out = cmd.current_dir(publication_root).output()?;
     if !out.status.success() {
         bail!(
             "could not stage selected files: {}",
-            String::from_utf8_lossy(&out.stderr)
+            redact(&String::from_utf8_lossy(&out.stderr))
         );
     }
 
@@ -216,7 +253,7 @@ pub fn commit_selection(
         .current_dir(publication_root)
         .output()?;
     if !out.status.success() {
-        bail!("commit failed: {}", String::from_utf8_lossy(&out.stderr));
+        bail!("commit failed: {}", redact(&String::from_utf8_lossy(&out.stderr)));
     }
     let hash_out = Command::new("git")
         .args(["rev-parse", "--short", "HEAD"])
@@ -240,7 +277,7 @@ pub fn push(publication_root: &Path, expected_remote_head: Option<&str>) -> Resu
         .output()
         .context("git fetch failed")?;
     if !out.status.success() {
-        bail!("fetch failed: {}", String::from_utf8_lossy(&out.stderr));
+        bail!("fetch failed: {}", redact(&String::from_utf8_lossy(&out.stderr)));
     }
 
     if let Some(expected) = expected_remote_head {
@@ -268,7 +305,7 @@ pub fn push(publication_root: &Path, expected_remote_head: Option<&str>) -> Resu
         .current_dir(publication_root)
         .output()?;
     if !out.status.success() {
-        bail!("push failed: {}", String::from_utf8_lossy(&out.stderr));
+        bail!("push failed: {}", redact(&String::from_utf8_lossy(&out.stderr)));
     }
     Journal::open(publication_root)?.record(Event::PublishedPushed)?;
     Ok(())
@@ -361,6 +398,59 @@ mod tests {
         let dir = tempdir().unwrap();
         assert!(commit_selection(dir.path(), &[], "m").is_err());
         assert!(commit_selection(dir.path(), &["../escape".into()], "m").is_err());
+    }
+
+    #[test]
+    fn refuses_to_sweep_foreign_staged_work() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        git(root, &["init"]);
+        std::fs::write(root.join("a.md"), "x").unwrap();
+        std::fs::write(root.join("mine.md"), "author's own work").unwrap();
+        git(root, &["add", "."]);
+        git(root, &["commit", "-m", "init"]);
+
+        std::fs::write(root.join("a.md"), "changed").unwrap();
+        std::fs::write(root.join("staged-by-author.md"), "careful work").unwrap();
+        git(root, &["add", "staged-by-author.md"]); // foreign, pre-staged
+
+        let err = commit_selection(root, &["a.md".into()], "fix a").unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("already staged"),
+            "refusal must say why: {msg}"
+        );
+        // Nothing was committed by the refused attempt.
+        let s = git_status(root);
+        assert!(s.contains("staged-by-author.md"));
+        assert!(s.contains(" M a.md") || s.contains("M  a.md") || s.contains("M a.md"));
+    }
+
+    #[test]
+    fn porcelain_renames_keep_the_destination() {
+        assert_eq!(
+            parse_porcelain("R  old-name.md -> new-name.md"),
+            Some(('R', "new-name.md".into()))
+        );
+        assert_eq!(
+            parse_porcelain(" M modified.md"),
+            Some(('M', "modified.md".into()))
+        );
+        // Tezuri's journal never surfaces for review.
+        assert_eq!(parse_porcelain(" M .tezuri/journal.jsonl"), None);
+        assert_eq!(parse_porcelain("A? "), None);
+    }
+
+    fn git_status(root: &Path) -> String {
+        String::from_utf8_lossy(
+            &Command::new("git")
+                .args(["status", "--porcelain"])
+                .current_dir(root)
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .to_string()
     }
 
     #[test]
