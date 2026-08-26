@@ -113,12 +113,15 @@ pub fn seed_catalog(publication_root: &Path) -> Result<Option<Catalog>> {
 fn which(program: &str) -> bool {
     let path = std::env::var_os("PATH").unwrap_or_default();
     let candidates: Vec<String> = if cfg!(windows) {
-        vec![program.to_string(), format!("{program}.exe"), format!("{program}.cmd")]
+        vec![
+            program.to_string(),
+            format!("{program}.exe"),
+            format!("{program}.cmd"),
+        ]
     } else {
         vec![program.to_string()]
     };
-    std::env::split_paths(&path)
-        .any(|dir| candidates.iter().any(|c| dir.join(c).is_file()))
+    std::env::split_paths(&path).any(|dir| candidates.iter().any(|c| dir.join(c).is_file()))
 }
 
 // ---------------------------------------------------------------------------

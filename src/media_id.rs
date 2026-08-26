@@ -45,7 +45,11 @@ impl Recipe {
             "" | "original" => Some(Recipe::Original),
             "thumb" => Some(Recipe::Thumb),
             "hero" => Some(Recipe::Hero),
-            other => other.parse::<u32>().ok().filter(|w| WIDTH_RECIPES.contains(w)).map(Recipe::Width),
+            other => other
+                .parse::<u32>()
+                .ok()
+                .filter(|w| WIDTH_RECIPES.contains(w))
+                .map(Recipe::Width),
         }
     }
 }
@@ -73,7 +77,11 @@ pub fn plug_of(original_name: &str) -> String {
         }
     }
     let trimmed = plug.trim_end_matches('-').to_string();
-    if trimmed.is_empty() { "image".into() } else { trimmed }
+    if trimmed.is_empty() {
+        "image".into()
+    } else {
+        trimmed
+    }
 }
 
 /// A media identity in the publication's dialect.
@@ -118,7 +126,11 @@ impl MediaId {
             return None;
         }
         let uuid = uuid::Uuid::parse_str(uuid_part).ok()?;
-        Some(MediaId { uuid, plug: plug.to_string(), ext: ext.to_string() })
+        Some(MediaId {
+            uuid,
+            plug: plug.to_string(),
+            ext: ext.to_string(),
+        })
     }
 }
 
@@ -144,7 +156,8 @@ pub fn derive_rendition(original: &Path, rendition: &Path, recipe: &Recipe) -> R
     if rendition.exists() {
         return Ok(());
     }
-    let img = image::open(original).with_context(|| format!("cannot decode {}", original.display()))?;
+    let img =
+        image::open(original).with_context(|| format!("cannot decode {}", original.display()))?;
     let (ow, oh) = (img.width(), img.height());
     let tw = recipe.target_width(ow);
     let scaled = if tw < ow {
@@ -166,12 +179,19 @@ pub fn derive_rendition(original: &Path, rendition: &Path, recipe: &Recipe) -> R
 /// Resolve a document reference (`media/<base>`) to the path that should be
 /// displayed at a given recipe, deriving it if missing. Falls back to the
 /// original when derivation fails or no shrink is needed.
-pub fn resolve_for_display(publication_root: &Path, base_ref: &str, recipe: Recipe) -> Result<PathBuf> {
+pub fn resolve_for_display(
+    publication_root: &Path,
+    base_ref: &str,
+    recipe: Recipe,
+) -> Result<PathBuf> {
     let base_path = crate::spine::confine(publication_root, Path::new(base_ref))?;
     if matches!(recipe, Recipe::Original) || !base_path.exists() {
         return Ok(base_path);
     }
-    let filename = base_path.file_name().and_then(|s| s.to_str()).context("bad media ref")?;
+    let filename = base_path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .context("bad media ref")?;
     let (id, _) = split_recipe(filename).context("media ref is not a base id")?;
 
     // Renditions keep the original's container extension for now (jpg/png);
@@ -194,14 +214,21 @@ mod tests {
 
     #[test]
     fn plugs_are_sanitized() {
-        assert_eq!(plug_of("My Wedding Suit (final).JPEG"), "my-wedding-suit-final");
+        assert_eq!(
+            plug_of("My Wedding Suit (final).JPEG"),
+            "my-wedding-suit-final"
+        );
         assert_eq!(plug_of("!!!"), "image");
         assert_eq!(plug_of("").len(), 5); // "image"
     }
 
     #[test]
     fn filenames_roundtrip() {
-        let id = MediaId { uuid: uuid::Uuid::now_v7(), plug: "suit".into(), ext: "jpg".into() };
+        let id = MediaId {
+            uuid: uuid::Uuid::now_v7(),
+            plug: "suit".into(),
+            ext: "jpg".into(),
+        };
         let base = id.base_filename();
         let (parsed, recipe) = split_recipe(&base).unwrap();
         assert_eq!(recipe, Recipe::Original);
@@ -228,7 +255,9 @@ mod tests {
         let img = image::RgbaImage::from_pixel(200, 100, image::Rgba([255, 0, 0, 255]));
         img.save(&orig).unwrap();
 
-        let rend = dir.path().join("0198c7a2aaaaaaaa78901234abcdefab_test_64.png");
+        let rend = dir
+            .path()
+            .join("0198c7a2aaaaaaaa78901234abcdefab_test_64.png");
         derive_rendition(&orig, &rend, &Recipe::Width(64)).unwrap();
         let out = image::open(&rend).unwrap();
         assert_eq!(out.width(), 64);

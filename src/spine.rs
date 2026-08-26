@@ -250,7 +250,7 @@ pub fn run_job(spec: &JobSpec) -> Result<JobOutcome> {
             (false, true)
         }
     };
-    let mut stdout = out_h.join().unwrap_or_default();
+    let stdout = out_h.join().unwrap_or_default();
     let stderr = err_h.join().unwrap_or_default();
 
     let mut truncated = false;
@@ -276,7 +276,6 @@ fn spec_max() -> usize {
 }
 
 fn read_bounded<R: std::io::Read>(r: Option<R>, max: usize) -> String {
-    use std::io::Read;
     let mut buf = Vec::new();
     if let Some(mut r) = r {
         let mut chunk = [0u8; 8192];

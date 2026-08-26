@@ -2,7 +2,7 @@
 //! on top of the same library; the flow is identical either way.
 
 use anyhow::{Context, Result};
-use tezuri::{articles::Article, consult, desk::Desk, media, publications, ship, spine};
+use tezuri::{articles::Article, consult, desk::Desk, media, ship, spine};
 
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();

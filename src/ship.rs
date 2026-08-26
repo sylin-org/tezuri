@@ -10,7 +10,7 @@
 use crate::spine::{confine, redact, run_job, Event, JobSpec, Journal};
 use anyhow::{bail, Context, Result};
 use serde::Serialize;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 // ---------------------------------------------------------------------------
@@ -33,10 +33,7 @@ pub fn detect_build(publication_root: &Path) -> Option<(String, Vec<String>)> {
         // Windows: npm is a .cmd shim; spawn it directly (no cmd wrapper).
         let pm = if cfg!(windows) { "npm.cmd" } else { "npm" };
         if which(pm) {
-            return Some((
-                pm.into(),
-                vec!["run".into(), "build".into()],
-            ));
+            return Some((pm.into(), vec!["run".into(), "build".into()]));
         }
     }
     let hugo_configs = ["config.toml", "config.yaml", "hugo.toml", "hugo.yaml"];
@@ -90,7 +87,7 @@ impl TempCopy {
 
 fn copy_to_temp(root: &Path) -> Result<TempCopy> {
     let dir = tempfile::tempdir()?;
-    copy_tree(root, &dir.path())?;
+    copy_tree(root, dir.path())?;
     Ok(TempCopy(dir))
 }
 
@@ -134,12 +131,15 @@ fn which(program: &str) -> bool {
     // Windows resolves `x` to x.exe and also honors explicit extensions like
     // npm.cmd; other platforms take the name as-is.
     let candidates: Vec<String> = if cfg!(windows) {
-        vec![program.to_string(), format!("{program}.exe"), format!("{program}.cmd")]
+        vec![
+            program.to_string(),
+            format!("{program}.exe"),
+            format!("{program}.cmd"),
+        ]
     } else {
         vec![program.to_string()]
     };
-    std::env::split_paths(&path)
-        .any(|dir| candidates.iter().any(|c| dir.join(c).is_file()))
+    std::env::split_paths(&path).any(|dir| candidates.iter().any(|c| dir.join(c).is_file()))
 }
 
 // ---------------------------------------------------------------------------

@@ -51,7 +51,7 @@ impl Desk {
                     links: a.links(),
                     slug: a.meta.slug.clone(),
                     title: a.title(),
-                    state: a.meta.state.clone(),
+                    state: a.meta.state,
                     date: a.meta.date.clone(),
                     dangling_links: vec![],
                 });
@@ -130,10 +130,6 @@ pub struct Momentum {
     pub published: usize,
     pub total_words: usize,
     pub orphans: usize,
-}
-
-fn count_words(s: &str) -> usize {
-    s.split_whitespace().count()
 }
 
 #[cfg(test)]

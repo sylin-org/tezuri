@@ -9,7 +9,9 @@ use std::path::PathBuf;
 use tauri::State;
 use tezuri::{
     articles::{Article, ArticleMeta},
-    consult, desk::Desk, media, publications, ship,
+    consult,
+    desk::Desk,
+    media, publications, ship,
 };
 
 /// The one publication open in this session. v1 keeps a single window bound
@@ -22,7 +24,9 @@ pub struct CommandError {
 }
 
 fn err<E: std::fmt::Display>(e: E) -> CommandError {
-    CommandError { message: e.to_string() }
+    CommandError {
+        message: e.to_string(),
+    }
 }
 
 fn root(session: &Session) -> Result<PathBuf, CommandError> {
@@ -67,7 +71,8 @@ fn registry_add(pub_data: NewPublication) -> Result<Registry, CommandError> {
 #[tauri::command]
 fn registry_remove(path: String) -> Result<Registry, CommandError> {
     let mut reg = Registry::load().map_err(err)?;
-    reg.publications.retain(|p| p.root != PathBuf::from(&path));
+    reg.publications
+        .retain(|p| p.root != std::path::Path::new(&path));
     reg.save().map_err(err)?;
     Ok(reg)
 }
@@ -78,7 +83,7 @@ fn set_last_opened(path: String) -> Result<(), CommandError> {
     let base = dirs_home().ok_or_else(|| err("no home directory"))?;
     let p = base.join(".tezuri").join("last-opened.txt");
     if let Some(parent) = p.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| err(e))?;
+        std::fs::create_dir_all(parent).map_err(err)?;
     }
     tezuri::spine::atomic_write(&p, path.as_bytes()).map_err(err)
 }
@@ -88,7 +93,9 @@ fn get_last_opened() -> Result<Option<String>, CommandError> {
     let base = dirs_home().ok_or_else(|| err("no home directory"))?;
     let p = base.join(".tezuri").join("last-opened.txt");
     if p.exists() {
-        Ok(Some(std::fs::read_to_string(p).map_err(|e| err(e))?.trim().to_string()))
+        Ok(Some(
+            std::fs::read_to_string(p).map_err(err)?.trim().to_string(),
+        ))
     } else {
         Ok(None)
     }
@@ -103,7 +110,10 @@ fn dirs_home() -> Option<PathBuf> {
 // -- session ---------------------------------------------------------------
 
 #[tauri::command]
-fn open_publication(path: String, session: State<Session>) -> Result<PublicationsInfo, CommandError> {
+fn open_publication(
+    path: String,
+    session: State<Session>,
+) -> Result<PublicationsInfo, CommandError> {
     let p = PathBuf::from(&path);
     if !p.is_dir() {
         return Err(err("that folder does not exist"));
@@ -143,9 +153,8 @@ fn pick_folder() -> Result<Option<String>, CommandError> {
 fn read_theme(path: String) -> Result<String, CommandError> {
     // Only ever the publication's own theme.css; confinement via spine.
     let root = PathBuf::from(&path);
-    let theme = tezuri::spine::confine(&root, std::path::Path::new("theme.css"))
-        .map_err(err)?;
-    std::fs::read_to_string(theme).map_err(|e| err(e))
+    let theme = tezuri::spine::confine(&root, std::path::Path::new("theme.css")).map_err(err)?;
+    std::fs::read_to_string(theme).map_err(err)
 }
 
 #[tauri::command]
@@ -165,8 +174,7 @@ pub struct ArticleFull {
 fn read_article(slug: String, session: State<Session>) -> Result<ArticleFull, CommandError> {
     let root_path = root(&session)?;
     let a = Article::load(&root_path, &slug).map_err(err)?;
-    let doc_path =
-        tezuri::articles::Article::doc_path(&root_path, &slug).map_err(err)?;
+    let doc_path = tezuri::articles::Article::doc_path(&root_path, &slug).map_err(err)?;
     let raw = std::fs::read_to_string(doc_path).map_err(err)?;
     Ok(ArticleFull { article: a, raw })
 }
@@ -180,28 +188,19 @@ pub struct ArticleInput {
 #[tauri::command]
 fn save_article(article: ArticleInput, session: State<Session>) -> Result<String, CommandError> {
     let root_path = root(&session)?;
-    let a = Article { meta: article.meta, document: article.document };
+    let a = Article {
+        meta: article.meta,
+        document: article.document,
+    };
     a.save(&root_path).map_err(err)
 }
 
 #[tauri::command]
-fn save_document(slug: String, title: String, standfirst: Option<String>, document: String, session: State<Session>) -> Result<String, CommandError> {
-    // The flow is the source of truth for title/standfirst; meta carries the rest.
-    let root_path = root(&session)?;
-    let mut a = Article::load(&root_path, &slug).map_err(err)?;
-    a.document = document;
-    if let Some(sf) = &standfirst {
-        a.meta.standfirst = Some(sf.clone());
-    }
-    void_title(&title);
-    a.save(&root_path).map_err(err)
-}
-
-fn void_title(_t: &str) {}
-
-/// Source-mode save: the document flow is written verbatim; meta.yaml untouched.
-#[tauri::command]
-fn save_article_raw(slug: String, document: String, session: State<Session>) -> Result<String, CommandError> {
+fn save_article_raw(
+    slug: String,
+    document: String,
+    session: State<Session>,
+) -> Result<String, CommandError> {
     let root_path = root(&session)?;
     let mut a = Article::load(&root_path, &slug).map_err(err)?;
     a.document = document;
@@ -209,7 +208,11 @@ fn save_article_raw(slug: String, document: String, session: State<Session>) -> 
 }
 
 #[tauri::command]
-fn create_article(slug: String, title: String, session: State<Session>) -> Result<Article, CommandError> {
+fn create_article(
+    slug: String,
+    title: String,
+    session: State<Session>,
+) -> Result<Article, CommandError> {
     Article::create(&root(&session)?, &slug, &title).map_err(err)
 }
 
@@ -220,7 +223,11 @@ pub struct SetStateResult {
 }
 
 #[tauri::command]
-fn set_article_state(slug: String, state: String, session: State<Session>) -> Result<SetStateResult, CommandError> {
+fn set_article_state(
+    slug: String,
+    state: String,
+    session: State<Session>,
+) -> Result<SetStateResult, CommandError> {
     let st = match state.as_str() {
         "draft" => tezuri::articles::State::Draft,
         "review" => tezuri::articles::State::Review,
@@ -231,15 +238,21 @@ fn set_article_state(slug: String, state: String, session: State<Session>) -> Re
     let mut a = Article::load(&root_path, &slug).map_err(err)?;
     a.meta.state = st;
     a.save(&root_path).map_err(err)?;
-    Ok(SetStateResult { slug, state: a.meta.state.as_str().into() })
+    Ok(SetStateResult {
+        slug,
+        state: a.meta.state.as_str().into(),
+    })
 }
 
 // -- media -------------------------------------------------------------------
 
 #[tauri::command]
-fn add_media(bytes: Vec<u8>, original_name: String, session: State<Session>) -> Result<String, CommandError> {
-    let stored = media::store_identified(&root(&session)?, &bytes, &original_name)
-        .map_err(err)?;
+fn add_media(
+    bytes: Vec<u8>,
+    original_name: String,
+    session: State<Session>,
+) -> Result<String, CommandError> {
+    let stored = media::store_identified(&root(&session)?, &bytes, &original_name).map_err(err)?;
     Ok(media::base_ref(&stored))
 }
 
@@ -248,11 +261,11 @@ fn add_media(bytes: Vec<u8>, original_name: String, session: State<Session>) -> 
 #[tauri::command]
 fn fetch_media(url: String, session: State<Session>) -> Result<String, CommandError> {
     let root_path = root(&session)?;
-    let resp = reqwest::blocking::get(&url).map_err(|e| err(e))?;
+    let resp = reqwest::blocking::get(&url).map_err(err)?;
     if !resp.status().is_success() {
         return Err(err(format!("fetch failed: {}", resp.status())));
     }
-    let bytes = resp.bytes().map_err(|e| err(e))?;
+    let bytes = resp.bytes().map_err(err)?;
     let name = url.rsplit('/').next().unwrap_or("image");
     let stored = media::store_identified(&root_path, &bytes, name).map_err(err)?;
     Ok(media::base_ref(&stored))
@@ -268,9 +281,18 @@ pub struct AdviceResult {
 }
 
 #[tauri::command]
-fn consult_recipe(recipe: String, slug: String, assistant: Option<String>, session: State<Session>) -> Result<AdviceResult, CommandError> {
+fn consult_recipe(
+    recipe: String,
+    slug: String,
+    assistant: Option<String>,
+    session: State<Session>,
+) -> Result<AdviceResult, CommandError> {
     let a = consult::advise(&root(&session)?, &recipe, &slug, assistant.as_deref()).map_err(err)?;
-    Ok(AdviceResult { recipe: a.recipe, assistant: a.assistant, output: a.verdict_first_output })
+    Ok(AdviceResult {
+        recipe: a.recipe,
+        assistant: a.assistant,
+        output: a.verdict_first_output,
+    })
 }
 
 #[tauri::command]
@@ -294,7 +316,10 @@ pub struct ProofResult {
 #[tauri::command]
 fn prove(session: State<Session>) -> Result<ProofResult, CommandError> {
     let p = ship::prove(&root(&session)?).map_err(err)?;
-    Ok(ProofResult { verdict: p.verdict, evidence: p.evidence })
+    Ok(ProofResult {
+        verdict: p.verdict,
+        evidence: p.evidence,
+    })
 }
 
 #[derive(Serialize)]
@@ -308,7 +333,10 @@ fn review_changes(session: State<Session>) -> Result<Vec<ChangeView>, CommandErr
     Ok(ship::review(&root(&session)?)
         .map_err(err)?
         .into_iter()
-        .map(|c| ChangeView { status: c.status, path: c.path })
+        .map(|c| ChangeView {
+            status: c.status,
+            path: c.path,
+        })
         .collect())
 }
 
@@ -318,7 +346,11 @@ pub struct CommitResult {
 }
 
 #[tauri::command]
-fn commit_selected(paths: Vec<String>, message: String, session: State<Session>) -> Result<CommitResult, CommandError> {
+fn commit_selected(
+    paths: Vec<String>,
+    message: String,
+    session: State<Session>,
+) -> Result<CommitResult, CommandError> {
     let h = ship::commit_selection(&root(&session)?, &paths, &message).map_err(err)?;
     Ok(CommitResult { hash: h })
 }
@@ -331,10 +363,6 @@ fn push_published(expected: Option<String>, session: State<Session>) -> Result<(
 #[tauri::command]
 fn remote_head(session: State<Session>) -> Result<Option<String>, CommandError> {
     ship::remote_head(&root(&session)?).map_err(err)
-}
-
-fn main() {
-    run();
 }
 
 pub fn run() {

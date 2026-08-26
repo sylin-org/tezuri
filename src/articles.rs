@@ -78,7 +78,11 @@ pub fn parse_flow(document: &str) -> (Option<String>, Option<String>) {
 
     // Skip leading blanks.
     while let Some(l) = lines.peek() {
-        if l.trim().is_empty() { lines.next(); } else { break; }
+        if l.trim().is_empty() {
+            lines.next();
+        } else {
+            break;
+        }
     }
     if let Some(l) = lines.peek() {
         if let Some(rest) = l.strip_prefix("# ") {
@@ -88,7 +92,9 @@ pub fn parse_flow(document: &str) -> (Option<String>, Option<String>) {
     }
     // Skip one blank between title and possible standfirst.
     if let Some(l) = lines.peek() {
-        if l.trim().is_empty() { lines.next(); }
+        if l.trim().is_empty() {
+            lines.next();
+        }
     }
     if let Some(l) = lines.peek() {
         let trimmed = l.trim();
@@ -101,7 +107,9 @@ pub fn parse_flow(document: &str) -> (Option<String>, Option<String>) {
 
 /// Derive the display title of a document, with fallback to the slug.
 pub fn title_of(document: &str, slug: &str) -> String {
-    parse_flow(document).0.unwrap_or_else(|| slug.replace('-', " "))
+    parse_flow(document)
+        .0
+        .unwrap_or_else(|| slug.replace('-', " "))
 }
 
 impl Article {
@@ -144,7 +152,9 @@ impl Article {
     }
 
     pub fn standfirst(&self) -> Option<String> {
-        parse_flow(&self.document).1.or_else(|| self.meta.standfirst.clone())
+        parse_flow(&self.document)
+            .1
+            .or_else(|| self.meta.standfirst.clone())
     }
 
     /// Persist both files atomically and journal the write.
@@ -240,7 +250,7 @@ mod tests {
 
         a.meta.state = State::Published;
         a.meta.tags = vec!["rust".into()];
-        a.document = format!("# Fresh Thoughts\n\n_It begins._\n\nBody here.\n");
+        a.document = "# Fresh Thoughts\n\n_It begins._\n\nBody here.\n".to_string();
         a.save(dir.path()).unwrap();
 
         let b = Article::load(dir.path(), "fresh").unwrap();
@@ -249,8 +259,8 @@ mod tests {
         assert_eq!(b.standfirst().as_deref(), Some("It begins."));
 
         // meta.yaml exists as a sibling and holds no prose
-        let meta_text = fs::read_to_string(Article::meta_path(dir.path(), "fresh").unwrap())
-            .unwrap();
+        let meta_text =
+            fs::read_to_string(Article::meta_path(dir.path(), "fresh").unwrap()).unwrap();
         assert!(meta_text.contains("state: published"));
         assert!(!meta_text.contains("Body here"));
     }
