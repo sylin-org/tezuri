@@ -14,15 +14,21 @@
   --serif-display: Georgia, "Times New Roman", serif;
   --measure: 44em;
 }
+
+/* ---- legacy aliases → family tokens (rules below predate the migration) --- */
 :root {
-  --bg: #1a1226;
-  --panel: #241a36;
-  --ink: #e8ddc8;
-  --dim: #9a8bb0;
+  --bg: var(--ground);
+  --panel: rgba(255, 255, 255, .022);
+  --line: rgba(255, 255, 255, .06);
+  --line-2: rgba(255, 255, 255, .1);
+  --ink: #c9c9d1;
+  --dim: #71717a;
   --amber: #f0a028;
-  --green: #4caf7d;
-  --line: #3a2b52;
+  --green: #4ade80;
+  --serif-display: Georgia, "Times New Roman", serif;
+  --measure: 44em;
 }
+
 * { box-sizing: border-box; }
 body {
   margin: 0; background: var(--bg); color: var(--ink);
