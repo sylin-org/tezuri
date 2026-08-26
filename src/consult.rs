@@ -86,44 +86,6 @@ impl Catalog {
     }
 }
 
-/// Seed a catalog from harness shapes discovered on PATH. Curation stays with
-/// the author: this only proposes the file, it never runs anything.
-pub fn seed_catalog(publication_root: &Path) -> Result<Option<Catalog>> {
-    let found: Vec<Assistant> = ["codex", "claude", "gemini", "opencode"]
-        .iter()
-        .filter(|h| which(h))
-        .map(|h| Assistant {
-            id: h.to_string(),
-            command: h.to_string(),
-            args: vec![],
-            note: Some("discovered on PATH".into()),
-            default: false,
-        })
-        .collect();
-    if found.is_empty() {
-        return Ok(None);
-    }
-    let mut found = found;
-    found[0].default = true;
-    let cat = Catalog { assistants: found };
-    cat.save(publication_root)?;
-    Ok(Some(cat))
-}
-
-fn which(program: &str) -> bool {
-    let path = std::env::var_os("PATH").unwrap_or_default();
-    let candidates: Vec<String> = if cfg!(windows) {
-        vec![
-            program.to_string(),
-            format!("{program}.exe"),
-            format!("{program}.cmd"),
-        ]
-    } else {
-        vec![program.to_string()]
-    };
-    std::env::split_paths(&path).any(|dir| candidates.iter().any(|c| dir.join(c).is_file()))
-}
-
 // ---------------------------------------------------------------------------
 // Recipe assembly + invocation.
 // ---------------------------------------------------------------------------
@@ -139,15 +101,18 @@ pub struct Advice {
 
 /// Assemble the context bundle for a recipe when no custom recipe file exists.
 fn assemble_prompt(publication_root: &Path, recipe: &str, slug: &str) -> Result<String> {
-    let article = crate::articles::Article::load(publication_root, slug)?;
+    // Validate that the article actually exists before we spend tokens on it.
+    crate::articles::Article::load(publication_root, slug)
+        .with_context(|| format!("article not found: {slug}"))?;
     let mut p = format!(
         "You are assisting with an article in this repository.\n\
          Read these files before answering:\n\
-         - articles/{slug}/index.md (the draft)\n\
+         - articles/{slug}/article.md (the draft: H1 title, optional _standfirst_ line, body)\n\
+         - articles/{slug}/meta.yaml (state, date, tags — never prose)\n\
          - voice.md (style card, if present)\n\n\
          Recipe: {recipe}\n\
          Rules: advisory only; return suggestions as unified diffs against \
-         index.md where applicable; never modify any file.\n\n"
+         article.md where applicable; never modify any file.\n\n"
     );
     match recipe {
         "polish" => p.push_str("Polish the prose of the draft. Keep the author's voice."),
@@ -167,7 +132,6 @@ fn assemble_prompt(publication_root: &Path, recipe: &str, slug: &str) -> Result<
         }
         other => p.push_str(other),
     }
-    let _ = article;
     Ok(p)
 }
 
@@ -264,7 +228,20 @@ mod tests {
     }
 
     #[test]
-    fn missing_harness_is_reported_not_hidden() {
-        assert!(!which("definitely-not-a-harness"));
+    fn advice_is_refused_for_a_missing_article() {
+        let dir = tempdir().unwrap();
+        let cat = Catalog {
+            assistants: vec![Assistant {
+                id: "codex".into(),
+                command: "definitely-not-a-harness".into(),
+                args: vec![],
+                note: None,
+                default: true,
+            }],
+        };
+        cat.save(dir.path()).unwrap();
+        // The missing article is refused before any subprocess is considered.
+        let err = advise(dir.path(), "polish", "ghost", None).unwrap_err();
+        assert!(err.to_string().contains("article not found"));
     }
 }
