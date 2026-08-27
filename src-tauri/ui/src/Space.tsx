@@ -16,9 +16,12 @@ export function SpaceRail({
   desk: { entries: DeskEntry[] };
   activeSlug: string | null;
   onOpenArticle: (slug: string) => void;
-  onNewArticle: () => void;
+  onNewArticle: (vals: { slug: string; title: string }) => void;
 }) {
   const [q, setQ] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [slug, setSlug] = useState("");
+  const [title, setTitle] = useState("");
   const entries = useMemo(() => {
     const needle = q.trim().toLowerCase();
     if (!needle) return desk.entries;
@@ -64,6 +67,30 @@ export function SpaceRail({
         />
       </div>
 
+      {creating && (
+        <form
+          className="rail-new-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const s = slug.trim();
+            if (!s) return;
+            setCreating(false);
+            setSlug("");
+            setTitle("");
+            onNewArticle({ slug: s, title: title.trim() || s });
+          }}
+        >
+          <input autoFocus value={slug} placeholder="slug — lowercase-kebab"
+                 onChange={(e) => setSlug(e.target.value)} aria-label="Slug" />
+          <input value={title} placeholder="Title"
+                 onChange={(e) => setTitle(e.target.value)} aria-label="Title" />
+          <div className="row" style={{ margin: 0 }}>
+            <button type="submit" className="primary">Create</button>
+            <button type="button" onClick={() => setCreating(false)}>Cancel</button>
+          </div>
+        </form>
+      )}
+
       <div className="rail-list">
         {entries.map((e) => (
           <button
@@ -83,7 +110,7 @@ export function SpaceRail({
         )}
       </div>
 
-      <button className="rail-new" onClick={onNewArticle}>+ New article</button>
+      <button className="rail-new" onClick={() => setCreating(true)}>+ New article</button>
     </section>
   );
 }

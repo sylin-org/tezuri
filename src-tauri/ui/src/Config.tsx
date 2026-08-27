@@ -62,20 +62,48 @@ export function Config({
           Registered spaces. Removing one forgets the path — files on disk are untouched.
         </p>
         {spaces.map((s) => (
-          <div className="space-manage-row" key={s.root}>
-            <span className="space-glyph" aria-hidden="true">
-              {(s.name || s.root.split(/[\\/]/).pop() || "?").slice(0, 2).toUpperCase()}
-            </span>
-            <span className="space-card-body">
-              <span className="space-name">{s.name || s.root.split(/[\\/]/).pop()}</span>
-              <span className="space-mono">{s.root}</span>
-            </span>
-            <span style={{ flex: 1 }} />
-            <button className="small-danger" onClick={() => onRemoveSpace(s.root)}>Remove</button>
-          </div>
+          <ManageRow key={s.root} space={s} onRemove={onRemoveSpace} />
         ))}
         {spaces.length === 0 && <p className="config-empty">No spaces registered yet.</p>}
       </div>
+    </div>
+  );
+}
+
+/** One registered-space row. The destructive ask is a two-step inline
+ *  confirmation in the row itself — never a dialog over the page. */
+function ManageRow({ space, onRemove }: {
+  space: SpaceRow;
+  onRemove: (root: string) => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const label = space.name || space.root.split(/[\\/]/).pop() || space.root;
+
+  if (!confirming) {
+    return (
+      <div className="space-manage-row">
+        <span className="space-glyph" aria-hidden="true">{label.slice(0, 2).toUpperCase()}</span>
+        <span className="space-card-body">
+          <span className="space-name">{label}</span>
+          <span className="space-mono">{space.root}</span>
+        </span>
+        <span style={{ flex: 1 }} />
+        <button className="small-danger" onClick={() => setConfirming(true)}>Remove</button>
+      </div>
+    );
+  }
+  return (
+    <div className="space-manage-row confirming">
+      <span className="space-glyph" aria-hidden="true">{label.slice(0, 2).toUpperCase()}</span>
+      <span className="space-card-body">
+        <span className="space-name">Remove “{label}” from this list?</span>
+        <span className="space-mono">forgetting the path only — files on disk are untouched</span>
+      </span>
+      <span style={{ flex: 1 }} />
+      <button onClick={() => setConfirming(false)}>Keep</button>
+      <button className="danger" onClick={() => { setConfirming(false); onRemove(space.root); }}>
+        Remove
+      </button>
     </div>
   );
 }

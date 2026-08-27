@@ -15,12 +15,17 @@ interface SpaceCard {
 
 export function Landing({
   pubs, lastOpened, onOpen, onAdd, error,
+  newSpacePath, onCreateSpace, onCancelNewSpace,
 }: {
   pubs: { name: string; persona: string; root: string }[];
   lastOpened: string | null;
   onOpen: (root: string) => void;
   onAdd: () => void;
   error: string;
+  /** A picked folder awaiting its inline naming form; null when none. */
+  newSpacePath: string | null;
+  onCreateSpace: (vals: { name: string; persona: string; byline: string }) => void;
+  onCancelNewSpace: () => void;
 }) {
   const [cards, setCards] = useState<SpaceCard[]>([]);
 
@@ -82,14 +87,66 @@ export function Landing({
             </span>
           </button>
         ))}
-        <button className="space-card ghost" onClick={onAdd}>
-          <span className="space-glyph plus" aria-hidden="true">+</span>
-          <span className="space-card-body">
-            <span className="space-name">Add a space…</span>
-            <span className="space-byline">a folder of Markdown articles</span>
-          </span>
-        </button>
+        {newSpacePath ? (
+          <NewSpaceCard
+            path={newSpacePath}
+            onCreate={onCreateSpace}
+            onCancel={onCancelNewSpace}
+          />
+        ) : (
+          <button className="space-card ghost" onClick={onAdd}>
+            <span className="space-glyph plus" aria-hidden="true">+</span>
+            <span className="space-card-body">
+              <span className="space-name">Add a space…</span>
+              <span className="space-byline">a folder of Markdown articles</span>
+            </span>
+          </button>
+        )}
       </div>
     </div>
+  );
+}
+
+/** The picked folder, named in place — the question lives on the card it
+ *  will become, not in a dialog over the page. */
+function NewSpaceCard({ path, onCreate, onCancel }: {
+  path: string;
+  onCreate: (vals: { name: string; persona: string; byline: string }) => void;
+  onCancel: () => void;
+}) {
+  const folderName = path.split(/[\\/]/).pop() || "publication";
+  const [name, setName] = useState(folderName);
+  const [persona, setPersona] = useState("");
+  const [byline, setByline] = useState("");
+
+  return (
+    <form
+      className="space-card new-space"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onCreate({ name, persona, byline });
+      }}
+    >
+      <span className="space-glyph" aria-hidden="true">{(name || "?").slice(0, 2).toUpperCase()}</span>
+      <span className="space-card-body">
+        <label className="ns-field">
+          <input autoFocus value={name} placeholder="Name"
+                 onChange={(e) => setName(e.target.value)} aria-label="Space name" />
+        </label>
+        <label className="ns-field">
+          <input value={persona} placeholder="Persona — who writes here"
+                 onChange={(e) => setPersona(e.target.value)} aria-label="Persona" />
+        </label>
+        <label className="ns-field">
+          <input value={byline} placeholder="Byline — words and photographs by…"
+                 onChange={(e) => setByline(e.target.value)} aria-label="Byline" />
+        </label>
+        <span className="space-mono">{path}</span>
+      </span>
+      <span className="ns-actions">
+        <button type="button" className="small-danger" onClick={onCancel}>Cancel</button>
+        <button type="submit" className="primary">Create</button>
+      </span>
+    </form>
   );
 }

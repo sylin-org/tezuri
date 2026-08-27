@@ -27,7 +27,7 @@ import { common, createLowlight } from "lowlight";
 import { Markdown } from "tiptap-markdown";
 import GalleryRun from "./Gallery";
 import { BubbleMenu } from "@tiptap/react/menus";
-import { askForm } from "./prompts";import {
+import {
   Bold, Italic, Strikethrough, Code, Underline as UnderlineIcon, Highlighter,
   List, ListOrdered, Quote, Link2, Minus, Image as ImageIcon,
   CheckSquare, Eye, Undo2, Redo2, Settings,
@@ -233,10 +233,44 @@ export function Writer({ initialMarkdown, slug, onChange, words }: WriterProps) 
 
 // ---- pinned toolbar --------------------------------------------------------
 
+/** A tiny anchored ask: an input row that appears beside its trigger, applies
+ *  on Enter, cancels on Escape. The whole of Tezuri's "dialog" vocabulary. */
+function InlineAsk({ initial, placeholder, applyLabel, onApply, onClose, withUnlink, onUnlink }: {
+  initial: string;
+  placeholder: string;
+  applyLabel: string;
+  onApply: (v: string) => void;
+  onClose: () => void;
+  withUnlink?: boolean;
+  onUnlink?: () => void;
+}) {
+  const [v, setV] = React.useState(initial);
+  return (
+    <form
+      className="inline-ask"
+      onSubmit={(e) => { e.preventDefault(); onApply(v); onClose(); }}
+    >
+      <input
+        autoFocus
+        value={v}
+        placeholder={placeholder}
+        onChange={(e) => setV(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
+      />
+      <button type="submit" className="primary">{applyLabel}</button>
+      {withUnlink && v === "" && (
+        <button type="button" onClick={() => { onUnlink?.(); onClose(); }}>Remove link</button>
+      )}
+      <button type="button" onClick={onClose}>✕</button>
+    </form>
+  );
+}
+
 function PinnedBar({ focusMode, setFocusMode, words }: {
   focusMode: boolean; setFocusMode: (v: boolean) => void; words: number;
 }) {
   const { editor } = useCurrentEditor();
+  const [ask, setAsk] = React.useState<null | "link" | "image">(null);
   if (!editor) return null;
   const chain = () => editor.chain().focus();
   const tb = (active?: boolean) => `tool-btn${active ? " active" : ""}`;
@@ -247,6 +281,9 @@ function PinnedBar({ focusMode, setFocusMode, words }: {
       {children}
     </button>
   );
+  const applyLink = (url: string) => {
+    url === "" ? chain().unsetLink().run() : chain().setLink({ href: url }).run();
+  };
 
   return (
     <div className="pinbar-tools" role="toolbar" aria-label="Formatting">
@@ -284,27 +321,9 @@ function PinnedBar({ focusMode, setFocusMode, words }: {
            onClick={() => chain().toggleBlockquote().run()}><Quote size={14} /></T>
         <span className="bubble-sep" />
         <T label="Link" active={editor.isActive("link")}
-           onClick={async () => {
-             const prev = editor.getAttributes("link").href ?? "";
-             const vals = await askForm({
-               title: "Link",
-               confirmLabel: "Apply",
-               fields: [{ key: "url", label: "URL", initial: prev }],
-             });
-             if (vals === null) return;
-             vals.url === "" ? chain().unsetLink().run()
-                             : chain().setLink({ href: vals.url }).run();
-           }}><Link2 size={14} /></T>
+           onClick={() => setAsk(ask === "link" ? null : "link")}><Link2 size={14} /></T>
         <T label="Image"
-           onClick={async () => {
-             const vals = await askForm({
-               title: "Image",
-               hint: "Paste or drop images to store them in the space; here you can reference a media/ path directly.",
-               confirmLabel: "Insert",
-               fields: [{ key: "src", label: "media/ path", placeholder: "media/<id>-<name>.png" }],
-             });
-             if (vals && vals.src) chain().setImage({ src: vals.src }).run();
-           }}><ImageIcon size={14} /></T>
+           onClick={() => setAsk(ask === "image" ? null : "image")}><ImageIcon size={14} /></T>
         <T label="Divider"
            onClick={() => chain().setHorizontalRule().run()}><Minus size={14} /></T>
         <span className="bubble-sep" />
@@ -320,15 +339,55 @@ function PinnedBar({ focusMode, setFocusMode, words }: {
         <span style={{ flex: 1 }} />
         <span className="wordcount">{words} words</span>
       </div>
+      {ask === "link" && (
+        <InlineAsk
+          initial={editor.getAttributes("link").href ?? ""}
+          placeholder="https:// — empty removes the link"
+          applyLabel="Apply"
+          withUnlink
+          onApply={applyLink}
+          onUnlink={() => chain().unsetLink().run()}
+          onClose={() => setAsk(null)}
+        />
+      )}
+      {ask === "image" && (
+        <InlineAsk
+          initial=""
+          placeholder="media/ path — paste or drop images to store them"
+          applyLabel="Insert"
+          onApply={(src) => { if (src) chain().setImage({ src }).run(); }}
+          onClose={() => setAsk(null)}
+        />
+      )}
     </div>
   );
 }
 
 function SelectionBubble() {
   const { editor } = useCurrentEditor();
+  const [editingLink, setEditingLink] = React.useState(false);
   if (!editor) return null;
   const b = (a: boolean) => `bubble-btn${a ? " active" : ""}`;
   const chain = () => editor.chain().focus();
+
+  if (editingLink) {
+    return (
+      <BubbleMenu options={{ placement: "top", offset: 8 }}>
+        <InlineAsk
+          initial={editor.getAttributes("link").href ?? ""}
+          placeholder="https:// — empty removes the link"
+          applyLabel="Apply"
+          withUnlink
+          onApply={(url) => {
+            url === "" ? chain().unsetLink().run() : chain().setLink({ href: url }).run();
+          }}
+          onUnlink={() => chain().unsetLink().run()}
+          onClose={() => setEditingLink(false)}
+        />
+      </BubbleMenu>
+    );
+  }
+
   return (
     <BubbleMenu options={{ placement: "top", offset: 8 }}>
       <button className={b(editor.isActive("bold"))}
@@ -339,17 +398,8 @@ function SelectionBubble() {
               onClick={() => chain().toggleStrike().run()}><Strikethrough size={14} /></button>
       <span className="bubble-sep" />
       <button className={b(editor.isActive("link"))}
-              onClick={async () => {
-                const prev = editor.getAttributes("link").href ?? "";
-                const vals = await askForm({
-                  title: "Link",
-                  confirmLabel: "Apply",
-                  fields: [{ key: "url", label: "URL", initial: prev }],
-                });
-                if (vals === null) return;
-                vals.url === "" ? chain().unsetLink().run()
-                                : chain().setLink({ href: vals.url }).run();
-              }}><Link2 size={14} /></button>
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setEditingLink(true)}><Link2 size={14} /></button>
     </BubbleMenu>
   );
 }

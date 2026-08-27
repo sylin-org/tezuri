@@ -7,7 +7,6 @@ import { Landing } from "./Landing";
 import { SpaceRail, type Workspace } from "./Space";
 import { About } from "./About";
 import { Config } from "./Config";
-import { ModalHost, askForm, askConfirm } from "./prompts";
 import { invoke, onSettle } from "./bridge";
 import type { Identity, PublicationInfo } from "./bridge";
 
@@ -167,28 +166,32 @@ export default function App() {
 
   const [assistantList, setAssistantList] = useState<string[]>([]);
 
+  // A picked folder awaiting its inline naming card on the landing grid.
+  const [newSpacePath, setNewSpacePath] = useState<string | null>(null);
+
   async function addPublication() {
     try {
       const path = await invoke<string | null>("pick_folder");
       if (!path) return;
+      // No dialog: the landing names the space in place.
+      setNewSpacePath(path);
+    } catch (e: any) {
+      setLandingError(e.message ?? String(e));
+    }
+  }
+
+  async function createSpace(vals: { name: string; persona: string; byline: string }) {
+    const path = newSpacePath;
+    if (!path) return;
+    try {
       const folderName = path.split(/[\\/]/).pop() || "publication";
-      const vals = await askForm({
-        title: "New space",
-        hint: "These characteristics live in publication.yaml inside the folder — plain files, yours.",
-        confirmLabel: "Add space",
-        fields: [
-          { key: "name", label: "Name", initial: folderName },
-          { key: "persona", label: "Persona", placeholder: "who writes here" },
-          { key: "byline", label: "Byline", placeholder: "e.g. words and photographs by…" },
-        ],
-      });
-      if (!vals) return;
       const reg = await invoke<{ publications: any[] }>("registry_add", {
         pubData: { name: vals.name.trim() || folderName, persona: vals.persona.trim(), path },
       });
       setPubList(reg.publications);
+      setNewSpacePath(null);
       await openSpace(path);
-      // Persist what the author just typed; the file carries the truth.
+      // Persist what the author typed; the file carries the truth.
       const id = await invoke<Identity>("read_identity", { path }).catch(() => EMPTY_ID);
       await invoke("save_identity", {
         path,
@@ -201,18 +204,11 @@ export default function App() {
       }).catch(() => {});
     } catch (e: any) {
       setLandingError(e.message ?? String(e));
+      setNewSpacePath(null);
     }
   }
 
   async function removePublication(root: string) {
-    const pub = pubList.find((p2) => p2.root === root);
-    const ok = await askConfirm({
-      title: "Remove space",
-      body: `Remove “${pub?.name ?? root}” from Tezuri? Files on disk are untouched.`,
-      confirmLabel: "Remove",
-      danger: true,
-    });
-    if (!ok) return;
     try {
       const reg = await invoke<{ publications: any[] }>("registry_remove", { path: root });
       setPubList(reg.publications);
@@ -245,19 +241,9 @@ export default function App() {
     }
   }
 
-  async function newDoc() {
-    const vals = await askForm({
-      title: "New article",
-      confirmLabel: "Create",
-      fields: [
-        { key: "slug", label: "Slug", placeholder: "lowercase-kebab, like on-rust" },
-        { key: "title", label: "Title", placeholder: "Working title" },
-      ],
-    });
-    if (!vals) return;
-    const slug = vals.slug.trim();
-    const title = vals.title.trim() || slug;
-    if (!slug) { setNote("an article needs a slug"); return; }
+  async function newDoc(vals: { slug: string; title: string }) {
+    const slug = vals.slug;
+    const title = vals.title || slug;
     try {
       await invoke("create_article", { slug, title });
       await refreshDesk();
@@ -378,7 +364,6 @@ export default function App() {
 
   return (
     <>
-      <ModalHost />
       <header className="app-band">
         <span className="lamp" aria-hidden="true">
           <span className="lamp-halo" />
@@ -404,6 +389,8 @@ export default function App() {
         <Landing
           pubs={pubList} lastOpened={lastOpened} error={landingError}
           onOpen={openSpace} onAdd={addPublication}
+          newSpacePath={newSpacePath} onCreateSpace={createSpace}
+          onCancelNewSpace={() => setNewSpacePath(null)}
         />
       )}
 
