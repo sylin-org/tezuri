@@ -21,5 +21,6 @@ pub mod media_id;
 pub mod publications;
 pub mod render;
 pub mod ship;
+pub mod slots;
 pub mod spine;
 pub mod theme;

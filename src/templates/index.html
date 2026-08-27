@@ -4,24 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{site_name}}</title>
-<style>
-  body { margin: 0; background: #0f0e12; color: #c9c9d1;
-         font: 400 15px/1.6 Georgia, serif; }
-  .page { max-width: 640px; margin: 0 auto; padding: 60px 24px; }
-  h1 { font: 400 30px/1.2 Georgia, serif; color: #f4f4f5; }
-  .entry { margin: 22px 0; }
-  .entry a { color: #e4e4e7; font-size: 19px; text-decoration: none; }
-  .entry a:hover { color: #fff; }
-  .entry .meta { color: #71717a; font: 400 11px/1 ui-monospace, monospace; }
-  footer { color: #52525b; font: 400 12px/1.6 sans-serif;
-           border-top: 1px solid rgba(255,255,255,.06); margin-top: 48px; padding-top: 16px; }
-</style>
 </head>
-<body>
-<div class="page">
-  <h1>{{site_name}}</h1>
-  {{entries}}
-  <footer>{{site_name}} · rendered from plain files</footer>
-</div>
+<body class="{{body_class}}">
+<header class="site-head">
+<p class="site-title"><a href="index.html">{{site_name}}</a></p>
+{{byline}}
+</header>
+<main class="page">
+{{items}}
+</main>
 </body>
 </html>

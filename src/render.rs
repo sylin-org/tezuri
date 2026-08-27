@@ -1,17 +1,19 @@
 //! Render: the article compiler.
 //!
-//! Markdown flow + meta + the space's `theme.css` + a layout template become
-//! complete, self-contained HTML pages written under `render/` inside the
-//! publication. Deterministic Rust-side compilation (pulldown-cmark) so the
-//! CLI, the tests, and the app's preview surface all produce byte-identical
-//! artifacts: the preview IS the final result. A publication may override the
-//! layout with `templates/article.html` / `templates/index.html` — plain HTML
-//! with a small `{{placeholder}}` contract; embedded defaults ship in the
-//! binary and nothing is ever fetched.
+//! One pipeline serves everything the ADR names: Gather (article, identity,
+//! desk, neighbors) → evaluate context against the slot registry
+//! (`slots::compose`) → substitute into the template → apply Tezuri's theme
+//! and behaviors. Templates are the space's own files under `templates/`;
+//! the embedded defaults are deliberately dumb — `{{ARTICLE}}` over a calm
+//! baseline — and gorgeousness arrives as starter packs owned by the space.
+//!
+//! Deterministic Rust-side compilation (pulldown-cmark) keeps the CLI, the
+//! tests, and the preview byte-identical: the preview IS the final result.
+//! Nothing is ever fetched.
 
 use crate::articles::{Article, State};
+use crate::slots::{self, Ctx, Output};
 use crate::spine::{atomic_write, confine, Event, Journal};
-use crate::theme;
 use anyhow::Result;
 use pulldown_cmark::{html, Options, Parser};
 use std::path::Path;
@@ -23,55 +25,36 @@ pub const RENDER_DIR: &str = "render";
 
 const ARTICLE_TEMPLATE: &str = include_str!("templates/article.html");
 const INDEX_TEMPLATE: &str = include_str!("templates/index.html");
+const BASELINE_CSS: &str = include_str!("templates/calm.css");
 
 // ---------------------------------------------------------------------------
-// Markdown → body HTML, with TOC and galleries
+// Markdown → article flow, with TOC headings and galleries
 // ---------------------------------------------------------------------------
 
-struct Heading {
-    level: u8,
-    text: String,
-    id: String,
-}
-
-/// Compile the article's body Markdown. The document's H1 and standfirst line
-/// belong to the page frame, not the body, so they are stripped here.
-fn compile_body(document: &str) -> (String, Vec<Heading>) {
-    let body_md = strip_frame(document);
+/// Compile the entire document — H1 title and standfirst line included,
+/// because `{{ARTICLE}}` IS the live editing surface in Write mode and must
+/// carry them. Body sections feed the TOC.
+fn compile_flow(document: &str) -> (String, Vec<slots::Heading>) {
     let mut opts = Options::empty();
     opts.insert(Options::ENABLE_TABLES);
     opts.insert(Options::ENABLE_STRIKETHROUGH);
-    let mut html = String::new();
-    html::push_html(&mut html, Parser::new_ext(body_md, opts));
+    let mut out = String::new();
+    html::push_html(&mut out, Parser::new_ext(document, opts));
 
-    let html = wrap_galleries(&html);
-    let (html, headings) = tag_headings(&html);
-    let html = rewrite_paths(&html);
-    (html, headings)
-}
-
-/// Drop the leading H1 and optional `_standfirst_` line, keeping the body.
-fn strip_frame(document: &str) -> &str {
-    let mut rest = document.trim_start();
-    if let Some(after) = rest.strip_prefix("# ") {
-        rest = after.split_once('\n').map(|(_, r)| r).unwrap_or("");
-        rest = rest.trim_start();
-        // Optional standfirst line.
-        if rest.starts_with('_') {
-            if let Some(after) = rest.split_once('\n') {
-                rest = after.1;
-            }
-        }
-    }
-    rest.trim_start()
+    let out = wrap_galleries(&out);
+    let (out, headings) = tag_headings(&out);
+    let out = rewrite_paths(&out);
+    (out, headings)
 }
 
 /// Runs of two or more consecutive image-only paragraphs become a gallery —
 /// and so does a single paragraph holding two or more images (markdown keeps
-/// adjacent image lines in one paragraph, split by soft breaks).
-fn wrap_galleries(html: &str) -> String {
-    let imgs_of = |p: &str| -> Option<Vec<String>> {
-        let inner = p.strip_prefix("<p>")?.strip_suffix("</p>\n")?;
+/// adjacent image lines in one paragraph, split by soft breaks). Chunks may
+/// carry leading non-paragraph content (the H1 frame, list closers); those
+/// pass through as-is.
+fn wrap_galleries(html_str: &str) -> String {
+    let imgs_of = |para: &str| -> Option<Vec<String>> {
+        let inner = para.strip_prefix("<p>")?.strip_suffix("</p>\n")?;
         if inner.contains("</") {
             return None; // any real closing tag means mixed content
         }
@@ -82,43 +65,63 @@ fn wrap_galleries(html: &str) -> String {
             .collect();
         (imgs.len() >= 2).then_some(imgs)
     };
-    let mut out = String::with_capacity(html.len());
+
+    let flush = |out: &mut String, run: &mut Vec<String>| {
+        if run.len() >= 2 {
+            out.push_str("<div class=\"gallery\">");
+            for img in run.drain(..) {
+                out.push_str(&img);
+            }
+            out.push_str("</div>\n");
+        } else {
+            for img in run.drain(..) {
+                out.push_str("<p>");
+                out.push_str(&img);
+                out.push_str("</p>\n");
+            }
+        }
+    };
+
+    let mut out = String::with_capacity(html_str.len());
     let mut run: Vec<String> = Vec::new();
-    let paras: Vec<&str> = html.split_inclusive("</p>\n").collect();
-    for para in paras {
+    let mut rest = html_str;
+    while !rest.is_empty() {
+        let Some(end) = rest.find("</p>\n") else {
+            flush(&mut out, &mut run);
+            out.push_str(rest);
+            break;
+        };
+        let chunk = &rest[..end + 5];
+        rest = &rest[end + 5..];
+
+        let popen = chunk.rfind("<p>");
+        let Some(popen) = popen else {
+            flush(&mut out, &mut run);
+            out.push_str(chunk);
+            continue;
+        };
+        let (prelude, para) = (&chunk[..popen], &chunk[popen..]);
+        if !prelude.is_empty() {
+            flush(&mut out, &mut run);
+            out.push_str(prelude);
+        }
         match imgs_of(para) {
             Some(imgs) => run.extend(imgs),
             None => {
-                flush_gallery(&mut out, &mut run);
+                flush(&mut out, &mut run);
                 out.push_str(para);
             }
         }
     }
-    flush_gallery(&mut out, &mut run);
     out
 }
 
-fn flush_gallery(out: &mut String, run: &mut Vec<String>) {
-    if run.len() >= 2 {
-        out.push_str("<div class=\"gallery\">");
-        for img in run.drain(..) {
-            out.push_str(&img);
-        }
-        out.push_str("</div>\n");
-    } else {
-        for img in run.drain(..) {
-            out.push_str("<p>");
-            out.push_str(&img);
-            out.push_str("</p>\n");
-        }
-    }
-}
-
-/// Give every h2/h3 a stable id and collect them for the TOC.
-fn tag_headings(html: &str) -> (String, Vec<Heading>) {
-    let mut out = String::with_capacity(html.len());
+/// Give every h2/h3 a stable id and collect them for the TOC. The H1 is the
+/// article's title and stays untouched.
+fn tag_headings(html_in: &str) -> (String, Vec<slots::Heading>) {
+    let mut out = String::with_capacity(html_in.len());
     let mut headings = Vec::new();
-    let mut rest = html;
+    let mut rest = html_in;
     while let Some(pos) = rest.find("<h2>").or_else(|| rest.find("<h3>")) {
         let level: u8 = if rest[pos..].starts_with("<h2>") {
             2
@@ -136,7 +139,7 @@ fn tag_headings(html: &str) -> (String, Vec<Heading>) {
         out.push_str(&format!("<h{level} id=\"{id}\">"));
         out.push_str(&rest[after_tag..end]);
         out.push_str(&close);
-        headings.push(Heading { level, text, id });
+        headings.push(slots::Heading { level, text, id });
         rest = &rest[end + close.len()..];
     }
     out.push_str(rest);
@@ -172,46 +175,55 @@ fn slug_of(text: &str) -> String {
 /// Rewrite publication-relative references to emitted ones: images and links
 /// pointing at `media/` gain the `../` hop out of `render/`; article links
 /// become sibling pages.
-fn rewrite_paths(html: &str) -> String {
-    html.replace("src=\"media/", "src=\"../media/")
+fn rewrite_paths(html_in: &str) -> String {
+    html_in
+        .replace("src=\"media/", "src=\"../media/")
         .replace("href=\"media/", "href=\"../media/")
         .replace("href=\"articles/", "href=\"")
         .replace(".md\"", ".html\"")
 }
 
-fn toc_html(headings: &[Heading]) -> String {
-    if headings.is_empty() {
-        return String::new();
-    }
-    let mut out = String::from("<nav class=\"toc\">");
-    for h in headings {
-        let cls = if h.level == 3 { " class=\"l3\"" } else { "" };
-        out.push_str(&format!(
-            "<a href=\"#{id}\"{cls}>{text}</a>",
-            id = h.id,
-            text = esc(&h.text)
-        ));
-    }
-    out.push_str("</nav>");
-    out
-}
-
-fn esc(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-}
-
 // ---------------------------------------------------------------------------
-// Page assembly
+// Gather → compose → decorate
 // ---------------------------------------------------------------------------
 
-fn read_time(words: usize) -> usize {
-    (words / 220).max(1)
+/// The display-ready cover reference: the width-1024 rendition when it has
+/// already been derived (the settler prewarms it), otherwise the original.
+/// Stat-only — rendering never derives renditions.
+fn cover_src(publication_root: &Path, cover: &Option<String>) -> Option<String> {
+    let c = cover
+        .as_deref()?
+        .trim()
+        .trim_start_matches("./")
+        .to_string();
+    if c.is_empty() || !c.contains('/') {
+        return None;
+    }
+    let abs = confine(publication_root, Path::new(&c)).ok()?;
+    if !abs.exists() {
+        return None;
+    }
+    if let (Some(stem), Some(ext)) = (abs.file_stem(), abs.extension()) {
+        let rendition = format!("{}_1024.{}", stem.to_string_lossy(), ext.to_string_lossy());
+        let rel_dir = Path::new(&c).parent().map(|p| p.to_path_buf());
+        if let Some(dir) = rel_dir {
+            let cand = dir.join(rendition);
+            if confine(publication_root, &cand)
+                .ok()
+                .is_some_and(|p| p.exists())
+            {
+                return Some(format!("../{}", cand.to_string_lossy().replace('\\', "/")));
+            }
+        }
+    }
+    Some(format!("../{c}"))
 }
 
-fn load_template(publication_root: &Path, name: &str, fallback: &'static str) -> Result<String> {
+pub(crate) fn load_template(
+    publication_root: &Path,
+    name: &str,
+    fallback: &'static str,
+) -> Result<String> {
     let rel = Path::new("templates").join(name);
     let p = confine(publication_root, &rel)?;
     if p.exists() {
@@ -221,112 +233,227 @@ fn load_template(publication_root: &Path, name: &str, fallback: &'static str) ->
     }
 }
 
-fn subst(template: &str, pairs: &[(&str, String)]) -> String {
-    let mut out = template.to_string();
-    for (k, v) in pairs {
-        out = out.replace(&format!("{{{{{k}}}}}"), v);
+/// Tezuri's behaviors, bound to the classes Tezuri itself emits. Self-contained:
+/// the lightbox overlay is created here, never demanded from the template.
+const BEHAVIOR_JS: &str = r##"<script>
+(function () {
+  var lb = null;
+  function open(src) {
+    if (!lb) {
+      lb = document.createElement('div');
+      lb.className = 'lightbox';
+      lb.innerHTML = '<img alt="">';
+      document.body.appendChild(lb);
+      lb.addEventListener('click', function () { this.classList.remove('on'); });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') lb.classList.remove('on');
+      });
     }
-    out
+    lb.querySelector('img').src = src;
+    lb.classList.add('on');
+  }
+  document.querySelectorAll('.gallery img, .article-prose > p > img')
+    .forEach(function (img) { img.addEventListener('click', function () { open(img.src); }); });
+
+  // Scroll-spy: the toc's current section follows the reader.
+  var links = [].slice.call(document.querySelectorAll('.toc a[href^="#"]'));
+  if (!links.length || !('IntersectionObserver' in window)) return;
+  var byId = {};
+  links.forEach(function (l) { byId[l.getAttribute('href').slice(1)] = l; });
+  var obs = new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) {
+      if (!en.isIntersecting) return;
+      links.forEach(function (l) { l.classList.remove('current'); });
+      var link = byId[en.target.id];
+      if (link) link.classList.add('current');
+    });
+  }, { rootMargin: '-80px 0px -70% 0px', threshold: 0 });
+  Object.keys(byId).forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) obs.observe(el);
+  });
+})();
+</script>"##;
+
+/// Insert rendered CSS early in `<head>` so authored template styles and the
+/// space's theme.css always override the baseline. Graceful when a template
+/// has no head: try `<body>`, then append at the end — CSS still applies.
+fn style_injection_point(doc: &str) -> usize {
+    if let Some(h) = doc.find("<head") {
+        if let Some(gt) = doc[h..].find('>') {
+            return h + gt + 1;
+        }
+    }
+    if let Some(b) = doc.find("<body") {
+        if let Some(gt) = doc[b..].find('>') {
+            return b + gt + 1;
+        }
+    }
+    doc.len()
 }
 
-/// Compile one article into a complete, self-contained page.
-pub fn render_article(publication_root: &Path, slug: &str) -> Result<String> {
+/// Compose one gathered context through its template, then inject theme and
+/// behaviors. Returns HTML plus editor notes.
+fn render_template(template: &str, ctx: &Ctx, theme_css: &str) -> (String, Vec<String>) {
+    let parts = slots::parse_template(template);
+    let (composed, notes) = slots::compose(&parts, ctx);
+
+    let styles = format!(
+        "<style id=\"tezuri-baseline\">{}</style><style id=\"tezuri-theme\">{}</style>",
+        BASELINE_CSS,
+        esc_style(theme_css)
+    );
+    let insert_at = style_injection_point(&composed);
+    let mut with_styles = String::with_capacity(composed.len() + styles.len() + BEHAVIOR_JS.len());
+    with_styles.push_str(&composed[..insert_at]);
+    with_styles.push_str(&styles);
+    with_styles.push_str(&composed[insert_at..]);
+
+    match with_styles.rfind("</body>") {
+        Some(p) => with_styles.insert_str(p, BEHAVIOR_JS),
+        None => with_styles.push_str(BEHAVIOR_JS),
+    }
+
+    (with_styles, notes)
+}
+
+/// CSS is author content injected verbatim; only close-tag sequences could
+/// escape the style element, so those are neutralized defensively.
+fn esc_style(css: &str) -> String {
+    css.replace("</style", "<\\/style")
+}
+
+fn site_display_name(publication_root: &Path, name: &str) -> String {
+    if !name.is_empty() {
+        return name.to_string();
+    }
+    publication_root
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("A space")
+        .to_string()
+}
+
+/// Gather article context: files → identity → publishable set → neighbors.
+pub fn gather_article_ctx(publication_root: &Path, slug: &str) -> Result<Ctx> {
     let a = Article::load(publication_root, slug)?;
-    let (body, headings) = compile_body(&a.document);
-    let title = a.title();
-    let standfirst = a.standfirst();
-    let words = a.word_count();
-
     let identity = crate::identity::Identity::load(publication_root)?;
-    let site_name = if identity.name.is_empty() {
-        publication_root
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("A space")
-            .to_string()
-    } else {
-        identity.name.clone()
-    };
-    let byline = if identity.byline.is_empty() {
-        identity.persona.clone()
-    } else {
-        identity.byline.clone()
-    };
+    let (flow_html, headings) = compile_flow(&a.document);
 
-    let css = theme::read(publication_root).unwrap_or_default();
-    let tags_inline = if a.meta.tags.is_empty() {
-        String::new()
-    } else {
-        let pills: Vec<String> = a
-            .meta
-            .tags
-            .iter()
-            .map(|t| format!("<span class=\"tagpill\">#{}</span>", esc(t)))
-            .collect();
-        format!("<span class=\"dot\">·</span> {}", pills.join(" "))
-    };
-    let tags_block = a
-        .meta
-        .tags
-        .iter()
-        .map(|t| format!("<span class=\"tagpill\">#{}</span>", esc(t)))
-        .collect::<Vec<_>>()
-        .join(" ");
+    // Excerpt works from prose without the frame.
+    let body_md = strip_frame(&a.document).to_string();
 
-    let cover_img = match &a.meta.cover {
-        Some(c) if !c.is_empty() => format!(
-            "<img class=\"hero-img\" src=\"../{c}\" alt=\"\" loading=\"eager\">",
-            c = esc(c)
-        ),
-        _ => String::new(),
-    };
-    // The hero kicker: the first tag in their vocabulary, else the byline.
-    let kicker_line = match a.meta.tags.first() {
-        Some(t) => format!("<p class=\"kicker\">{}</p>", esc(t)),
-        None if !byline.is_empty() => format!("<p class=\"kicker\">{}</p>", esc(&byline)),
-        None => String::new(),
-    };
-    // A call-to-action anchor from the space's own extras (publication.yaml
-    // `discord: <invite-url>`), for templates that offer one.
-    let cta = identity
-        .extra
-        .get("discord")
-        .and_then(|v| v.as_str())
-        .map(|url| {
-            format!(
-                "<section><a class=\"cta\" href=\"{url}\" target=\"_blank\" \
-                 rel=\"noopener noreferrer\">Discuss on Discord <span aria-hidden=\"true\">→</span></a></section>",
-                url = esc(url)
-            )
-        })
-        .unwrap_or_default();
+    let publishable = publishable_entries(publication_root)?;
+    let neighbors = slots::Ctx::neighbors_for(&publishable, slug);
 
+    let cta = site_cta_of(&identity);
+    let site_url = extras_str(&identity.extra, &["site_url", "url"]);
+
+    Ok(Ctx {
+        output: Output::Article,
+        slug: slug.to_string(),
+        title: a.title(),
+        standfirst: a.standfirst(),
+        raw_date: a.meta.date.clone(),
+        words: a.word_count(),
+        state: a.meta.state,
+        tags: a.meta.tags.clone(),
+        cover_src: cover_src(publication_root, &a.meta.cover),
+        body_md,
+        flow_html,
+        headings,
+        neighbors,
+        site_name: site_display_name(publication_root, &identity.name),
+        byline: if identity.byline.is_empty() {
+            identity.persona.clone()
+        } else {
+            identity.byline.clone()
+        },
+        cta,
+        site_url,
+        publishable,
+        require_article: true,
+    })
+}
+
+fn strip_frame(document: &str) -> &str {
+    let mut rest = document.trim_start();
+    if let Some(after) = rest.strip_prefix("# ") {
+        rest = after.split_once('\n').map(|(_, r)| r).unwrap_or("");
+        rest = rest.trim_start();
+        // Optional standfirst line.
+        if rest.starts_with('_') {
+            if let Some(after) = rest.split_once('\n') {
+                rest = after.1;
+            }
+        }
+    }
+    rest.trim_start()
+}
+
+fn extras_str(
+    extra: &std::collections::BTreeMap<String, serde_yaml::Value>,
+    keys: &[&str],
+) -> String {
+    for k in keys {
+        if let Some(v) = extra.get(*k).and_then(|v| v.as_str()) {
+            return v.trim().to_string();
+        }
+    }
+    String::new()
+}
+
+/// A call-to-action from the space's own publication.yaml: modeled first,
+/// the earlier discord-specific key kept working.
+fn site_cta_of(identity: &crate::identity::Identity) -> Option<(String, String)> {
+    if let Some(url) = extras_str(&identity.extra, &["site_cta_url"]).into_option() {
+        let label = extras_str(&identity.extra, &["site_cta_label"]);
+        return Some((
+            if label.is_empty() {
+                "Read more".into()
+            } else {
+                label
+            },
+            url,
+        ));
+    }
+    let discord = extras_str(&identity.extra, &["discord"]);
+    (!discord.is_empty()).then(|| ("Discuss on Discord".into(), discord))
+}
+
+trait IntoOption {
+    fn into_option(self) -> Option<String>;
+}
+impl IntoOption for String {
+    fn into_option(self) -> Option<String> {
+        (!self.is_empty()).then_some(self)
+    }
+}
+
+/// Publishable set, newest first, undated last — the desk's own ordering.
+fn publishable_entries(publication_root: &Path) -> Result<Vec<crate::desk::DeskEntry>> {
+    Ok(crate::desk::Desk::rebuild(publication_root)?
+        .entries
+        .into_iter()
+        .filter(|e| e.state != State::Draft)
+        .collect())
+}
+
+// ---------------------------------------------------------------------------
+// Public surface
+// ---------------------------------------------------------------------------
+
+/// Compile one article into a complete page (CSS and behaviors applied).
+pub fn render_article(publication_root: &Path, slug: &str) -> Result<String> {
+    Ok(render_article_warned(publication_root, slug)?.0)
+}
+
+/// Same compilation, surfacing editor notes alongside — the Write-mode seam.
+pub fn render_article_warned(publication_root: &Path, slug: &str) -> Result<(String, Vec<String>)> {
+    let ctx = gather_article_ctx(publication_root, slug)?;
     let tpl = load_template(publication_root, "article.html", ARTICLE_TEMPLATE)?;
-    Ok(subst(
-        &tpl,
-        &[
-            ("title", esc(&title)),
-            ("site_name", esc(&site_name)),
-            ("byline", esc(&byline)),
-            (
-                "standfirst_line",
-                match &standfirst {
-                    Some(sf) => format!("<p class=\"standfirst\">{}</p>", esc(sf)),
-                    None => String::new(),
-                },
-            ),
-            ("date", a.meta.date.clone().unwrap_or_default()),
-            ("read_time", read_time(words).to_string()),
-            ("tags_inline", tags_inline),
-            ("tags_block", tags_block),
-            ("body", body),
-            ("toc", toc_html(&headings)),
-            ("css", css),
-            ("cover_img", cover_img),
-            ("kicker_line", kicker_line),
-            ("cta", cta),
-        ],
-    ))
+    let theme_css = crate::theme::read(publication_root)?;
+    Ok(render_template(&tpl, &ctx, &theme_css))
 }
 
 /// Compile one article and write its page. Returns the written path
@@ -341,51 +468,53 @@ pub fn write_page(publication_root: &Path, slug: &str) -> Result<String> {
     Ok(rel)
 }
 
-/// The index page lists the publishable set — review and published. Drafts
-/// preview on demand and are never offered to the destination.
-fn publishable(root: &Path) -> Result<Vec<crate::desk::DeskEntry>> {
-    Ok(crate::desk::Desk::rebuild(root)?
-        .entries
-        .into_iter()
-        .filter(|e| e.state != State::Draft)
-        .collect())
-}
-
 /// (Re)write the index page from the current publishable set.
 pub fn write_index(publication_root: &Path) -> Result<String> {
     let identity = crate::identity::Identity::load(publication_root)?;
-    let site_name = if identity.name.is_empty() {
-        publication_root
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("A space")
-            .to_string()
-    } else {
-        identity.name.clone()
+    let publishable = publishable_entries(publication_root)?;
+
+    let ctx = Ctx {
+        output: Output::Index,
+        slug: String::new(),
+        title: site_display_name(publication_root, &identity.name),
+        standfirst: None,
+        raw_date: None,
+        words: 0,
+        state: State::Published,
+        tags: vec![],
+        cover_src: None,
+        body_md: String::new(),
+        flow_html: String::new(),
+        headings: vec![],
+        neighbors: Default::default(),
+        site_name: site_display_name(publication_root, &identity.name),
+        byline: if identity.byline.is_empty() {
+            identity.persona.clone()
+        } else {
+            identity.byline.clone()
+        },
+        cta: site_cta_of(&identity),
+        site_url: extras_str(&identity.extra, &["site_url", "url"]),
+        publishable,
+        require_article: false,
     };
 
-    let mut index_rows = String::new();
-    for e in &publishable(publication_root)? {
-        index_rows.push_str(&format!(
-            "<div class=\"entry\"><a href=\"{slug}.html\">{title}</a><br>\
-             <span class=\"meta\">{date} · {words} words</span></div>\n",
-            slug = e.slug,
-            title = esc(&e.title),
-            date = e.date.as_deref().unwrap_or("undated"),
-            words = e.words,
-        ));
-    }
-
-    let index = subst(
-        &load_template(publication_root, "index.html", INDEX_TEMPLATE)?,
-        &[("site_name", esc(&site_name)), ("entries", index_rows)],
-    );
     let index_rel = format!("{RENDER_DIR}/index.html");
-    atomic_write(
-        &confine(publication_root, Path::new(&index_rel))?,
-        index.as_bytes(),
-    )?;
+    let bytes = composed_bytes(publication_root, "index.html", INDEX_TEMPLATE, &ctx)?;
+    atomic_write(&confine(publication_root, Path::new(&index_rel))?, &bytes)?;
     Ok(index_rel)
+}
+
+fn composed_bytes(
+    publication_root: &Path,
+    name: &str,
+    fallback: &'static str,
+    ctx: &Ctx,
+) -> Result<Vec<u8>> {
+    let tpl = load_template(publication_root, name, fallback)?;
+    let theme_css = crate::theme::read(publication_root)?;
+    let (page, _) = render_template(&tpl, ctx, &theme_css);
+    Ok(page.into_bytes())
 }
 
 /// Compile the publishable set and write `render/<slug>.html` +
@@ -393,7 +522,7 @@ pub fn write_index(publication_root: &Path) -> Result<String> {
 /// recognize. Returns the written paths (publication-relative).
 pub fn emit_render(publication_root: &Path) -> Result<Vec<String>> {
     let mut written = Vec::new();
-    for e in &publishable(publication_root)? {
+    for e in &publishable_entries(publication_root)? {
         written.push(write_page(publication_root, &e.slug)?);
     }
     written.push(write_index(publication_root)?);
@@ -411,57 +540,58 @@ mod tests {
     const DOC: &str = "# On Rust\n\n_A meditation on ownership._\n\n## First part\n\nHello \
                        world.\n\n## Second part\n\nMore words.\n\n### Deep\n\nDeeper.\n";
 
-    #[test]
-    fn heading_ids_land_cleanly() {
-        let (body, _) = compile_body(DOC);
-        // The full open-tag shape, text with no prefix garbage.
-        assert!(body.contains("<h2 id=\"sec-1-first-part\">First part</h2>"));
-        assert!(body.contains("<h3 id=\"sec-3-deep\">Deep</h3>"));
-        assert!(!body.contains(">>"), "no doubled angle brackets");
+    fn setup(dir: &Path, slug: &str, doc: &str) {
+        Article::create(dir, slug, slug).unwrap();
+        let mut a = Article::load(dir, slug).unwrap();
+        a.document = doc.into();
+        a.save(dir).unwrap();
     }
 
     #[test]
-    fn strips_frame_and_compiles_toc() {
-        let (body, headings) = compile_body(DOC);
-        assert!(!body.contains("<h1>"), "the frame's H1 must not double up");
-        assert!(body.contains("<h2 id=\"sec-1-first-part\">"));
-        assert!(body.contains("id=\"sec-3-deep\""));
+    fn flow_keeps_title_and_standfirst_and_ids_sections() {
+        let (flow, headings) = compile_flow(DOC);
+        assert!(flow.contains("<h1>On Rust</h1>"), "H1 lives in the flow");
+        assert!(flow.contains("<em>A meditation on ownership.</em>"));
+        assert!(flow.contains("<h2 id=\"sec-1-first-part\">First part</h2>"));
+        assert!(flow.contains("<h3 id=\"sec-3-deep\">Deep</h3>"));
         assert_eq!(headings.len(), 3);
-        assert_eq!(headings[0].text, "First part");
     }
 
     #[test]
     fn galleries_wrap_adjacent_images() {
         let md = "# T\n\n![a](media/a.png)\n![b](media/b.png)\n\nSolo:\n\n![c](media/c.png)\n";
-        let (body, _) = compile_body(md);
-        assert!(body.contains("<div class=\"gallery\">"));
-        assert!(body.contains("src=\"../media/a.png\""));
-        // The lone image stays a plain paragraph.
-        let gallery_end = body.find("</div>").unwrap();
-        assert!(body[gallery_end..].contains("<p><img"));
+        let (flow, _) = compile_flow(md);
+        assert!(flow.contains("<div class=\"gallery\">"));
+        assert!(flow.contains("src=\"../media/a.png\""));
+        let gallery_end = flow.find("</div>").unwrap();
+        assert!(flow[gallery_end..].contains("<p><img"), "{flow}");
     }
 
     #[test]
     fn article_links_become_sibling_pages() {
-        let (body, _) = compile_body("T\n\nsee [that](articles/other.md)\n");
-        assert!(body.contains("href=\"other.html\""));
+        let (flow, _) = compile_flow("T\n\nsee [that](articles/other.md)\n");
+        assert!(flow.contains("href=\"other.html\""));
     }
 
     #[test]
-    fn renders_complete_page_from_template() {
+    fn dumb_default_renders_calm_full_document_page() {
         let dir = tempdir().unwrap();
-        Article::create(dir.path(), "on-rust", "On Rust").unwrap();
-        let mut a = Article::load(dir.path(), "on-rust").unwrap();
-        a.document = DOC.into();
-        a.meta.tags = vec!["rust".into()];
-        a.save(dir.path()).unwrap();
+        setup(dir.path(), "on-rust", DOC);
 
-        let page = render_article(dir.path(), "on-rust").unwrap();
-        assert!(page.contains("<h1 class=\"art-title\">On Rust</h1>"));
-        assert!(page.contains("A meditation on ownership."));
-        assert!(page.contains("href=\"#sec-1-first-part\""));
-        assert!(page.contains("#rust"));
-        assert!(page.contains("IN THIS ARTICLE"));
+        let (page, notes) = render_article_warned(dir.path(), "on-rust").unwrap();
+        assert!(notes.is_empty());
+        assert!(
+            page.contains("<div class=\"article-prose\"><h1>On Rust</h1>"),
+            "{page}"
+        );
+        // Navigation exists iff the template says {{toc}}; sections are still
+        // anchorable by id.
+        assert!(page.contains("<h2 id=\"sec-1-first-part\">"));
+        assert!(page.contains("<style id=\"tezuri-baseline\">"), "{page}");
+        assert!(page.contains(".lightbox.on"), "behaviors ship");
+        assert!(page.contains("is-article is-draft"), "{page}");
+        let tail = page.trim_end().replace('\n', "");
+        assert!(tail.ends_with("</body></html>"), "{page}");
     }
 
     #[test]
@@ -498,9 +628,104 @@ mod tests {
         Article::create(dir.path(), "gamma", "Gamma").unwrap();
         let tpl_dir = dir.path().join("templates");
         std::fs::create_dir_all(&tpl_dir).unwrap();
-        std::fs::write(tpl_dir.join("article.html"), "<html>{{title}}</html>").unwrap();
+        std::fs::write(
+            tpl_dir.join("article.html"),
+            "<html><head>{{title}}</head><body class=\"mine\">{{ARTICLE}}</body></html>",
+        )
+        .unwrap();
 
         let page = render_article(dir.path(), "gamma").unwrap();
-        assert_eq!(page, "<html>Gamma</html>");
+        // Baseline lands immediately inside head, so any later style block
+        // in a template's own head always wins over it.
+        assert!(
+            page.starts_with("<html><head><style id=\"tezuri-baseline\">"),
+            "{page}"
+        );
+        assert!(
+            page.contains("</style><style id=\"tezuri-theme\"></style>Gamma</head>"),
+            "{page}"
+        );
+        assert!(
+            page.contains("<div class=\"article-prose\"><h1>Gamma</h1>"),
+            "{page}"
+        );
+        let tail = page.trim_end().replace('\n', "");
+        assert!(tail.ends_with("</body></html>"), "{page}");
+        assert_eq!(page.matches("(function () {").count(), 1, "behaviors once");
+    }
+
+    #[test]
+    fn unknown_slot_whispers_into_notes_not_breakage() {
+        let dir = tempdir().unwrap();
+        Article::create(dir.path(), "g2", "G2").unwrap();
+        let tpl_dir = dir.path().join("templates");
+        std::fs::create_dir_all(&tpl_dir).unwrap();
+        std::fs::write(
+            tpl_dir.join("article.html"),
+            "{{sparkle}}<body>{{ARTICLE}}</body>",
+        )
+        .unwrap();
+
+        let (page, notes) = render_article_warned(dir.path(), "g2").unwrap();
+        assert!(page.contains("G2"), "{page}");
+        assert_eq!(notes.len(), 1);
+        assert!(notes[0].starts_with("unknown slot {{sparkle}}"));
+    }
+
+    #[test]
+    fn theme_css_is_injected_for_the_render_plane() {
+        let dir = tempdir().unwrap();
+        Article::create(dir.path(), "themed", "Themed").unwrap();
+        crate::theme::write(dir.path(), ".article-prose { letter-spacing: .5px; }").unwrap();
+
+        let page = render_article(dir.path(), "themed").unwrap();
+        assert!(
+            page.contains("<style id=\"tezuri-theme\">.article-prose"),
+            "{page}"
+        );
+    }
+
+    #[test]
+    fn cover_prefers_derived_1024_when_present() {
+        let dir = tempdir().unwrap();
+        let media = dir.path().join("media");
+        std::fs::create_dir_all(&media).unwrap();
+        std::fs::write(media.join("ab-plug.png"), b"x").unwrap();
+        std::fs::write(media.join("ab-plug_1024.png"), b"x").unwrap();
+        let _ = std::fs::write(media.join("cd-other.jpg"), b"x");
+
+        assert_eq!(
+            cover_src(dir.path(), &Some("media/ab-plug.png".into())).unwrap(),
+            "../media/ab-plug_1024.png"
+        );
+        assert_eq!(
+            cover_src(dir.path(), &Some("media/cd-other.jpg".into())).unwrap(),
+            "../media/cd-other.jpg"
+        );
+        assert!(cover_src(dir.path(), &Some("media/missing.png".into())).is_none());
+        assert!(cover_src(dir.path(), &Some("bare-name.png".into())).is_none());
+    }
+
+    #[test]
+    fn site_cta_supports_modeled_key_and_legacy_discord() {
+        use crate::identity::Identity;
+        let mut id = Identity {
+            name: "K".into(),
+            ..Default::default()
+        };
+        id.extra
+            .insert("discord".into(), "https://discord.gg/x".into());
+
+        let cta = site_cta_of(&id).unwrap();
+        assert_eq!(cta.0, "Discuss on Discord");
+        assert_eq!(cta.1, "https://discord.gg/x");
+
+        id.extra.insert(
+            "site_cta_url".into(),
+            serde_yaml::Value::String("https://ko-fi.com/k".into()),
+        );
+        let cta = site_cta_of(&id).unwrap();
+        assert_eq!(cta.0, "Read more");
+        assert_eq!(cta.1, "https://ko-fi.com/k");
     }
 }

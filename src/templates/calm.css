@@ -1,0 +1,82 @@
+/* Calm baseline: what the dumb default template relies on.Injected early by
+   Tezuri so a space's theme.css and a template's own styles override it. */
+
+* { box-sizing: border-box; }
+html { color-scheme: light dark; -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: #ffffff;
+  color: #1f2328;
+  font: 400 17px/1.7 Georgia, "Times New Roman", serif;
+}
+.page { max-width: 42em; margin: 0 auto; padding: 3em 24px 5em; }
+
+a { color: #0969da; text-decoration-thickness: from-font; }
+a:hover { text-decoration: underline; }
+
+.article-prose h1 { font: 400 2.1em/1.25 Georgia, serif; margin: 0 0 .35em; letter-spacing: -.01em; }
+.article-prose h2 { font-weight: 600; font-size: 1.4em; margin: 2em 0 .6em; line-height: 1.3; }
+.article-prose h3 { font-weight: 600; font-size: 1.15em; margin: 1.6em 0 .5em; }
+.standfirst { font-style: italic; color: #57606a; font-size: 1.15em; margin: 0 0 1.8em; }
+.article-prose p { margin: 0 0 1.2em; }
+.article-prose img { max-width: 100%; height: auto; border-radius: 4px; cursor: zoom-in; }
+.article-prose blockquote { margin: 1.4em 0; padding: .1em 0 .1em 1.2em;
+  border-left: 3px solid #d0d7de; color: #57606a; }
+.article-prose code { font-family: ui-monospace, Consolas, monospace; font-size: .85em;
+  background: rgba(175,184,193,.2); padding: .15em .35em; border-radius: 4px; }
+.article-prose pre { background: #f6f8fa; padding: 1em; overflow-x: auto; border-radius: 6px; }
+.article-prose pre code { background: none; padding: 0; }
+.article-prose hr { border: 0; border-top: 1px solid #d8dee4; margin: 2.5em 0; }
+.article-prose table { border-collapse: collapse; width: 100%; margin: 1.4em 0; font-size: .95em; }
+.article-prose th, .article-prose td { border: 1px solid #d8dee4; padding: .45em .7em; text-align: left; }
+.article-prose th { background: #f6f8fa; }
+
+.gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px; margin: 1.6em 0; }
+.gallery img { width: 100%; height: 160px; object-fit: cover; cursor: zoom-in; }
+
+.toc { margin: 1.2em 0 2.2em; padding-left: 1em; border-left: 2px solid #eaeef2; }
+.toc a { display: block; padding: .18em 0; color: #57606a; text-decoration: none; }
+.toc a:hover { color: #1f2328; }
+.toc a.l3 { padding-left: 1em; }
+
+.tagpill { display: inline-block; border: 1px solid #d0d7de; border-radius: 999px;
+  padding: .12em .75em; font-size: .72rem; font-family: ui-monospace, Consolas, monospace;
+  letter-spacing: .08em; color: #57606a; text-transform: uppercase; text-decoration: none; }
+
+.site-cta { margin: 3em 0; }
+.site-cta a { display: inline-block; border: 1px solid #0969da33; border-radius: 999px;
+  padding: .45em 1.3em; text-decoration: none; }
+.site-cta a:hover { background: #f3f8ff; }
+
+.neighbor-link, .home-link { text-decoration: none; }
+
+ul.article-list { list-style: none; margin: 1.6em 0; padding: 0; }
+ul.article-list > li.article-list-item { padding: .9em 0; border-bottom: 1px solid #eaeef2; }
+ul.article-list > li.article-list-item > a { font-size: 1.15em; font-weight: 500; }
+ul.article-list .item-date { display: block; margin-top: .15em;
+  font: 400 .72rem/1 ui-monospace, Consolas, monospace; letter-spacing: .08em; color: #57606a; }
+
+.lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.88);
+  display: none; align-items: center; justify-content: center;
+  cursor: zoom-out; z-index: 50; }
+.lightbox.on { display: flex; }
+.lightbox img { max-width: 94vw; max-height: 94vh; border-radius: 4px; }
+
+@media (prefers-color-scheme: dark) {
+  body { background: #0d1117; color: #c9d1d9; }
+  a { color: #58a6ff; }
+  .standfirst, .toc a, ul.article-list .item-date, .tagpill { color: #8b949e; }
+  .article-prose blockquote { border-left-color: #30363d; color: #8b949e; }
+  .article-prose pre { background: #161b22; }
+  .article-prose th { background: #161b22; }
+  .article-prose th, .article-prose td, .article-prose hr,
+  ul.article-list > li.article-list-item, .toc, .tagpill { border-color: #21262d; }
+  ul.article-list > li.article-list-item { border-bottom: 1px solid #21262d; }
+  .site-cta a:hover { background: #12203240; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}

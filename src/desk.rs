@@ -20,6 +20,7 @@ pub struct DeskEntry {
     pub links: Vec<String>,
     /// Referenced by other published work but missing from the desk.
     pub dangling_links: Vec<String>,
+    pub tags: Vec<String>,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -54,6 +55,7 @@ impl Desk {
                     state: a.meta.state,
                     date: a.meta.date.clone(),
                     dangling_links: vec![],
+                    tags: a.meta.tags.clone(),
                 });
             }
         }
@@ -117,9 +119,8 @@ impl Desk {
 }
 
 impl DeskEntry {
-    fn tags_like(&self, _q: &str) -> bool {
-        // Tags live in frontmatter; v1 search covers titles and slugs.
-        false
+    fn tags_like(&self, q: &str) -> bool {
+        self.tags.iter().any(|t| t.to_lowercase().contains(q))
     }
 }
 
