@@ -277,14 +277,16 @@ function AppearanceSection() {
     <div className="config-section">
       <h2>This space — appearance</h2>
       <p className="config-hint">
-        Lives in <code>theme.css</code>. Presets propose; the specimen shows; saving writes the
-        file. Or compose the CSS yourself — it is your file.
+        Lives in <code>theme.css</code> and styles how this space's <b>articles are rendered</b> —
+        the emitted pages in <code>render/</code> and the editor's Preview. Tezuri's own chrome
+        stays out of it. Presets propose; the specimen shows; saving writes the file. Or compose
+        the CSS yourself — it is your file.
       </p>
 
       <div className="preset-row">
         <button className="preset-card" onClick={() => setDraft("")}>
           <span className="preset-name">Built-in</span>
-          <span className="preset-desc">No theme file — the app's own look.</span>
+          <span className="preset-desc">No theme file — the template's own look.</span>
         </button>
         {presets.map((p) => (
           <button key={p.id} className="preset-card" onClick={() => setDraft(p.css)}>
@@ -305,13 +307,14 @@ function AppearanceSection() {
             rows={10}
           />
         </label>
-        <div className="theme-specimen theme-scope" aria-label="Specimen preview">
+        <div className="theme-specimen theme-scope" aria-label="Specimen of the rendered article">
           <style>{draft}</style>
-          <div className="tiptap">
-            <span className="specimen-kicker">SPECIMEN</span>
-            <span className="specimen-title">On Rust</span>
-            <span className="specimen-standfirst">_A meditation on ownership._</span>
-            <span className="specimen-body">{SPECIMEN}</span>
+          <div className="specimen-page">
+            <span className="kicker">SPECIMEN</span>
+            <h1 className="art-title">On Rust</h1>
+            <p className="standfirst">A meditation on ownership.</p>
+            <div className="metaline"><span>2026-08-26</span><span className="dot">·</span><span>5 min read</span></div>
+            <div className="art-body">{SPECIMEN}</div>
           </div>
         </div>
       </div>

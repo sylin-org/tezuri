@@ -254,6 +254,19 @@ fn write_theme(css: String, session: State<Session>) -> Result<(), CommandError>
     tezuri::theme::write(&root(&session)?, &css).map_err(err)
 }
 
+/// Compile one article into its final page — the preview is this exact
+/// string, so what the author sees is what emits.
+#[tauri::command]
+fn render_article(slug: String, session: State<Session>) -> Result<String, CommandError> {
+    tezuri::render::render_article(&root(&session)?, &slug).map_err(err)
+}
+
+/// Compile every article into render/ inside the publication.
+#[tauri::command]
+fn emit_render(session: State<Session>) -> Result<Vec<String>, CommandError> {
+    tezuri::render::emit_render(&root(&session)?).map_err(err)
+}
+
 #[tauri::command]
 fn desk(session: State<Session>) -> Result<Desk, CommandError> {
     Desk::rebuild(&root(&session)?).map_err(err)
@@ -498,6 +511,8 @@ pub fn run() {
             theme_presets,
             read_theme,
             write_theme,
+            render_article,
+            emit_render,
             desk,
             read_article,
             save_article,

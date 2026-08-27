@@ -6,7 +6,7 @@ import { Writer } from "./Writer";
 import { Landing } from "./Landing";
 import { SpaceRail, type Workspace } from "./Space";
 import { About } from "./About";
-import { Config, THEME_EVENT } from "./Config";
+import { Config } from "./Config";
 import { ModalHost, askForm, askConfirm } from "./prompts";
 import { invoke } from "./bridge";
 import type { Identity, PublicationInfo } from "./bridge";
@@ -23,7 +23,6 @@ export default function App() {
   const [open, setOpen] = useState<PublicationInfo | null>(null);
   const [landingError, setLandingError] = useState("");
   const [note, setNote] = useState("");
-
   // ---- space state ----------------------------------------------------------
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [entries, setEntries] = useState<any[]>([]);
@@ -38,7 +37,6 @@ export default function App() {
     cover: string | null; date: string | null; tags: string[] | null;
   } | null>(null);
   const [text, setText] = useState("");
-  const [sourceMode, setSourceMode] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "dirty">("saved");
 
   // ---- shared chrome state ----------------------------------------------------
@@ -229,6 +227,7 @@ export default function App() {
       dirtyRef.current = false;
       setActiveSlug(slug);
       setWorkspace({ kind: "article", slug });
+      setMode("write");
     } catch (e: any) {
       setNote(e.message ?? String(e));
     }
@@ -323,24 +322,35 @@ export default function App() {
     } catch (e: any) { setNote(e.message ?? String(e)); }
   }
 
-  // The space's own theme.css styles the editor plane — a derived view, so a
-  // publication file may dress it. Injected under the fixed id; a change
-  // event from Configuration replaces it.
-  const [themeCss, setThemeCss] = useState("");
-  useEffect(() => {
-    if (!open) { setThemeCss(""); return; }
-    invoke<string>("read_theme").then(setThemeCss).catch(() => setThemeCss(""));
-  }, [open]);
+  // ---- render mode: Write (WYSIWYG), Source (raw md), Preview (the artifact)
+  // The preview is the compiled page itself — same bytes emit_render writes.
+  const [mode, setMode] = useState<"write" | "source" | "preview">("write");
+  const [previewHtml, setPreviewHtml] = useState("");
+  const [emitted, setEmitted] = useState<string[] | null>(null);
 
-  useEffect(() => {
-    const h = (e: Event) => setThemeCss((e as CustomEvent<string>).detail);
-    window.addEventListener(THEME_EVENT, h);
-    return () => window.removeEventListener(THEME_EVENT, h);
+  const showPreview = useCallback(async () => {
+    const d = docRef.current;
+    if (!d) return;
+    // Preview always shows the saved state; flush a pending autosave first.
+    if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current);
+    await flushRef.current();
+    try {
+      setPreviewHtml(await invoke<string>("render_article", { slug: d.slug }));
+      setMode("preview");
+    } catch (e: any) {
+      setNote(e.message ?? String(e));
+    }
   }, []);
 
-  const themeStyle = themeCss
-    ? <style>{themeCss}</style>
-    : null;
+  async function doEmit() {
+    try {
+      const files = await invoke<string[]>("emit_render");
+      setEmitted(files);
+      setNote(`rendered ${files.length} page(s) into render/ — ready for review`);
+    } catch (e: any) {
+      setNote(e.message ?? String(e));
+    }
+  }
 
   // ---- render -----------------------------------------------------------------
   const bandTabs = (
@@ -400,15 +410,13 @@ export default function App() {
       )}
 
       {surface === "space" && open && (
-        <main>
-          <SpaceRail
+        <main>          <SpaceRail
             identity={identity} desk={{ entries }}
             activeSlug={activeSlug}
             onOpenArticle={loadArticle} onNewArticle={newDoc}
           />
 
-          <section id="editor" className={themeCss.trim() ? "theme-scope" : undefined}>
-            {themeStyle}
+          <section id="editor">
             {workspace?.kind === "article" && doc && (
               <>
                 <div className="pinbar">
@@ -427,11 +435,19 @@ export default function App() {
                   </select>
                   <SaveDot status={saveStatus} />
                   <span style={{ flex: 1 }} />
+                  <div className="mode-switch" role="tablist" aria-label="View">
+                    <button role="tab" aria-selected={mode === "write"}
+                            className={mode === "write" ? "active" : ""}
+                            onClick={() => setMode("write")}>Write</button>
+                    <button role="tab" aria-selected={mode === "source"}
+                            className={mode === "source" ? "active" : ""}
+                            onClick={() => setMode("source")}>Source</button>
+                    <button role="tab" aria-selected={mode === "preview"}
+                            className={mode === "preview" ? "active" : ""}
+                            onClick={() => void showPreview()}>Preview</button>
+                  </div>
                   <button onClick={() => setAssistOpen(!assistOpen)}
                           title="Advisory help: polish, voice, facts">Assistant</button>
-                  <button onClick={() => setSourceMode(!sourceMode)}>
-                    {sourceMode ? "Write" : "Source"}
-                  </button>
                   <button
                     className={saveStatus === "dirty" ? "primary" : ""}
                     onClick={() => { if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current); void flush(); }}
@@ -455,7 +471,14 @@ export default function App() {
                     </label>
                   </div>
                 )}
-                {sourceMode ? (
+                {mode === "preview" ? (
+                  <iframe
+                    className="preview-frame"
+                    title="Rendered article — exactly what emits"
+                    srcDoc={previewHtml}
+                    sandbox="allow-scripts"
+                  />
+                ) : mode === "source" ? (
                   <div className="cm-host">
                     <CodeMirror
                       value={text} height="100%"
@@ -505,6 +528,10 @@ export default function App() {
             <div className="row"><button onClick={doProve}>Prove build</button>
               {proof && <span className={`verdict-${proof.verdict}`}>{proof.verdict}</span>}</div>
             <pre className="out" style={{ maxHeight: "20vh" }}>{proof?.evidence ?? ""}</pre>
+            <div className="row">
+              <button onClick={doEmit} title="Compile every article into render/">Render pages</button>
+              {emitted && <span className="mono-fact">{emitted.length} pages → render/</span>}
+            </div>
             <h2>Changes</h2>
             {changes.length === 0 ? <p style={{ color: "var(--muted)" }}>working tree clean</p> :
               changes.map((c) => (
