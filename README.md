@@ -54,8 +54,18 @@ pwsh ./eng/verify.ps1
 It type-checks and builds the frontend bundle, checks rustfmt, runs clippy with warnings denied,
 runs the whole test suite, compiles the desktop executable, and audits the working patch for
 whitespace errors.
-Platform installer bundling is not wired up yet; once installers exist, release checks will cover
-the artifact a person actually downloads.
+
+Before calling a release shippable, exercise the artifact a person actually downloads:
+
+```powershell
+pwsh ./eng/release-check.ps1
+```
+
+It builds the release binary with the current bundle embedded, launches it as a real process,
+confirms it stays alive, and stops it cleanly.
+
+Platform installer bundling is not wired up yet; until then the release binary is the
+downloadable artifact, and this check covers it.
 
 ## Product model
 
