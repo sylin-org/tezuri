@@ -27,6 +27,22 @@ export interface ComposePlaneProps {
 }
 
 export function WriteComposePlane(p: ComposePlaneProps) {
+  // The composer arrives one invoke after the article opens; until then the
+  // plain writing surface stands in. A failed composition degrades to the
+  // same thing — the page never breaks while the desk thinks.
+  if (!p.compose || !Array.isArray(p.compose.segments)) {
+    return (
+      <div className="wc-editor-host">
+        <Writer
+          initialMarkdown={p.markdown}
+          slug={p.slug}
+          mediaBase={p.mediaBase}
+          onChange={p.onMarkdown}
+          words={p.words}
+        />
+      </div>
+    );
+  }
   return (
     <div className="write-composition">
       {p.compose.segments.map((seg, i) => {
@@ -103,45 +119,19 @@ function EditableSlot({ instance, ...v }: EditableCommon) {
         </span>
       );
     case "tags": {
-      if (instance.mirror) return <span className="wc-slot wc-mirror" data-slot="tags"><TagView html={instance.html} /></span>;
-      const tags = v.tags ?? [];
-      const [draft, setDraft] = React.useState("");
-      const suggestions = v.tagVocabulary.filter((t) => !tags.includes(t));
+      if (instance.mirror)
+        return (
+          <span className="wc-slot wc-mirror" data-slot="tags">
+            <TagView html={instance.html} />
+          </span>
+        );
       return (
         <span className="wc-slot" data-slot="tags">
-          <span className="tag-editor">
-            {tags.map((t) => (
-              <span className="tagpill" key={t}>
-                #{t}
-                <button
-                  type="button"
-                  className="tag-x"
-                  title={`Remove ${t}`}
-                  onClick={() => v.onMetaChange({ tags: tags.filter((x) => x !== t) })}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-            <input
-              list="tezuri-tag-vocab"
-              value={draft}
-              size={6}
-              placeholder="+ tag"
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if ((e.key === "Enter" || e.key === ",") && draft.trim()) {
-                  e.preventDefault();
-                  v.onMetaChange({ tags: [...new Set([...tags, draft.trim().toLowerCase()])] });
-                  setDraft("");
-                }
-              }}
-              aria-label="Add a tag"
-            />
-            <datalist id="tezuri-tag-vocab">
-              {suggestions.map((s) => <option key={s} value={s} />)}
-            </datalist>
-          </span>
+          <TagEditor
+            tags={v.tags ?? []}
+            vocabulary={v.tagVocabulary}
+            onChange={(next) => v.onMetaChange({ tags: next })}
+          />
         </span>
       );
     }
@@ -164,6 +154,53 @@ function EditableSlot({ instance, ...v }: EditableCommon) {
 async function storeMedia(file: File): Promise<string> {
   const buf = new Uint8Array(await file.arrayBuffer());
   return invoke<string>("add_media", { bytes: Array.from(buf), originalName: file.name });
+}
+
+/** The tag pill editor as its own component: hooks live here unconditionally. */
+function TagEditor({ tags, vocabulary, onChange }: {
+  tags: string[];
+  vocabulary: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [draft, setDraft] = React.useState("");
+  const suggestions = vocabulary.filter((t) => !tags.includes(t));
+  return (
+    <span className="tag-editor">
+      {tags.map((t) => (
+        <span className="tagpill" key={t}>
+          #{t}
+          <button
+            type="button"
+            className="tag-x"
+            title={`Remove ${t}`}
+            onClick={() => onChange(tags.filter((x) => x !== t))}
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      <input
+        list="tezuri-tag-vocab"
+        value={draft}
+        size={6}
+        placeholder="+ tag"
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if ((e.key === "Enter" || e.key === ",") && draft.trim()) {
+            e.preventDefault();
+            onChange([...new Set([...tags, draft.trim().toLowerCase()])]);
+            setDraft("");
+          }
+        }}
+        aria-label="Add a tag"
+      />
+      <datalist id="tezuri-tag-vocab">
+        {suggestions.map((s) => (
+          <option key={s} value={s} />
+        ))}
+      </datalist>
+    </span>
+  );
 }
 
 /** Cover picker: replace via file chooser, clear with one click. Files go
