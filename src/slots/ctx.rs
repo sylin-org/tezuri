@@ -214,6 +214,75 @@ pub fn compose_marked(parts: &[Part], ctx: &Ctx) -> (String, Vec<String>, Vec<Sl
 
 /// Substitute every slot, returning composed HTML plus editor notes. Empty
 /// data renders zero bytes; unknowns render empty and note themselves once.
+/// The Write-plane composition: identical to `compose`, but every
+/// non-ARTICLE slot is wrapped in a `data-tz-slot` element so the editor
+/// runtime can attach conduct affordances. The ARTICLE slot is left bare —
+/// the runtime claims its prose element directly.
+pub fn compose_wrapped(parts: &[Part], ctx: &Ctx) -> (String, Vec<String>) {
+    let mut out = String::new();
+    let mut notes = Vec::new();
+    let mut saw_article = false;
+    let mut banner_used = false;
+
+    for part in parts {
+        match part {
+            Part::Text(t) => out.push_str(t),
+            Part::Slot(slot) => {
+                if slot.name == "ARTICLE" {
+                    saw_article = true;
+                    out.push_str(&article_value(slot, ctx, &mut banner_used));
+                    continue;
+                }
+                if !known(&slot.name) {
+                    let note = format!("unknown slot {} rendered empty", slot.raw);
+                    if !notes.contains(&note) {
+                        notes.push(note);
+                    }
+                    continue;
+                }
+                // Head and attribute slots (title, site_name, body_class)
+                // substitute verbatim: a wrapper span inside <title> or an
+                // attribute value would corrupt the document.
+                if matches!(slot.name.as_str(), "title" | "site_name" | "body_class") {
+                    let (value, noted) = evaluate(slot, ctx);
+                    for n in noted {
+                        if !notes.contains(&n) {
+                            notes.push(n);
+                        }
+                    }
+                    out.push_str(&value);
+                    continue;
+                }
+                let (value, noted) = evaluate(slot, ctx);
+                for n in noted {
+                    if !notes.contains(&n) {
+                        notes.push(n);
+                    }
+                }
+                let attr_raw = esc(&slot.raw);
+                let hints = canonical_hints(&slot.hints, &slot.name).join(",");
+                out.push_str(&format!(
+                    "<span data-tz-slot=\"{}\" data-tz-hints=\"{}\" style=\"display:contents\">{}</span>",
+                    attr_raw,
+                    esc(&hints),
+                    value
+                ));
+            }
+        }
+    }
+    if ctx.require_article && !saw_article {
+        out.push_str(&format!(
+            "<div class=\"article-prose\">{}</div>",
+            ctx.flow_html
+        ));
+        notes.insert(
+            0,
+            "template has no {{ARTICLE}}; the article flow was appended at the end".into(),
+        );
+    }
+    (out, notes)
+}
+
 pub fn compose(parts: &[Part], ctx: &Ctx) -> (String, Vec<String>) {
     let mut out = String::new();
     let mut notes = Vec::new();

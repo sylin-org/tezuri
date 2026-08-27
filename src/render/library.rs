@@ -104,7 +104,6 @@ fn downloads_dir(kind: &str) -> Result<PathBuf> {
     Ok(base.join(".tezuri").join("downloads").join(kind))
 }
 
-
 fn safe_stem(name: &str) -> Result<String> {
     let safe: String = name
         .chars()
@@ -297,8 +296,7 @@ fn history_load() -> Result<HistoryFile> {
     if !p.exists() {
         return Ok(BTreeMap::new());
     }
-    Ok(serde_json::from_str(&std::fs::read_to_string(&p)?)
-        .unwrap_or_default())
+    Ok(serde_json::from_str(&std::fs::read_to_string(&p)?).unwrap_or_default())
 }
 
 fn history_save(file: &HistoryFile) -> Result<()> {
@@ -345,11 +343,7 @@ pub fn picker_apply(publication_root: &Path, kind: &str, id: &str) -> Result<Str
 
 /// Step the history ring for one kind (-1 back, +1 forward) and re-apply
 /// the selection at the new position. Returns the new position.
-pub fn picker_history_step(
-    publication_root: &Path,
-    kind: &str,
-    delta: i32,
-) -> Result<i64> {
+pub fn picker_history_step(publication_root: &Path, kind: &str, delta: i32) -> Result<i64> {
     let mut file = history_load()?;
     let key = publication_root.to_string_lossy().to_string();
     let space = file
@@ -386,4 +380,3 @@ pub fn picker_history(publication_root: &Path) -> Result<(usize, usize)> {
         space.map(|s| s.template.len()).unwrap_or(0),
     ))
 }
-

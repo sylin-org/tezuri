@@ -75,6 +75,41 @@ pub fn render_article_with(
     Ok(render_template(template, &ctx, &theme_css))
 }
 
+/// The Write-plane page: the artifact as readers will see it, with the
+/// header forced to the plain flow (the markdown stays whole — H1 and the
+/// standfirst line are ordinary content here) and the editor runtime
+/// injected. Every slot is wrapped in a `data-tz-slot` marker so the
+/// runtime can hang its conduct affordances on real elements.
+pub fn write_page_html(
+    publication_root: &Path,
+    slug: &str,
+    template: &str,
+) -> Result<(String, Vec<String>)> {
+    let mut ctx = gather_article_ctx(publication_root, slug)?;
+    // Write always edits the document as written; banner consumption is a
+    // reader-facing projection, never an editor state.
+    ctx.banner = false;
+    let parts = crate::slots::parse_template(template);
+    let (body, notes) = crate::slots::compose_wrapped(&parts, &ctx);
+
+    // The artifact's style-injection contract, on the composed body.
+    let theme_css = read_theme(publication_root)?;
+    let styles = format!(
+        "<style id=\"tezuri-baseline\">{}</style><style id=\"tezuri-theme\">{}</style>",
+        esc_style(crate::render::assets::BASELINE_CSS),
+        esc_style(&theme_css)
+    );
+    let insert_at = style_injection_point(&body);
+    let page = format!("{}{}{}", &body[..insert_at], styles, &body[insert_at..]);
+
+    let with_script = page.replace(
+        "</body>",
+        "<script src=\"/tezuri-editor.js\" defer></script>
+</body>",
+    );
+    Ok((with_script, notes))
+}
+
 pub(crate) fn composed_bytes(
     publication_root: &Path,
     name: &str,

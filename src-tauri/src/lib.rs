@@ -459,6 +459,29 @@ fn read_template(session: State<Session>) -> Result<Option<String>, CommandError
     tezuri::render::read_template(&root(&session)?).map_err(err)
 }
 
+/// The Write-plane page: the artifact with the editor runtime injected.
+#[tauri::command]
+fn write_page(slug: String, session: State<Session>) -> Result<String, CommandError> {
+    let root = root(&session)?;
+    let tpl = tezuri::render::read_template(&root)
+        .map_err(err)?
+        .unwrap_or_else(|| tezuri::render::embedded_article_template().to_string());
+    let (page, _) = tezuri::render::write_page_html(&root, &slug, &tpl).map_err(err)?;
+    Ok(page)
+}
+
+/// The Write-plane page against a draft template (conduct preview).
+#[tauri::command]
+fn write_page_draft(
+    slug: String,
+    template: String,
+    session: State<Session>,
+) -> Result<String, CommandError> {
+    let root = root(&session)?;
+    let (page, _) = tezuri::render::write_page_html(&root, &slug, &template).map_err(err)?;
+    Ok(page)
+}
+
 /// The embedded default template's bytes, so conducting can seed a draft
 /// even before the space owns a file.
 #[tauri::command]
@@ -879,6 +902,8 @@ pub fn run() {
             render_article,
             write_compose,
             read_template,
+            write_page,
+            write_page_draft,
             default_template,
             write_template,
             write_compose_draft,

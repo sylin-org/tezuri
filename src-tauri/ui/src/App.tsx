@@ -2,13 +2,13 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
-import { WriterProvider, WriterEditor } from "./Writer";
-import { WriteComposePlane, TagEditor } from "./Compose";
 import { Landing } from "./Landing";
 import { SpaceRail, type Workspace } from "./Space";
 import { About } from "./About";
 import { Config } from "./Config";
 import { SpaceDetails } from "./SpaceDetails";
+import { WritePane } from "./WritePane";
+import { ArticleDetails } from "./ArticleDetails";
 import { invoke, onSettle, spliceSlot, insertSlotAt } from "./bridge";
 import type { Identity, PublicationInfo, CatalogEntry } from "./bridge";
 
@@ -48,6 +48,7 @@ export default function App() {
   const [doc, setDoc] = useState<{
     slug: string; title: string; state: string;
     cover: string | null; date: string | null; tags: string[] | null;
+    id: string | null; author: string | null;
   } | null>(null);
   const [text, setText] = useState("");
   // The space's template, projected live for Write mode.
@@ -222,6 +223,18 @@ export default function App() {
   // surface. Assistant remains a toggle of the side rail.
   const [spaceTab, setSpaceTab] = useState<"details" | "article">("article");
 
+  // State toggle from Article Details / the pinbar select.
+  const applyState = useCallback(async (state: string) => {
+    const slug = slugRef.current;
+    if (!slug) return;
+    try {
+      const r = await invoke<any>("set_article_state", { slug, state });
+      setDoc((d0) => (d0 ? { ...d0, state: r.state ?? state } : d0));
+    } catch (e: any) {
+      setNote(e.message ?? String(e));
+    }
+  }, []);
+
   // Adding a space needs nothing but a folder: the folder name names the
   // space; everything else is editable later in Space Details.
   async function addPublication() {
@@ -262,6 +275,8 @@ export default function App() {
         cover: a.article.meta.cover ?? null,
         date: a.article.meta.date ?? null,
         tags: a.article.meta.tags ?? [],
+        id: a.article.meta.id ?? null,
+        author: a.article.meta.author ?? null,
       });
       setText(a.raw);
       // Conduct seed: the space's file when it owns one, else the embedded
@@ -376,7 +391,7 @@ export default function App() {
   // ---- surfaces: Write (the artifact's dress, editing in place), Source
   // (raw markdown bytes). The proof of what emits lives in render/ itself —
   // surfaced through the ship rail's render step, never a competing lens.
-  const [mode, setMode] = useState<"write" | "source">("write");
+  const [mode, setMode] = useState<"details" | "write" | "source">("write");
   const [emitted, setEmitted] = useState<string[] | null>(null);
   // The app-side origin of the open session's media (custom protocol), so
   // article images resolve inside the webview. Disk artifacts stay relative.
@@ -501,59 +516,40 @@ export default function App() {
                     <button role="tab" aria-selected={mode === "write"}
                             className={mode === "write" ? "active" : ""}
                             onClick={() => setMode("write")}>Write</button>
+                    <button role="tab" aria-selected={mode === "details"}
+                            className={mode === "details" ? "active" : ""}
+                            onClick={() => setMode("details")}>Details</button>
                     <button role="tab" aria-selected={mode === "source"}
                             className={mode === "source" ? "active" : ""}
                             onClick={() => setMode("source")}>Source</button>
                   </div>
                   <button onClick={() => setAssistOpen(!assistOpen)}
                           title="Advisory help: polish, voice, facts">Assistant</button>
-                  {templateDraft !== templateFile && templateDraft !== null && (
-                    <span className="conduct-bar" role="group" aria-label="Layout changes">
-                      <span className="mono-fact">layout changed</span>
-                      <button
-                        className="primary"
-                        onClick={async () => {
-                          try {
-                            await invoke("write_template", { text: templateDraft });
-                            setTemplateFile(templateDraft);
-                            await refreshCompose(doc.slug, templateDraft);
-                            setNote("layout saved to templates/article.html");
-                          } catch (e: any) { setNote(e.message ?? String(e)); }
-                        }}
-                      >Save layout</button>
-                      <button
-                        onClick={() => { setTemplateDraft(templateFile ?? ""); void refreshCompose(doc.slug, templateFile); }}
-                      >Discard</button>
-                    </span>
-                  )}
                   <button
                     className={saveStatus === "dirty" ? "primary" : ""}
                     onClick={() => { if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current); void flush(); }}
                     disabled={saveStatus === "saving"}
                   >{saveStatus === "saving" ? "Saving…" : "Save"}</button>
                 </div>
-                {mode === "write" && (
-                  <div className="post-strip" aria-label="Post settings">
-                    <input
-                      type="date"
-                      value={doc.date ?? ""}
-                      onChange={(e2) => { setDoc({ ...doc, date: e2.target.value || null }); touch(); }}
-                      aria-label="Publish date"
-                    />
-                    <TagEditor
-                      tags={doc.tags ?? []}
-                      vocabulary={[...new Set(entries.flatMap((e) => e.tags ?? []))]}
-                      onChange={(next: string[]) => { setDoc({ ...doc, tags: next }); touch(); }}
-                    />
-                    <CoverStrip
-                      cover={doc.cover}
-                      mediaBase={mediaBase}
-                      onPick={(ref) => { setDoc({ ...doc, cover: ref }); touch(); }}
-                      onClear={() => { setDoc({ ...doc, cover: null }); touch(); }}
-                    />
-                  </div>
+                {mode === "details" && (
+                  <ArticleDetails
+                    slug={doc.slug}
+                    id={doc.id ?? null}
+                    state={doc.state}
+                    date={doc.date}
+                    tags={doc.tags}
+                    cover={doc.cover}
+                    author={doc.author ?? null}
+                    byline={identity?.byline ?? ""}
+                    mediaBase={mediaBase}
+                    onChange={(patch) => {
+                      setDoc((d0) => (d0 ? { ...d0, ...patch } : d0));
+                      if (patch.state) { void applyState(patch.state); }
+                      touch();
+                    }}
+                  />
                 )}
-                {mode === "source" ? (
+                {mode === "source" && (
                   <div className="cm-host">
                     <CodeMirror
                       value={text} height="100%"
@@ -562,42 +558,15 @@ export default function App() {
                       theme="dark" basicSetup={{ foldGutter: false }}
                     />
                   </div>
-                ) : (
-                  <WriterProvider
-                    key={doc.slug + (framed ? "+framed" : "")}
-                    initialMarkdown={
-                      framed ? text.slice((compose.title_prefix as string).length) : text
-                    }
+                )}
+                {mode === "write" && (
+                  <WritePane
                     slug={doc.slug}
+                    template={templateDraft}
+                    markdown={text}
                     mediaBase={mediaBase}
-                    onChange={(md) => {
-                      setText(framed ? (compose.title_prefix as string) + md : md);
-                      touch();
-                    }}
-                    words={text.split(/\s+/).filter(Boolean).length}
-                  >
-                    <WriteComposePlane
-                      compose={compose}
-                      markdown={text}
-                      mediaBase={mediaBase}
-                      date={doc.date}
-                      tags={doc.tags}
-                      cover={doc.cover}
-                      tagVocabulary={[
-                        ...new Set(
-                          entries.flatMap((e) => e.tags ?? [])
-                        ),
-                      ]}
-                      catalog={catalog}
-                      editorSlot={<WriterEditor />}
-                      onConduct={conduct}
-                      onInsert={insertSlot}
-                      onMetaChange={(patch) => {
-                        setDoc((d0) => d0 ? { ...d0, ...patch } : d0);
-                        touch();
-                      }}
-                    />
-                  </WriterProvider>
+                    onMarkdown={(md) => { setText(md); touch(); }}
+                  />
                 )}
               </>
             )}
