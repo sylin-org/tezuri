@@ -1,14 +1,14 @@
 /* Sepia press — paper-warm, print-flavored. */
-.theme-scope {
-  --paper: #211a12;
-  --body-ink: #d8c7a8;
-  --title-ink: #efe3c8;
-  --accent: #c98f3d;
-  --rule: rgba(216, 199, 168, .18);
-}
-.theme-scope .tiptap { color: var(--body-ink); }
-.theme-scope .tiptap > h1:first-child { color: var(--title-ink); }
-.theme-scope .tiptap blockquote { border-left-color: var(--accent); }
-.theme-scope .tiptap a { color: var(--accent); }
-.theme-scope .tiptap code { background: rgba(216, 199, 168, .08); }
-.theme-scope .tiptap hr { border-top-color: var(--rule); }
+body.theme-scope { background: #211a12; color: #d8c7a8; }
+.theme-scope { --accent: #c98f3d; }
+.theme-scope .kicker { color: #8a7a5c; }
+.theme-scope .art-title { color: #efe3c8; }
+.theme-scope .standfirst { color: #b3a284; font-style: italic; }
+.theme-scope .metaline, .theme-scope .toc-rail { color: #8a7a5c; }
+.theme-scope .toc-rail a { color: #8a7a5c; }
+.theme-scope .toc-rail a:hover { color: #d8c7a8; }
+.theme-scope .tagpill { border-color: rgba(216,199,168,.3); color: #b3a284; }
+.theme-scope .art-body a { color: var(--accent); }
+.theme-scope .art-body blockquote { border-left: 3px solid var(--accent); color: #b3a284; }
+.theme-scope .art-body code { background: rgba(216,199,168,.1); }
+.theme-scope .art-body hr { border: none; border-top: 1px solid rgba(216,199,168,.25); }

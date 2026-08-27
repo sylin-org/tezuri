@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{title}} — {{site_name}}</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #0f0e12; color: #c9c9d1;
+    font: 400 17px/1.75 Georgia, "Times New Roman", serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: #7ab7ff; }
+  .page { max-width: 1100px; margin: 0 auto; padding: 0 24px 80px; }
+  .hero { max-width: none; margin: 0 -24px; height: 300px;
+          background-size: cover; background-position: center; position: relative; }
+  .hero::after { content: ""; position: absolute; inset: 0;
+                 background: linear-gradient(to bottom, rgba(15,14,18,.15), #0f0e12 96%); }
+  .article-cols { display: flex; gap: 48px; align-items: flex-start; }
+  .article { flex: 1; min-width: 0; max-width: 46em; }
+  .kicker { font: 400 11px/1 ui-monospace, Consolas, monospace;
+            letter-spacing: .16em; color: #71717a; text-transform: uppercase;
+            margin: 40px 0 10px; }
+  h1.art-title { font: 400 44px/1.15 Georgia, serif; color: #f4f4f5; margin: 0 0 8px; }
+  .standfirst { font-style: italic; color: #a1a1aa; font-size: 1.15em; margin: 0 0 14px; }
+  .metaline { display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+              color: #71717a; font: 400 12px/1 ui-monospace, Consolas, monospace;
+              margin: 0 0 36px; }
+  .metaline .dot { opacity: .5; }
+  .tagpill { border: 1px solid rgba(255,255,255,.14); border-radius: 999px;
+             padding: 3px 10px; font-size: 11px; color: #a1a1aa; }
+  .toc-rail { width: 230px; flex: none; position: sticky; top: 32px; padding-top: 40px; }
+  .toc-rail h2 { font: 400 10px/1 ui-monospace, monospace; letter-spacing: .16em;
+                 color: #71717a; margin: 0 0 10px; }
+  .toc-rail a { display: block; padding: 4px 0 4px 10px; font: 400 13px/1.5 sans-serif;
+                color: #71717a; text-decoration: none;
+                border-left: 2px solid transparent; }
+  .toc-rail a:hover { color: #c9c9d1; }
+  .toc-rail a.l3 { padding-left: 24px; font-size: 12px; }
+  .toc-rail .tags { margin-top: 26px; }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+             gap: 8px; margin: 1.6em 0; }
+  .gallery img { width: 100%; height: 160px; object-fit: cover; border-radius: 6px;
+                 cursor: zoom-in; }
+  .article img { max-width: 100%; height: auto; border-radius: 6px; }
+  .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.88);
+              display: none; align-items: center; justify-content: center;
+              cursor: zoom-out; z-index: 50; }
+  .lightbox.on { display: flex; }
+  .lightbox img { max-width: 94vw; max-height: 94vh; }
+  footer.page { color: #52525b; font: 400 12px/1.6 sans-serif;
+                border-top: 1px solid rgba(255,255,255,.06); margin-top: 60px;
+                padding-top: 20px; }
+  @media (max-width: 900px) { .toc-rail { display: none; } }
+  {{css}}
+</style>
+</head>
+<body class="theme-scope">
+{{cover_section}}
+<div class="page">
+  <div class="article-cols">
+    <article class="article">
+      <p class="kicker">{{byline}}</p>
+      <h1 class="art-title">{{title}}</h1>
+      {{standfirst_line}}
+      <p class="metaline">
+        <span>{{date}}</span><span class="dot">·</span>
+        <span>{{read_time}} min read</span>{{tags_inline}}
+      </p>
+      <div class="art-body">
+{{body}}
+      </div>
+    </article>
+    <aside class="toc-rail">
+      <h2>IN THIS ARTICLE</h2>
+      {{toc}}
+      <div class="tags">{{tags_block}}</div>
+    </aside>
+  </div>
+  <footer class="page">
+    {{site_name}} · rendered from plain files
+  </footer>
+</div>
+<div class="lightbox" id="lb"><img id="lb-img" alt=""></div>
+<script>
+  document.querySelectorAll('.article img').forEach(function (img) {
+    img.addEventListener('click', function () {
+      var lb = document.getElementById('lb');
+      document.getElementById('lb-img').src = img.src;
+      lb.classList.add('on');
+    });
+  });
+  document.getElementById('lb').addEventListener('click', function () {
+    this.classList.remove('on');
+  });
+</script>
+</body>
+</html>

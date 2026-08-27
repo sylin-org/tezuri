@@ -1,13 +1,8 @@
-/* Night garden — the built-in look, made explicit. */
-.theme-scope {
-  --paper: transparent;
-  --body-ink: #c9c9d1;
-  --title-ink: #f4f4f5;
-  --accent: #bef264;
-  --rule: rgba(255, 255, 255, .06);
-}
-.theme-scope .tiptap { color: var(--body-ink); }
-.theme-scope .tiptap > h1:first-child { color: var(--title-ink); }
-.theme-scope .tiptap blockquote { border-left-color: var(--accent); }
-.theme-scope .tiptap a { color: color-mix(in srgb, var(--accent) 55%, #7ab7ff); }
-.theme-scope .tiptap hr { border-top-color: var(--rule); }
+/* Night garden — the space's built-in look, made explicit. */
+.theme-scope { --accent: #bef264; }
+.theme-scope .kicker { color: #71717a; }
+.theme-scope .art-title { color: #f4f4f5; }
+.theme-scope .standfirst { color: #a1a1aa; }
+.theme-scope .art-body a { color: color-mix(in srgb, var(--accent) 40%, #7ab7ff); }
+.theme-scope .art-body blockquote { border-left: 3px solid var(--accent); }
+.theme-scope .art-body hr { border: none; border-top: 1px solid rgba(255,255,255,.1); }

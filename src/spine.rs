@@ -86,6 +86,9 @@ pub enum Event {
     IdentityWritten,
     /// The space's theme.css was written or cleared.
     ThemeWritten,
+    /// Pages were compiled into render/.
+    #[serde(rename_all = "camelCase")]
+    Rendered { pages: usize },
     /// Media was stored under its content address.
     #[serde(rename_all = "camelCase")]
     MediaStored { hash: String, filename: String },
@@ -109,6 +112,7 @@ impl Event {
             Event::ArticleWritten { .. } => "article-written",
             Event::IdentityWritten => "identity-written",
             Event::ThemeWritten => "theme-written",
+            Event::Rendered { .. } => "rendered",
             Event::MediaStored { .. } => "media-stored",
             Event::ConsultAdvised { .. } => "consult-advised",
             Event::ProofRan { .. } => "proof-ran",

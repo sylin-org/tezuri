@@ -19,6 +19,7 @@ regex = "1"
 walkdir = "2"
 tempfile = "3"
 image = "0.25.10"
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
 
 [dev-dependencies]
 tempfile = "3"

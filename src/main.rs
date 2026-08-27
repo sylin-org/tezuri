@@ -13,6 +13,7 @@ fn main() -> Result<()> {
         Some("desk") => cmd_desk(&root),
         Some("consult") => cmd_consult(&root, &args[1..]),
         Some("prove") => cmd_prove(&root),
+        Some("render") => cmd_render(&root),
         Some("ship") => cmd_ship(&root, &args[1..]),
         _ => {
             eprintln!(
@@ -24,7 +25,8 @@ fn main() -> Result<()> {
                  prove                  run the site's own build on a copy\n\
                  ship review            show changed paths\n\
                  ship commit <msg> <path...>  commit only these paths\n\
-                 ship push              push if remote state still holds\n"
+                 ship push              push if remote state still holds\n\
+                 render                 compile all articles into render/\n"
             );
             Ok(())
         }
@@ -93,6 +95,19 @@ fn cmd_prove(root: &std::path::Path) -> Result<()> {
     if p.verdict != "passed" || std::env::var("TEZURI_VERBOSE").is_ok() {
         println!("{}", p.evidence);
     }
+    Ok(())
+}
+
+fn cmd_render(root: &std::path::Path) -> Result<()> {
+    let written = tezuri::render::emit_render(root)?;
+    for w in &written {
+        println!("{w}");
+    }
+    println!(
+        "{} page(s) in {}/",
+        written.len(),
+        tezuri::render::RENDER_DIR
+    );
     Ok(())
 }
 

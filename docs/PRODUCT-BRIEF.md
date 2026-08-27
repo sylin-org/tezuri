@@ -216,7 +216,10 @@ Testable rules, enforced per feature:
 
 - Collaboration, comments, presence, multi-user anything.
 - Hosting, deploying, analytics dashboards.
-- A site generator, theme system, or competing renderer — the destination repo's build is authority.
+- Competing with a destination that builds its own pages: when the repository has its own build
+  (Hugo, Astro, npm…), that build stays authoritative and Tezuri only proves it. Spaces *without*
+  a build engine get the same treatment from Tezuri's own article renderer, driven entirely by the
+  space's style and templates. Tezuri does not silently take over a repo that already renders.
 - Plugin ecosystems and extension points ahead of demonstrated pressure.
 - Mobile/web versions; accounts; telemetry of any kind.
 - An open-ended rich-content model. The grammar stays closed on purpose.

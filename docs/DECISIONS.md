@@ -10,6 +10,28 @@ replacements.
 
 ---
 
+## 2026-08-26 — Add the render stage; renderer authority is conditional
+
+Tezuri compiles articles into complete styled HTML: the Markdown flow, `meta.yaml`, the space's
+`theme.css`, and a layout template become self-contained pages written to `render/` inside the
+publication (`render/<slug>.html` plus a simple `render/index.html`). The renderer is Rust-side
+(pulldown-cmark) for deterministic, byte-stable output shared by the CLI, tests, and the app.
+Gallery-by-adjacency compiles to an embedded figure grid with a small lightbox; media and
+article references are rewritten to emitted paths; headings feed a scroll-spy TOC. A publication
+may override the layout with `templates/article.html` and `templates/index.html` — plain HTML
+with a small `{{placeholder}}` contract; embedded defaults ship in the binary and nothing is
+fetched.
+
+Authority is conditional: when the destination repository builds its own pages, that build stays
+authoritative and Tezuri only proves it (unchanged). Spaces without a build engine are exactly
+where Tezuri renders. Emission is an idempotent write of current pages; v1 never deletes
+unrecognized files in `render/`. The preview surface renders the same compiled artifact, so what
+an author sees while writing is byte-identical to what emits.
+
+This amends the reset-era "the target repository's build is authoritative — do not build a
+competing renderer" invariant, which presumed every destination had a build. It replaces the
+absolute with the conditional framing now recorded in the product brief.
+
 ## 2026-08-26 — Adopt the Sylin workbench dialect from Ghostlight
 
 Tezuri's interface speaks the same visual grammar as Ghostlight's orchestrator window
