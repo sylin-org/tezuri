@@ -10,6 +10,51 @@ replacements.
 
 ---
 
+## 2026-08-27 — The slot catalog: characterized entries, modes on ARTICLE, conducted in place
+
+The registry graduates from a name list to a **catalog**: typed Rust tables — never
+configuration files — where every entry declares what menus offer, which values each control
+accepts, its default, and one line of documentation. Parse validation, evaluation, Write-mode
+menus, insertion palettes, and autocomplete are all views over the same schema. Hint values a
+slot does not recognize render the entry's default plus one editor note; the page never breaks.
+
+**Hints become `key:value` with pinned aliases.** The uniform idiom is `tags:text`,
+`date:iso`, `article-list | list:newest, count:8`. Bare forms already published by the v1 ADR
+(`iso`, `text`, `pills`, `count:N`) remain legal aliases so no signed example breaks. Unknown
+keys and values whisper rather than error, per rule five.
+
+**Two element families replace a component system.**
+- *Frame modes hang off* `{{ARTICLE}}`: `title-banner` is the first — the article's own frame
+  re-projected (title line, subtitle line, cover as background, author, tags, date), not a
+  separate component. Ownership questions vanish: one evaluator branch consumes the H1 and
+  standfirst out of the flow when the mode says so. `{{ARTICLE | title-banner, cover:fit,
+  tags:text, date:long}}` is fully composed conduct over one slot. Toggling the banner off is
+  editing one token, not file surgery.
+- *Standalone components* (`toc`, `article-list`, `footer`, …) remain ordinary slots.
+
+**Options select content; CSS selects appearance.** Menu controls answer "what goes in this
+block" — which fields, which order, which count — always finite and nameable. Fit/fill/cover
+variants survive because they are three named markup shapes. Pure visual knobs do not become
+options: composites emit stable classes (`.title-banner`, `.title-banner--cover-fit`,
+`.site-footer`) and the space's theme.css or the calm baseline decides how they look; sticky
+footers ship as the baseline default, not a `sticky:true` hint.
+
+**Conduct is try-first, apply-second.** Evaluation is a pure function of slot + context, so a
+menu flips candidate hints against a copy and re-projects that one slot instantly — zero
+bytes touched. Choosing persists by splicing the exact old raw expression for the new one in
+the template draft (the parse already holds each slot's byte range): propose→apply as usual,
+journaled as `TemplateWritten`. Repeat instances are menued per instance.
+
+**Insertion uses visible ghosts, not gesture inference.** During composition, literal-run
+containers that project empty grow a quiet `+` affordance; clicking it opens the palette
+pre-filtered by each entry's declared host compatibility (`flow` / `rail`). No coordinate
+ray-casting, keyboard-reachable for free. Structural authorship — creating rails, nesting
+divs, deleting wrappers — stays in Source mode on real bytes; Tezuri conducts slots, it does
+not become a page editor.
+
+This amends "Landing the pipeline" (registry shape), extends "The template language"
+(conduct mechanics made concrete), and leaves the five rules untouched.
+
 ## 2026-08-27 — Landing the pipeline: slots module, sentinel composition
 
 The signed template-language contract (below) has its first two build slices
