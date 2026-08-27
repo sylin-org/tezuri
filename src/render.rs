@@ -26,6 +26,7 @@ pub const RENDER_DIR: &str = "render";
 const ARTICLE_TEMPLATE: &str = include_str!("templates/article.html");
 const INDEX_TEMPLATE: &str = include_str!("templates/index.html");
 const FEED_TEMPLATE: &str = include_str!("templates/feed.xml");
+const CARD_TEMPLATE: &str = include_str!("templates/card.html");
 const BASELINE_CSS: &str = include_str!("templates/calm.css");
 
 // ---------------------------------------------------------------------------
@@ -761,6 +762,21 @@ pub fn write_feed(publication_root: &Path) -> Result<String> {
     Ok(rel)
 }
 
+/// Compile one article into its embeddable card: `render/<slug>.card.html`.
+/// Bare composition — no Tezuri chrome, no theme injection; the template is
+/// self-contained because embeds leave home.
+pub fn write_card(publication_root: &Path, slug: &str) -> Result<String> {
+    let mut ctx = gather_article_ctx(publication_root, slug)?;
+    ctx.output = Output::Card;
+    ctx.require_article = false;
+    let tpl = load_template(publication_root, "card.html", CARD_TEMPLATE)?;
+    let parts = slots::parse_template(&tpl);
+    let (html, _) = slots::compose(&parts, &ctx);
+    let rel = format!("{RENDER_DIR}/{slug}.card.html");
+    atomic_write(&confine(publication_root, Path::new(&rel))?, html.as_bytes())?;
+    Ok(rel)
+}
+
 fn composed_bytes(
     publication_root: &Path,
     name: &str,
@@ -780,12 +796,13 @@ pub fn emit_render(publication_root: &Path) -> Result<Vec<String>> {
     let mut written = Vec::new();
     for e in &publishable_entries(publication_root)? {
         written.push(write_page(publication_root, &e.slug)?);
+        written.push(write_card(publication_root, &e.slug)?);
     }
     written.push(write_index(publication_root)?);
     written.push(write_feed(publication_root)?);
-    // The event counts article pages; index and feed are site furniture.
+    // The event counts article pages; cards, index and feed are furniture.
     Journal::open(publication_root)?.record(Event::Rendered {
-        pages: written.len().saturating_sub(2),
+        pages: written.len().saturating_sub(2) / 2,
     })?;
     Ok(written)
 }
@@ -866,12 +883,16 @@ mod tests {
         let written = emit_render(dir.path()).unwrap();
         assert_eq!(
             written.len(),
-            4,
-            "two pages + index + feed; drafts never emit"
+            6,
+            "two pages + two cards + index + feed; drafts never emit"
         );
         assert!(dir.path().join("render/alpha.html").exists());
         assert!(dir.path().join("render/beta.html").exists());
         assert!(!dir.path().join("render/secret-draft.html").exists());
+        let card = std::fs::read_to_string(dir.path().join("render/alpha.card.html")).unwrap();
+        assert!(card.contains("tezuri-card"), "{card}");
+        assert!(card.contains("Alpha"), "{card}");
+        assert!(!card.contains("tezuri-baseline"), "cards carry no chrome: {card}");
         let index = std::fs::read_to_string(dir.path().join("render/index.html")).unwrap();
         assert!(index.contains("href=\"alpha.html\""));
         assert!(index.contains("href=\"beta.html\""));

@@ -457,6 +457,12 @@ pub fn registry() -> Vec<SlotDef> {
             options: &[],
         },
         SlotDef {
+            name: "self_url",
+            doc: "Canonical link to this article (site_url + slug, else relative).",
+            hosts: FLOW_ONLY,
+            options: &[],
+        },
+        SlotDef {
             name: "updated",
             doc: "Most recent publish date among listed items.",
             hosts: FLOW_ONLY,
@@ -491,6 +497,8 @@ pub enum Output {
     /// RSS channel: items compose as pre-built <item> blocks; links
     /// absolutize against site_url.
     Feed,
+    /// Per-article embeddable snippet (render/<slug>.card.html).
+    Card,
 }
 
 /// A section heading bound to its emitted id.
@@ -933,6 +941,15 @@ fn evaluate(slot: &RawSlot, ctx: &Ctx) -> (String, Vec<String>) {
             vec![],
         ),
         "site_url" => (esc(&ctx.site_url), vec![]),
+        "self_url" => {
+            let base = ctx.site_url.trim_end_matches('/');
+            let link = if base.is_empty() {
+                format!("{}.html", esc(&ctx.slug))
+            } else {
+                format!("{}/{}.html", esc(base), esc(&ctx.slug))
+            };
+            (link, vec![])
+        }
         "updated" => updated_value(ctx),
         "footer" => footer_value(&hints, ctx, &unknown(&["sticky:"])),
         other => (String::new(), vec![format!("unknown slot {{{{{other}}}}}")]),
@@ -1060,6 +1077,7 @@ fn body_class_value(ctx: &Ctx) -> String {
         }
         Output::Index => "is-index".to_string(),
         Output::Feed => "is-feed".to_string(),
+        Output::Card => "is-card".to_string(),
     }
 }
 

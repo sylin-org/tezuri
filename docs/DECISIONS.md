@@ -10,6 +10,18 @@ replacements.
 
 ---
 
+## 2026-08-27 — Cards: per-article embeddable snippets
+
+"An embeddable card" resolves to a per-article artifact: the snippet another
+site pastes to preview one post. Output gains `Card`; emission lands at
+`render/<slug>.card.html`; the space may override `templates/card.html` with
+an embedded default shipping otherwise. One new slot: `self_url` — the
+canonical link to this article (`site_url` + slug when the space declares a
+canonical origin, relative otherwise). Card markup is self-contained HTML
+(the template owns its own styles, since embeds carry no Tezuri chrome).
+The feed remains the site-level artifact; cards never existed at that level,
+so nothing is superseded.
+
 ## 2026-08-27 — The slot catalog: characterized entries, modes on ARTICLE, conducted in place
 
 The registry graduates from a name list to a **catalog**: typed Rust tables — never
