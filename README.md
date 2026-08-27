@@ -15,6 +15,11 @@ through the author's own assistant harnesses, and a human-gated ship pipeline en
 review-and-select commits and lease-checked pushes. The desk index rebuilds from files whenever a
 publication opens; nothing canonical lives inside the application.
 
+The presentation contract has its engine: spaces render through a five-rule template language
+(`src/slots.rs`) — one pipeline serves the emitted page and Write mode alike, where the space's
+own `templates/article.html` composes around a live editor at `{{ARTICLE}}`. Default
+presentation is deliberately calm; gorgeousness arrives as starter packs owned by the space.
+
 [`docs/PRODUCT-BRIEF.md`](docs/PRODUCT-BRIEF.md) is the authority for what the product must do and
 must never do. Deleted source and historical implementation choices are not design inputs for the
 new application.

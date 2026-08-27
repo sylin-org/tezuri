@@ -10,6 +10,43 @@ replacements.
 
 ---
 
+## 2026-08-27 — Landing the pipeline: slots module, sentinel composition
+
+The signed template-language contract (below) has its first two build slices
+landed and verified.
+
+**The engine lives in one place.** `src/slots.rs` owns grammar (parse, tokens,
+hints), the frozen v1 registry with its one-line docs, and evaluation;
+`render.rs` gathers (article, identity, publishable set, neighbors, cover
+rendition stat-pick) and composes. The default templates are deliberately
+dumb (`{{ARTICLE}}`, calm baseline CSS injected early so theme.css and any
+authored `<style>` wins), H1 and standfirst live INSIDE the compiled flow so
+Write mode can edit them there, and behaviors/theme ride on Tezuri's own
+injection points — no `{{css}}`.
+
+**Write mode composes through sentinels, not text carving.** `compose_marked`
+runs the same substitution emitting invisible Unicode markers at every
+editable boundary, then the desk slices the *composed page* down to its body
+region and reads marker positions back out. Whatever shell trick a template
+holds (slots inside attributes, style blocks, missing body tags) cannot
+misplace a segment, because nothing ever tries to parse template fragments —
+the final bytes are the source of truth even for the editor plane. Segment
+fidelity beats prose cleverness here.
+
+**Projection fidelity is ordered, not grid-exact.** The Write plane renders
+segments in document order around a live TipTap host at `{{ARTICLE}}`; repeat
+flow anchors mirror their markdown as inert specimens; date/tags/cover carry
+real inline editors writing meta fields; every other slot shows its evaluated
+value, refreshed after each save. Exact multi-column replication of exotic
+layouts stays the job of Preview — the byte-exact proof lens. Preview parity
+was never re-litigated: both surfaces draw from one renderer.
+
+One engine subtlety worth keeping visible: `around` must locate the current
+article in the FULL published set before excluding self, chronology runs
+newest-first with undated last, and gallery wrapping now tolerates leading
+frame content (the H1 shares the first split chunk with paragraph runs).
+These were found by tests, not reviews, and their pins live beside them.
+
 ## 2026-08-26 — The template language: five rules, live slots, conducted
 
 The presentation layer gets a frozen v1 contract. Content is sacred (`.md` + `meta.yaml`);
