@@ -735,21 +735,27 @@ body.tezuri-dirty .state-word { color: var(--amber); }
 
 .theme-scope.article-prose :where(a:hover) { color: var(--al); }
 
-/* ---- Write-mode composition: the space's template, projected live ----
-   Template text runs render as inert blocks; the editor mounts where the
-   template says {{ARTICLE}}; slots show live projections. Navigation exists
-   here iff the template itself carries {{toc}} — same rule as the artifact. */
+/* ---- Write-mode composition: content and projections only ----
+   Literal template runs are invisible structure here — the page layout is
+   Preview's lens. The plane shows the frame (declared modes), slot
+   projections with conduct affordances, and the editor at {{ARTICLE}}. */
 .writer-wrap { flex: 1; min-height: 0; display: flex; }
-.write-composition { flex: 1; overflow-y: auto; padding: 0 0 60px; }
-.wc-text { max-width: 46em; margin: 0 auto; padding: 12px 24px; opacity: .55;
-           font-size: 13.5px; }
-.wc-editor-host { position: relative; border-top: 1px solid var(--line);
-                  border-bottom: 1px solid var(--line); margin: 4px 0; }
+.write-composition { flex: 1; overflow-y: auto; padding: 0 0 60px; display: flex;
+  flex-direction: column; }
+.wc-editor-wrap { position: relative; border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line); margin: 4px 0 18px; }
+.wc-editor-host { flex: 1; min-height: 0; }
+.writer-editor-host .tiptap { min-height: 40vh; }
+.wc-frame { padding: 14px 24px 4px; }
 .wc-mirror { opacity: .6; font-style: italic; }
+.wc-mirror-flow { margin: 10px 24px; max-width: 46em; }
 .wc-mirror-flow .wc-mirror-pre {
-  white-space: pre-wrap; word-break: break-word; max-height: 40vh; overflow-y: auto;
+  white-space: pre-wrap; word-break: break-word; max-height: 30vh; overflow-y: auto;
   background: var(--panel); padding: 10px 14px; border-radius: 8px;
   font: 400 11.5px/1.5 var(--mono); color: var(--muted); }
+.wc-slot { display: inline-block; vertical-align: middle; }
+.wc-whispers { margin: auto 24px 8px; max-width: none;
+  font: 400 11px/1.6 var(--mono); color: var(--muted); opacity: .75; }
 .wc-slot { display: inline-block; vertical-align: middle; }
 .wc-slot[data-slot="cover_img"] { display: block; }
 .cover-editor img, .wc-slot img { max-width: min(100%, 320px);
@@ -804,3 +810,14 @@ body.tezuri-dirty .state-word { color: var(--amber); }
 .wc-ghost { display: inline-block; border: 1px dashed var(--line);
   border-radius: 6px; padding: 1px 8px;
   font: 400 11px var(--mono); color: var(--muted); }
+
+/* ---- post settings strip: quiet one-line row above the plane ---- */
+.post-strip { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 6px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.post-strip input[type="date"] { background: none; border: none;
+  border-bottom: 1px dashed var(--line); color: var(--ink-1);
+  font-size: 12.5px; padding: 3px 4px; outline: none; }
+.cover-strip { display: inline-flex; align-items: center; gap: 8px; }
+.cover-strip-thumb { height: 26px; width: auto; border-radius: 4px; }
+.post-strip button { font-size: 11.5px; padding: 2px 9px; }
+.tag-editor input { min-width: 90px; }

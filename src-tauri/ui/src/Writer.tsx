@@ -7,7 +7,7 @@
 // remains the source of truth via tiptap-markdown.
 
 import React from "react";
-import { EditorProvider, useCurrentEditor, ReactNodeViewRenderer, NodeViewWrapper } from "@tiptap/react";
+import { EditorProvider, useCurrentEditor, ReactNodeViewRenderer, NodeViewWrapper, EditorContent } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -30,7 +30,7 @@ import { BubbleMenu } from "@tiptap/react/menus";
 import {
   Bold, Italic, Strikethrough, Code, Underline as UnderlineIcon, Highlighter,
   List, ListOrdered, Quote, Link2, Minus, Image as ImageIcon,
-  CheckSquare, Eye, Undo2, Redo2, Settings,
+  CheckSquare, Eye, Undo2, Redo2,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -101,11 +101,23 @@ async function importImageFiles(files: File[], editor: Editor | null): Promise<v
   }
 }
 
-export function Writer({ initialMarkdown, slug, mediaBase, onChange, words }: WriterProps) {
+export interface WriterProviderProps {
+  initialMarkdown: string;
+  slug: string;
+  /** App-side origin of the session's media (custom protocol), or empty. */
+  mediaBase?: string;
+  onChange: (md: string) => void;
+  words: number;
+  children?: React.ReactNode;
+}
+
+/** The editing context for the whole Write plane: the toolbar owns the top
+ *  of whatever it wraps, and editor mounts happen anywhere inside through
+ *  <WriterEditor/>. Replaces the old monolithic <Writer/> whose toolbar was
+ *  bolted mid-composition at the {{ARTICLE}} position. */
+export function WriterProvider({ initialMarkdown, slug, mediaBase, onChange, words, children }: WriterProviderProps) {
   const [focusMode, setFocusMode] = React.useState(false);
-  const suppressUpdate = React.useRef(false);
   const displaySrc = React.useMemo(() => makeDisplaySrc(mediaBase), [mediaBase]);
-  void suppressUpdate;
 
   return (
     <div className="writer-column">
@@ -241,9 +253,18 @@ export function Writer({ initialMarkdown, slug, mediaBase, onChange, words }: Wr
     >
       <EditorBinder />
       <SelectionBubble />
+      {children}
     </EditorProvider>
     </div>
   );
+}
+
+/** The bare editable surface: mounts the provider's editor at this position.
+ *  Exactly one non-mirror instance per plane. */
+export function WriterEditor() {
+  const { editor } = useCurrentEditor();
+  if (!editor) return null;
+  return <EditorContent editor={editor} className="writer-editor-host" />;
 }
 
 // ---- pinned toolbar --------------------------------------------------------
@@ -348,9 +369,6 @@ function PinnedBar({ focusMode, setFocusMode, words }: {
                 onClick={() => setFocusMode(!focusMode)}>
           <Eye size={14} />
         </button>
-        <T label="Post settings — tags, cover, date"
-           onClick={() => window.dispatchEvent(new CustomEvent("tezuri:settings"))}>
-          <Settings size={14} /></T>
         <span style={{ flex: 1 }} />
         <span className="wordcount">{words} words</span>
       </div>

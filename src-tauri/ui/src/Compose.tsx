@@ -1,32 +1,30 @@
 // The Write-mode composition: the space's template, projected live.
 //
-// Segments arrive from the desktop's composer in template order. Text runs
-// are inert content; {{ARTICLE}} hosts the TipTap surface (first instance)
-// or a read-only mirror of the same flow (repeats); each slot renders its
-// projection — first-class fields (date, tags, cover) get real inline
-// editors, everything else shows its evaluated value. One content state,
-// many slots, no dual carets: mirrors are views, editors write to doc.
+// Segments arrive from the desktop's composer in template order. Write mode
+// shows CONTENT ONLY: literal template runs are invisible structure (they
+// carry the page layout Preview owns), while slot projections, the frame,
+// and the editor at {{ARTICLE}} render in order. The toolbar lives above
+// the plane via WriterProvider; the editable surface mounts wherever the
+// composer said {{ARTICLE}} sits.
 
 import React from "react";
 import type { CatalogEntry, SlotInstance, WriteCompose } from "./bridge";
 import { nextHintsFor } from "./bridge";
 import { invoke } from "./bridge";
-import { Writer } from "./Writer";
 
 export interface ComposePlaneProps {
   compose: WriteCompose;
   markdown: string;
-  slug: string;
   mediaBase: string;
   date: string | null;
   tags: string[] | null;
   cover: string | null;
   tagVocabulary: string[];
-  words: number;
   catalog: CatalogEntry[];
+  /** The editable surface, mounted at the first {{ARTICLE}}. */
+  editorSlot: React.ReactNode;
   /** Conduct one slot occurrence: draft splice + recompose, upstream. */
   onConduct: (raw: string, occurrence: number, hints: string[]) => void;
-  onMarkdown: (md: string) => void;
   onMetaChange: (patch: { date?: string | null; tags?: string[]; cover?: string | null }) => void;
 }
 
@@ -43,20 +41,10 @@ export function WriteComposePlane(p: ComposePlaneProps) {
     p.catalog.find((e) => e.name === name);
 
   // The composer arrives one invoke after the article opens; until then the
-  // plain writing surface stands in. A failed composition degrades to the
-  // same thing — the page never breaks while the desk thinks.
+  // bare editor stands in. A failed composition degrades the same way — the
+  // page never breaks while the desk thinks.
   if (!p.compose || !Array.isArray(p.compose.segments)) {
-    return (
-      <div className="wc-editor-host">
-        <Writer
-          initialMarkdown={p.markdown}
-          slug={p.slug}
-          mediaBase={p.mediaBase}
-          onChange={p.onMarkdown}
-          words={p.words}
-        />
-      </div>
-    );
+    return <div className="write-composition">{p.editorSlot}</div>;
   }
   ordinal.current = new Map(); // re-seed per segment walk
 
@@ -70,16 +58,16 @@ export function WriteComposePlane(p: ComposePlaneProps) {
             ? ordOf(seg.raw)
             : -1;
         if (seg.kind === "text") {
-          // Trusted bytes: the desktop composed them from the space's own
-          // template through the slot engine, shell stripped.
-          return <div key={i} className="wc-text" dangerouslySetInnerHTML={{ __html: seg.html }} />;
+          // Structural scaffolding: the page layout Preview owns. Write mode
+          // renders content and projections only.
+          return null;
         }
         if (seg.kind === "article_flow") {
           const entry = entryOf("ARTICLE");
           const frame = seg.frame ? (
             <div
               key={`${i}-frame`}
-              className="wc-text wc-frame"
+              className="wc-frame"
               dangerouslySetInnerHTML={{ __html: seg.frame }}
             />
           ) : null;
@@ -98,39 +86,33 @@ export function WriteComposePlane(p: ComposePlaneProps) {
             ) : null;
           if (seg.mirror) {
             return (
-              <>
-                {frame}
-                <div key={i} className="wc-mirror-flow wc-text"
-                     title="A second {{ARTICLE}} — a mirror of your writing"
-                     aria-hidden="true">
-                  <p className="mono-fact">mirror of your article</p>
-                  <pre className="wc-mirror-pre">{p.markdown}</pre>
-                </div>
-              </>
+              <div key={i} className="wc-mirror-flow"
+                   title="A second {{ARTICLE}} — a mirror of your writing"
+                   aria-hidden="true">
+                <p className="mono-fact">mirror of your article</p>
+                <pre className="wc-mirror-pre">{p.markdown}</pre>
+              </div>
             );
           }
           return (
             <div key={i} className="wc-editor-wrap">
               <span className="wc-editor-tools">{chip}</span>
               {frame}
-              <div className="wc-editor-host">
-                <Writer
-                  initialMarkdown={p.markdown}
-                  slug={p.slug}
-                  mediaBase={p.mediaBase}
-                  onChange={p.onMarkdown}
-                  words={p.words}
-                />
-              </div>
+              <div className="wc-editor-host">{p.editorSlot}</div>
             </div>
           );
         }
         return seg.editable
-          ? <EditableSlot key={i} instance={seg} {...editPropsOf(seg.name, p)} />
+          ? <EditableSlot key={i} instance={seg} {...editPropsOf(p)} />
           : <StaticSlot key={i} instance={seg} mediaBase={p.mediaBase}
                         catalogEntry={entryOf(seg.name)}
                         occurrence={occ} onConduct={p.onConduct} />;
       })}
+      {p.compose.notes.length > 0 && (
+        <p className="wc-whispers" title="Editor notes from this template">
+          {p.compose.notes.join(" · ")}
+        </p>
+      )}
     </div>
   );
 }
@@ -214,7 +196,7 @@ function hintValue(hints: string[], key: string): string | undefined {
   return undefined;
 }
 
-function editPropsOf(name: string, p: ComposePlaneProps) {
+function editPropsOf(p: ComposePlaneProps) {
   return {
     date: p.date,
     tags: p.tags,
@@ -292,7 +274,7 @@ async function storeMedia(file: File): Promise<string> {
 }
 
 /** The tag pill editor as its own component: hooks live here unconditionally. */
-function TagEditor({ tags, vocabulary, onChange }: {
+export function TagEditor({ tags, vocabulary, onChange }: {
   tags: string[];
   vocabulary: string[];
   onChange: (next: string[]) => void;

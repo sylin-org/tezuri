@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
-import { Writer } from "./Writer";
-import { WriteComposePlane } from "./Compose";
+import { WriterProvider, WriterEditor } from "./Writer";
+import { WriteComposePlane, TagEditor } from "./Compose";
 import { Landing } from "./Landing";
 import { SpaceRail, type Workspace } from "./Space";
 import { About } from "./About";
@@ -65,7 +65,6 @@ export default function App() {
   const [proof, setProof] = useState<{ verdict: string; evidence: string } | null>(null);
   const [changes, setChanges] = useState<any[]>([]);
   const [selPaths, setSelPaths] = useState<Set<string>>(new Set());
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const autosaveTimer = useRef<number | null>(null);
   const dirtyRef = useRef(false);
@@ -156,12 +155,6 @@ export default function App() {
     const h = (e: Event) => setNote((e as CustomEvent<string>).detail);
     window.addEventListener("tezuri:media-error", h);
     return () => window.removeEventListener("tezuri:media-error", h);
-  }, []);
-
-  useEffect(() => {
-    const h = () => setSettingsOpen((v) => !v);
-    window.addEventListener("tezuri:settings", h);
-    return () => window.removeEventListener("tezuri:settings", h);
   }, []);
 
   // The lamp speaks only real state: saving breathes, an unsaved draft holds.
@@ -549,21 +542,25 @@ export default function App() {
                     disabled={saveStatus === "saving"}
                   >{saveStatus === "saving" ? "Saving…" : "Save"}</button>
                 </div>
-                {settingsOpen && (
-                  <div className="settings-pop">
-                    <h3>Post settings</h3>
-                    <label>Cover image URL or media/ path
-                      <input value={doc.cover ?? ""} size={44}
-                        onChange={(e2) => { setDoc({ ...doc, cover: e2.target.value || null }); touch(); }} />
-                    </label>
-                    <label>Date
-                      <input type="date" value={doc.date ?? ""}
-                        onChange={(e2) => { setDoc({ ...doc, date: e2.target.value || null }); touch(); }} />
-                    </label>
-                    <label>Tags (comma-separated)
-                      <input value={(doc.tags ?? []).join(", ")} size={44}
-                        onChange={(e2) => { setDoc({ ...doc, tags: e2.target.value.split(",").map(x => x.trim()).filter(Boolean) }); touch(); }} />
-                    </label>
+                {mode === "write" && (
+                  <div className="post-strip" aria-label="Post settings">
+                    <input
+                      type="date"
+                      value={doc.date ?? ""}
+                      onChange={(e2) => { setDoc({ ...doc, date: e2.target.value || null }); touch(); }}
+                      aria-label="Publish date"
+                    />
+                    <TagEditor
+                      tags={doc.tags ?? []}
+                      vocabulary={[...new Set(entries.flatMap((e) => e.tags ?? []))]}
+                      onChange={(next: string[]) => { setDoc({ ...doc, tags: next }); touch(); }}
+                    />
+                    <CoverStrip
+                      cover={doc.cover}
+                      mediaBase={mediaBase}
+                      onPick={(ref) => { setDoc({ ...doc, cover: ref }); touch(); }}
+                      onClear={() => { setDoc({ ...doc, cover: null }); touch(); }}
+                    />
                   </div>
                 )}
                 {mode === "preview" ? (
@@ -583,11 +580,17 @@ export default function App() {
                     />
                   </div>
                 ) : (
-                  <div className="writer-wrap">
+                  <WriterProvider
+                    key={doc.slug}
+                    initialMarkdown={text}
+                    slug={doc.slug}
+                    mediaBase={mediaBase}
+                    onChange={(md) => { setText(md); touch(); }}
+                    words={text.split(/\s+/).filter(Boolean).length}
+                  >
                     <WriteComposePlane
                       compose={compose}
                       markdown={text}
-                      slug={doc.slug}
                       mediaBase={mediaBase}
                       date={doc.date}
                       tags={doc.tags}
@@ -597,16 +600,15 @@ export default function App() {
                           entries.flatMap((e) => e.tags ?? [])
                         ),
                       ]}
-                      words={text.split(/\s+/).filter(Boolean).length}
                       catalog={catalog}
+                      editorSlot={<WriterEditor />}
                       onConduct={conduct}
-                      onMarkdown={(md) => { setText(md); touch(); }}
                       onMetaChange={(patch) => {
                         setDoc((d0) => d0 ? { ...d0, ...patch } : d0);
                         touch();
                       }}
                     />
-                  </div>
+                  </WriterProvider>
                 )}
               </>
             )}
@@ -666,6 +668,57 @@ export default function App() {
         </main>
       )}
     </>
+  );
+}
+
+/** The cover control for the post-settings strip: thumbnail + replace/clear.
+ *  Files store through the session's media command; the doc keeps the ref. */
+function CoverStrip({ cover, mediaBase, onPick, onClear }: {
+  cover: string | null;
+  mediaBase: string;
+  onPick: (ref: string) => void;
+  onClear: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  return (
+    <span className="cover-strip">
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          if (!f) return;
+          setBusy(true);
+          try {
+            const buf = new Uint8Array(await f.arrayBuffer());
+            const ref = await invoke<string>("add_media", {
+              bytes: Array.from(buf),
+              originalName: f.name || "cover.png",
+            });
+            onPick(ref);
+          } finally {
+            setBusy(false);
+            e.target.value = "";
+          }
+        }}
+      />
+      {cover && (
+        <img
+          className="cover-strip-thumb"
+          src={`${mediaBase}${(cover ?? "").replace(/^media\//, "")}`}
+          alt=""
+        />
+      )}
+      <button type="button" disabled={busy} onClick={() => inputRef.current?.click()}>
+        {busy ? "storing…" : cover ? "replace cover" : "set cover"}
+      </button>
+      {cover && (
+        <button type="button" onClick={onClear} title="Remove the cover">clear</button>
+      )}
+    </span>
   );
 }
 
