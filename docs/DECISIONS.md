@@ -16,8 +16,13 @@ The two-lens arrangement is superseded by the owner's standing decision:
 Write mode IS the representation — correct fonts, the space's layout dress,
 editing in place. The composer now returns the artifact's head CSS (fonts
 imports, the template's own style blocks, the calm baseline) alongside the
-segments; the desk scopes it to the Write plane, preserving chrome
-neutrality (body-level rules simply don't match inside it). The Preview tab
+segments; the desk scopes it to the Write plane — the page's own
+`html`/`body`/`:root` dress folds onto the plane element itself, every
+other rule is prefixed as its descendant, and nothing escapes the scope, so
+the desk chrome stays neutral. The dress is worn in the artifact's own
+cascade order — calm baseline early, then theme.css, the template's own
+styles last — so the same rules win on the plane as on the emitted page.
+The Preview tab
 and its iframe are gone. Byte-exactness does not die with it: the emitted
 files under `render/` remain the untouched proof, surfaced through the ship
 rail's render step and the filesystem — the proof moved from a tab to the

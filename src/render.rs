@@ -474,8 +474,9 @@ pub fn compose_write_view_with(
 
 /// The artifact's head dress, for the Write plane to wear: font imports
 /// from `<link rel=stylesheet>` targets (the author's own template chose
-/// them), the template's own `<style>` blocks, then the calm baseline.
-/// Order matters — baseline last, so the template's overrides win.
+/// them), then the artifact's cascade — calm baseline first, the space's
+/// theme.css, and the template's own `<style>` blocks last, so the same
+/// rules win here as on the emitted page.
 fn head_dress(template: &str, publication_root: &Path) -> Result<String> {
     let mut imports = String::new();
     let mut styles = String::new();
@@ -506,14 +507,14 @@ fn head_dress(template: &str, publication_root: &Path) -> Result<String> {
     if !imports.is_empty() {
         css.push_str(&imports);
     }
-    if !styles.is_empty() {
-        css.push_str(&styles);
-    }
+    css.push_str(BASELINE_CSS);
     if !theme.is_empty() {
         css.push_str(&theme);
         css.push('\n');
     }
-    css.push_str(BASELINE_CSS);
+    if !styles.is_empty() {
+        css.push_str(&styles);
+    }
     Ok(css)
 }
 
@@ -1098,10 +1099,14 @@ mod tests {
         assert!(c
             .css
             .contains(".title-banner--title { font-style: italic; }"));
-        assert!(
-            c.css.contains("tezuri-baseline") || c.css.contains("Cal"),
-            "baseline rides last"
-        );
+        // The artifact's cascade, mirrored: the calm baseline lands early so
+        // the template's own styles override it, as on the emitted page.
+        let baseline_at = c.css.find("Calm baseline").expect("baseline present");
+        let authored_at = c
+            .css
+            .find(".title-banner--title { font-style: italic; }")
+            .expect("template styles present");
+        assert!(baseline_at < authored_at, "baseline early, authored wins");
     }
 
     #[test]

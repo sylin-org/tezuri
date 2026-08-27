@@ -106,22 +106,41 @@ export interface WriteCompose {
   css: string;
 }
 
-/** Prefix every selector so artifact CSS wears the Write plane, not the
- *  desk. `body {…}` and `:root` stop matching inside a div — chrome
- *  neutrality by construction. At-rule headers pass; their inner rules get
- *  scoped by the same pass. Comments go first. */
+/** Rewrite artifact CSS so it wears the Write plane, not the desk.
+ *  `html` / `body` / `:root` rules ARE the page's dress — background, base
+ *  font, ink — so they map onto the scope element itself; a selector that
+ *  merely starts with one of those (`body .hero`) folds whole onto the
+ *  plane. Everything else is prefixed as a descendant. At-rule headers
+ *  pass; inner rules get scoped by the same pass. Nothing escapes the
+ *  scope, so the desk chrome stays neutral. */
 export function scopeCss(css: string, scope: string): string {
   const stripped = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const pageLevel = /^(html|body|:root)\b/;
+  const scopeSel = (s: string) => (pageLevel.test(s) ? scope : `${scope} ${s}`);
   return stripped.replace(/([^{}]+)\{/g, (m, sel: string) => {
     const t = sel.trim();
-    if (t.startsWith("@") || t.startsWith(scope)) return m;
-    const list = t
+    if (!t.startsWith("@")) {
+      const list = t
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map(scopeSel)
+        .join(", ");
+      return `${list}{`;
+    }
+    // At-statements without a block (@import, @charset) end in `;` and may
+    // have swallowed the next rule's selectors into this match — scope that
+    // remainder instead of leaking it. Block at-rules (@media…) pass.
+    const semi = t.lastIndexOf(";");
+    if (semi === -1 || semi === t.length - 1) return m;
+    const head = t.slice(0, semi + 1);
+    const rest = t
+      .slice(semi + 1)
       .split(",")
       .map((s) => s.trim())
-      .filter(Boolean)
-      .map((s) => `${scope} ${s}`)
-      .join(", ");
-    return `${list}{`;
+      .filter(Boolean);
+    if (rest.length === 0) return m;
+    return `${head}\n${rest.map(scopeSel).join(", ")}{`;
   });
 }
 
