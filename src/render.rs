@@ -379,6 +379,10 @@ pub struct WriteCompose {
     pub notes: Vec<String>,
     /// Template came from templates/article.html rather than the built-in.
     pub space_template: bool,
+    /// The artifact's head dress: font imports and the template's own style
+    /// blocks. The desk scopes this to the Write plane so Write wears what
+    /// the artifact wears.
+    pub css: String,
 }
 
 /// Compose the Write-mode view of one article: template segments in order,
@@ -405,6 +409,7 @@ pub fn compose_write_view_with(
     let ctx = gather_article_ctx(publication_root, slug)?;
     let space_template = confine(publication_root, Path::new("templates/article.html"))?.exists();
     let parts = slots::parse_template(template);
+    let css = head_dress(template, publication_root)?;
 
     let (page, notes, toks) = slots::compose_marked(&parts, &ctx);
     let body = carve_to_body(&page);
@@ -463,7 +468,73 @@ pub fn compose_write_view_with(
         segments,
         notes,
         space_template,
+        css,
     })
+}
+
+/// The artifact's head dress, for the Write plane to wear: font imports
+/// from `<link rel=stylesheet>` targets (the author's own template chose
+/// them), the template's own `<style>` blocks, then the calm baseline.
+/// Order matters — baseline last, so the template's overrides win.
+fn head_dress(template: &str, publication_root: &Path) -> Result<String> {
+    let mut imports = String::new();
+    let mut styles = String::new();
+
+    // Stylesheet links and style blocks from the whole template: the shell
+    // carve ignores heads, but the dress is exactly what heads are for.
+    let mut rest = template;
+    while let Some(p) = rest.find("<link") {
+        rest = &rest[p..];
+        let Some(tag_end) = rest.find('>') else { break };
+        let tag = &rest[..tag_end];
+        if tag.contains("stylesheet") {
+            if let Some(h0) = tag.find("href=\"") {
+                let href = &tag[h0 + 6..];
+                let href = &href[..href.find('"').unwrap_or(0)];
+                imports.push_str(&format!("@import url('{href}');\n", href = href));
+            }
+        }
+        rest = &rest[tag_end + 1..];
+    }
+    for block in extract_blocks(template, "<style", "</style>") {
+        styles.push_str(&block);
+        styles.push('\n');
+    }
+
+    let theme = crate::theme::read(publication_root).unwrap_or_default();
+    let mut css = String::new();
+    if !imports.is_empty() {
+        css.push_str(&imports);
+    }
+    if !styles.is_empty() {
+        css.push_str(&styles);
+    }
+    if !theme.is_empty() {
+        css.push_str(&theme);
+        css.push('\n');
+    }
+    css.push_str(BASELINE_CSS);
+    Ok(css)
+}
+
+/// Complete `<style>…</style>` bodies from a document, tolerating missing
+/// closers by dropping the unterminated tail (whisper, never break).
+fn extract_blocks(doc: &str, open: &str, close: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut rest = doc;
+    while let Some(p) = rest.find(open) {
+        let after_open = p + open.len();
+        let Some(gt_rel) = rest[after_open..].find('>') else {
+            break;
+        };
+        let start = after_open + gt_rel + 1;
+        let Some(c) = rest[start..].find(close) else {
+            break;
+        };
+        out.push(rest[start..start + c].to_string());
+        rest = &rest[start + c + close.len()..];
+    }
+    out
 }
 
 /// Split one ARTICLE token's evaluated HTML into its declared frame
@@ -773,7 +844,10 @@ pub fn write_card(publication_root: &Path, slug: &str) -> Result<String> {
     let parts = slots::parse_template(&tpl);
     let (html, _) = slots::compose(&parts, &ctx);
     let rel = format!("{RENDER_DIR}/{slug}.card.html");
-    atomic_write(&confine(publication_root, Path::new(&rel))?, html.as_bytes())?;
+    atomic_write(
+        &confine(publication_root, Path::new(&rel))?,
+        html.as_bytes(),
+    )?;
     Ok(rel)
 }
 
@@ -892,7 +966,10 @@ mod tests {
         let card = std::fs::read_to_string(dir.path().join("render/alpha.card.html")).unwrap();
         assert!(card.contains("tezuri-card"), "{card}");
         assert!(card.contains("Alpha"), "{card}");
-        assert!(!card.contains("tezuri-baseline"), "cards carry no chrome: {card}");
+        assert!(
+            !card.contains("tezuri-baseline"),
+            "cards carry no chrome: {card}"
+        );
         let index = std::fs::read_to_string(dir.path().join("render/index.html")).unwrap();
         assert!(index.contains("href=\"alpha.html\""));
         assert!(index.contains("href=\"beta.html\""));
@@ -992,6 +1069,39 @@ mod tests {
         );
         assert!(cover_src(dir.path(), &Some("media/missing.png".into())).is_none());
         assert!(cover_src(dir.path(), &Some("bare-name.png".into())).is_none());
+    }
+
+    #[test]
+    fn compose_carries_the_artifacts_dress() {
+        let dir = tempdir().unwrap();
+        setup(dir.path(), "dressed", DOC);
+        let tpl_dir = dir.path().join("templates");
+        std::fs::create_dir_all(&tpl_dir).unwrap();
+        std::fs::write(
+            tpl_dir.join("article.html"),
+            concat!(
+                "<html><head>",
+                "<link href=\"https://fonts.googleapis.com/css2?family=X\" rel=\"stylesheet\">",
+                "<style>.title-banner--title { font-style: italic; }</style>",
+                "</head><body>{{ARTICLE | title-banner}}</body></html>"
+            ),
+        )
+        .unwrap();
+
+        let c = compose_write_view(dir.path(), "dressed").unwrap();
+        assert!(
+            c.css
+                .contains("@import url('https://fonts.googleapis.com/css2?family=X');"),
+            "{}",
+            c.css
+        );
+        assert!(c
+            .css
+            .contains(".title-banner--title { font-style: italic; }"));
+        assert!(
+            c.css.contains("tezuri-baseline") || c.css.contains("Cal"),
+            "baseline rides last"
+        );
     }
 
     #[test]

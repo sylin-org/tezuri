@@ -9,7 +9,7 @@
 
 import React from "react";
 import type { CatalogEntry, SlotInstance, WriteCompose } from "./bridge";
-import { nextHintsFor } from "./bridge";
+import { nextHintsFor, scopeCss } from "./bridge";
 import { invoke } from "./bridge";
 
 export interface ComposePlaneProps {
@@ -77,13 +77,17 @@ export function WriteComposePlane(p: ComposePlaneProps) {
 
     if (seg.kind === "article_flow") {
       const entry = entryOf("ARTICLE");
-      const frame = seg.frame ? (
-        <div
-          key={`${i}-frame`}
-          className="wc-frame"
-          dangerouslySetInnerHTML={{ __html: seg.frame }}
-        />
-      ) : null;
+        const frame = seg.frame ? (
+          <div
+            key={`${i}-frame`}
+            className="wc-frame"
+            dangerouslySetInnerHTML={{
+              __html: p.mediaBase
+                ? seg.frame.replaceAll("../media/", p.mediaBase)
+                : seg.frame,
+            }}
+          />
+        ) : null;
       const chip =
         entry && entry.options.length > 0 && !seg.mirror ? (
           <SlotMenu
@@ -127,6 +131,14 @@ export function WriteComposePlane(p: ComposePlaneProps) {
 
   return (
     <div className="write-composition">
+      {p.compose.css && (
+        <style
+          key={p.compose.css.length}
+          dangerouslySetInnerHTML={{
+            __html: scopeCss(p.compose.css, ".write-composition"),
+          }}
+        />
+      )}
       {out}
       {p.compose.notes.length > 0 && (
         <p className="wc-whispers" title="Editor notes from this template">

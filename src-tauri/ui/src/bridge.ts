@@ -101,6 +101,28 @@ export interface WriteCompose {
   segments: Seg[];
   notes: string[];
   space_template: boolean;
+  /** The artifact's head dress (font imports, template styles, baseline) —
+   *  the desk scopes it to the Write plane. */
+  css: string;
+}
+
+/** Prefix every selector so artifact CSS wears the Write plane, not the
+ *  desk. `body {…}` and `:root` stop matching inside a div — chrome
+ *  neutrality by construction. At-rule headers pass; their inner rules get
+ *  scoped by the same pass. Comments go first. */
+export function scopeCss(css: string, scope: string): string {
+  const stripped = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  return stripped.replace(/([^{}]+)\{/g, (m, sel: string) => {
+    const t = sel.trim();
+    if (t.startsWith("@") || t.startsWith(scope)) return m;
+    const list = t
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((s) => `${scope} ${s}`)
+      .join(", ");
+    return `${list}{`;
+  });
 }
 
 // -- slot catalog ------------------------------------------------------------

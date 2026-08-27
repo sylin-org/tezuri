@@ -383,10 +383,10 @@ export default function App() {
     } catch (e: any) { setNote(e.message ?? String(e)); }
   }
 
-  // ---- render mode: Write (WYSIWYG), Source (raw md), Preview (the artifact)
-  // The preview is the compiled page itself — same bytes emit_render writes.
-  const [mode, setMode] = useState<"write" | "source" | "preview">("write");
-  const [previewHtml, setPreviewHtml] = useState("");
+  // ---- surfaces: Write (the artifact's dress, editing in place), Source
+  // (raw markdown bytes). The proof of what emits lives in render/ itself —
+  // surfaced through the ship rail's render step, never a competing lens.
+  const [mode, setMode] = useState<"write" | "source">("write");
   const [emitted, setEmitted] = useState<string[] | null>(null);
   // The app-side origin of the open session's media (custom protocol), so
   // article images resolve inside the webview. Disk artifacts stay relative.
@@ -404,22 +404,6 @@ export default function App() {
     if (!open) { setThemeCss(""); return; }
     invoke<string>("read_theme").then(setThemeCss).catch(() => setThemeCss(""));
   }, [open]);
-
-  const showPreview = useCallback(async () => {
-    const d = docRef.current;
-    if (!d) return;
-    // Preview always shows the saved state; flush a pending autosave first.
-    if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current);
-    await flushRef.current();
-    try {
-      const html = await invoke<string>("render_article", { slug: d.slug });
-      // View-side seam: point ../media/ at the session's media origin.
-      setPreviewHtml(mediaBase ? html.replaceAll('../media/', mediaBase) : html);
-      setMode("preview");
-    } catch (e: any) {
-      setNote(e.message ?? String(e));
-    }
-  }, [mediaBase]);
 
   async function doEmit() {
     try {
@@ -524,9 +508,6 @@ export default function App() {
                     <button role="tab" aria-selected={mode === "source"}
                             className={mode === "source" ? "active" : ""}
                             onClick={() => setMode("source")}>Source</button>
-                    <button role="tab" aria-selected={mode === "preview"}
-                            className={mode === "preview" ? "active" : ""}
-                            onClick={() => void showPreview()}>Preview</button>
                   </div>
                   <button onClick={() => setAssistOpen(!assistOpen)}
                           title="Advisory help: polish, voice, facts">Assistant</button>
@@ -576,14 +557,7 @@ export default function App() {
                     />
                   </div>
                 )}
-                {mode === "preview" ? (
-                  <iframe
-                    className="preview-frame"
-                    title="Rendered article — exactly what emits"
-                    srcDoc={previewHtml}
-                    sandbox="allow-scripts"
-                  />
-                ) : mode === "source" ? (
+                {mode === "source" ? (
                   <div className="cm-host">
                     <CodeMirror
                       value={text} height="100%"

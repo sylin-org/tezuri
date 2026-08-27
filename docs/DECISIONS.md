@@ -10,6 +10,19 @@ replacements.
 
 ---
 
+## 2026-08-27 — Preview retires; Write wears the artifact's dress
+
+The two-lens arrangement is superseded by the owner's standing decision:
+Write mode IS the representation — correct fonts, the space's layout dress,
+editing in place. The composer now returns the artifact's head CSS (fonts
+imports, the template's own style blocks, the calm baseline) alongside the
+segments; the desk scopes it to the Write plane, preserving chrome
+neutrality (body-level rules simply don't match inside it). The Preview tab
+and its iframe are gone. Byte-exactness does not die with it: the emitted
+files under `render/` remain the untouched proof, surfaced through the ship
+rail's render step and the filesystem — the proof moved from a tab to the
+artifact itself.
+
 ## 2026-08-27 — Cards: per-article embeddable snippets
 
 "An embeddable card" resolves to a per-article artifact: the snippet another
