@@ -664,11 +664,20 @@ pub fn gather_article_ctx(publication_root: &Path, slug: &str) -> Result<Ctx> {
         headings,
         neighbors,
         site_name: site_display_name(publication_root, &identity.name),
-        byline: if identity.byline.is_empty() {
-            identity.persona.clone()
-        } else {
-            identity.byline.clone()
-        },
+        byline: a
+            .meta
+            .author
+            .clone()
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| s.trim().to_string())
+            .unwrap_or_else(|| {
+                if identity.byline.is_empty() {
+                    identity.persona.clone()
+                } else {
+                    identity.byline.clone()
+                }
+            }),
+        banner: identity.header_style() == crate::identity::HeaderStyle::Banner,
         cta,
         site_url,
         footer_md: extras_str(&identity.extra, &["footer"]),
@@ -680,13 +689,15 @@ pub fn gather_article_ctx(publication_root: &Path, slug: &str) -> Result<Ctx> {
 fn strip_frame(document: &str) -> &str {
     let mut rest = document.trim_start();
     if let Some(after) = rest.strip_prefix("# ") {
+        // Skip the title line, then blanks, then the positional standfirst
+        // paragraph (a heading is never a standfirst).
         rest = after.split_once('\n').map(|(_, r)| r).unwrap_or("");
         rest = rest.trim_start();
-        // Optional standfirst line.
-        if rest.starts_with('_') {
-            if let Some(after) = rest.split_once('\n') {
-                rest = after.1;
-            }
+        if !rest.is_empty() && !rest.starts_with('#') {
+            rest = match rest.split_once("\n\n") {
+                Some((_, r)) => r,
+                None => "",
+            };
         }
     }
     rest.trim_start()
@@ -798,6 +809,7 @@ fn site_ctx(publication_root: &Path) -> Result<(crate::identity::Identity, Ctx)>
         words: 0,
         state: State::Published,
         tags: vec![],
+        banner: false,
         cover_src: None,
         body_md: String::new(),
         flow_html: String::new(),
@@ -1118,33 +1130,26 @@ mod tests {
         let mut a = Article::load(dir.path(), "drafty").unwrap();
         a.meta.cover = Some("media/drafty.png".into());
         a.save(dir.path()).unwrap();
+        // Banner is the space's decision; the draft only carries the hint.
+        std::fs::write(
+            dir.path().join("publication.yaml"),
+            b"header_style: banner\n",
+        )
+        .unwrap();
 
         let draft = "<html><body>{{ARTICLE | title-banner, cover:fill}}</body></html>";
-        let c = compose_write_view_with(dir.path(), "drafty", draft).unwrap();
-        let flow = c
-            .segments
-            .iter()
-            .find_map(|s| match s {
-                Seg::ArticleFlow {
-                    mirror: false,
-                    frame,
-                    prose,
-                    ..
-                } => Some((frame.clone(), prose.clone())),
-                _ => None,
-            })
-            .expect("article segment");
-        assert!(flow.0.contains("title-banner"), "{flow:?}");
-        assert!(flow.0.contains("cover-fill"), "{flow:?}");
-        // The prose the editor mounts at carries no H1 — the banner owns it.
-        assert!(!flow.1.contains("<h1>"), "{flow:?}");
-        assert!(!c.space_template);
 
-        // The specimen renders the same mode through the whole pipeline.
+        // The specimen renders the mode through the whole pipeline.
         let (page, notes) = render_article_with(dir.path(), "drafty", draft).unwrap();
         assert!(notes.is_empty());
         assert!(page.contains("<section class=\"title-banner\">"), "{page}");
-        assert!(!page.contains("<style id=\"tezuri-baseline\"><h1>"));
+        assert!(page.contains("cover-fill"), "{page}");
+        // The banner owns title + standfirst: the flow sheds them.
+        assert!(page.contains("title-banner--title"), "{page}");
+        assert!(
+            !page.contains("<div class=\"article-prose\"><h1>"),
+            "{page}"
+        );
     }
 
     #[test]
@@ -1240,7 +1245,10 @@ mod tests {
             Seg::Slot(sl) => sl.html.clone(),
             _ => unreachable!(),
         };
-        assert_eq!(standfirst_html, "<p class=\"standfirst\">Standfast.</p>");
+        assert_eq!(
+            standfirst_html,
+            "<p class=\"standfirst\"><em>Standfast.</em></p>"
+        );
         let tags_html = match &c.segments[7] {
             Seg::Slot(sl) => sl.html.clone(),
             _ => unreachable!("{order:?}"),
@@ -1327,5 +1335,42 @@ mod tests {
         let cta = site_cta_of(&id).unwrap();
         assert_eq!(cta.0, "Read more");
         assert_eq!(cta.1, "https://ko-fi.com/k");
+    }
+
+    #[test]
+    fn banner_header_style_consumes_the_frame() {
+        let dir = tempdir().unwrap();
+        setup(dir.path(), "hero", DOC);
+        std::fs::write(
+            dir.path().join("publication.yaml"),
+            b"header_style: banner\n",
+        )
+        .unwrap();
+
+        // The default template is dumb — the banner only appears when a
+        // template asks for it. Through a banner template, title and
+        // standfirst feed the hero and leave the flow.
+        let tpl = concat!("<html><body>{{ARTICLE | title-banner, cover:none}}</body></html>");
+        let (page, _) = render_article_with(dir.path(), "hero", tpl).unwrap();
+        assert!(page.contains("title-banner--title"), "{page}");
+        assert!(page.contains("title-banner--standfirst"), "{page}");
+        assert!(
+            !page.contains("<div class=\"article-prose\"><h1>"),
+            "flow sheds its frame: {page}"
+        );
+        assert!(page.contains("Deeper.</p>"), "body survives: {page}");
+    }
+
+    #[test]
+    fn normal_header_style_keeps_the_flow_whole() {
+        let dir = tempdir().unwrap();
+        setup(dir.path(), "plain", DOC);
+        // No header_style: Normal. Even a banner-carrying template renders
+        // the raw flow — the document is king, dressing is a space decision.
+        let tpl = concat!("<html><body>{{ARTICLE | title-banner, cover:none}}</body></html>");
+        let (page, _) = render_article_with(dir.path(), "plain", tpl).unwrap();
+        assert!(!page.contains("<section class=\"title-banner\">"), "{page}");
+        assert!(page.contains("<h1>On Rust</h1>"), "{page}");
+        assert!(page.contains("A meditation on ownership."), "{page}");
     }
 }

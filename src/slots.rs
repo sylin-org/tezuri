@@ -591,6 +591,10 @@ pub struct Ctx {
     /// `{{ARTICLE}}` gains its flow appended plus an editor note. Pure
     /// slot evaluation contexts leave this off.
     pub require_article: bool,
+    /// The space's Header Style is Banner: a `title-banner` hint renders
+    /// the hero and consumes title + standfirst from the flow. Normal
+    /// keeps the raw flow regardless of template hints.
+    pub banner: bool,
 }
 
 impl Ctx {
@@ -720,8 +724,10 @@ pub fn compose_marked(parts: &[Part], ctx: &Ctx) -> (String, Vec<String>, Vec<Sl
 
 /// The {{ARTICLE}} slot: its frame mode decides the projection. `plain`
 /// emits the flow; `title-banner` re-projects the article's own frame into
-/// a banner block and consumes H1/standfirst out of the flow, so nothing
-/// double-renders. First banner wins; repeats fall back to plain flow.
+/// a banner block and consumes title/standfirst out of the flow, so nothing
+/// double-renders — but only when the space's Header Style is Banner.
+/// Normal keeps the raw flow no matter what the template hints. First
+/// banner wins; repeats fall back to plain flow.
 fn article_value(slot: &RawSlot, ctx: &Ctx, banner_used: &mut bool) -> String {
     let hints = canonical_hints(&slot.hints, "ARTICLE");
     // A frame mode is either explicit (`mode:title-banner`) or a bare
@@ -743,7 +749,7 @@ fn article_value(slot: &RawSlot, ctx: &Ctx, banner_used: &mut bool) -> String {
             },
             str::to_string,
         );
-    if mode != "title-banner" || *banner_used {
+    if mode != "title-banner" || *banner_used || !ctx.banner {
         return format!("<div class=\"article-prose\">{}</div>", ctx.flow_html);
     }
     *banner_used = true;
@@ -864,12 +870,12 @@ fn strip_flow_frame(flow: &str) -> String {
             rest = format!("{}{}", &rest[..p], &rest[p + c + 5..]);
         }
     }
-    // The standfirst compiles to an emphasized paragraph right after the H1
-    // only when it was a standalone _…_ line; consume at most that.
+    // The positional standfirst is the paragraph that followed the H1:
+    // consume the first <p> block after it, whatever it contains.
     let t = rest.trim_start();
-    if let Some(after_p) = t.strip_prefix("<p><em>") {
-        if let Some(end) = after_p.find("</em></p>") {
-            return after_p[end + 9..].trim_start_matches('\n').to_string();
+    if let Some(after_p) = t.strip_prefix("<p>") {
+        if let Some(end) = after_p.find("</p>") {
+            return after_p[end + 4..].trim_start_matches('\n').to_string();
         }
     }
     rest
@@ -952,7 +958,12 @@ fn evaluate(slot: &RawSlot, ctx: &Ctx) -> (String, Vec<String>) {
     match slot.name.as_str() {
         "title" => (esc(&ctx.title), vec![]),
         "standfirst" => match &ctx.standfirst {
-            Some(sf) => (format!("<p class=\"standfirst\">{}</p>", esc(sf)), vec![]),
+            // The standfirst is raw markdown (positional first paragraph);
+            // inline-render it so emphasis and links carry into the class.
+            Some(sf) => (
+                format!("<p class=\"standfirst\">{}</p>", md_inline(sf)),
+                vec![],
+            ),
             None => (String::new(), vec![]),
         },
         "date" => date_value(&hints, ctx.raw_date.as_deref()),
@@ -1486,6 +1497,7 @@ mod tests {
             neighbors: Ctx::neighbors_for(&publishable, slug),
             site_name: "Field Notes".into(),
             byline: String::new(),
+            banner: true,
             cta: None,
             site_url: "https://example.com/".into(),
             footer_md: "\u{a9} 2026 Field Notes".into(),

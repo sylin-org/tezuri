@@ -4,8 +4,9 @@
 //! One Markdown flow, nothing else. `articles/<slug>/meta.yaml` — state,
 //! date, tags, cover reference, provenance. Content and data never mix.
 //!
-//! Title is derived from the first `# ` heading; standfirst from the first
-//! block after it when it is a standalone `_…_` line.
+//! Title is derived from the first `# ` heading; the standfirst is the
+//! first paragraph after it, positionally — dressing it differently is a
+//! render-time concern (space Header Style), never markdown syntax.
 
 use crate::spine::{atomic_write, confine, content_hash, Event, Journal};
 use anyhow::{bail, Context, Result};
@@ -84,9 +85,11 @@ pub struct Article {
 // Parsing the dialect.
 // ---------------------------------------------------------------------------
 
-/// Split a document into (title, standfirst, body-start-offset).
-/// Title = first `# ` heading. Standfirst = first block after it that is a
-/// single-line `_…_`. Body starts right after whichever came last.
+/// Split a document into (title, standfirst). Title = first `# ` heading.
+/// Standfirst = the first paragraph that follows it, positionally — no
+/// special syntax. Whether that line is dressed as a standfirst or left as
+/// ordinary flow is a space-level Header Style decision, never a property
+/// of the markdown.
 pub fn parse_flow(document: &str) -> (Option<String>, Option<String>) {
     let mut lines = document.lines().peekable();
     let mut title = None;
@@ -106,16 +109,28 @@ pub fn parse_flow(document: &str) -> (Option<String>, Option<String>) {
             lines.next();
         }
     }
-    // Skip one blank between title and possible standfirst.
-    if let Some(l) = lines.peek() {
+    // Skip blanks between title and the standfirst paragraph.
+    while let Some(l) = lines.peek() {
         if l.trim().is_empty() {
             lines.next();
+        } else {
+            break;
         }
     }
-    if let Some(l) = lines.peek() {
-        let trimmed = l.trim();
-        if trimmed.starts_with('_') && trimmed.ends_with('_') && trimmed.len() > 2 {
-            standfirst = Some(trimmed[1..trimmed.len() - 1].to_string());
+    // The standfirst is the whole first paragraph: collect its lines until
+    // the blank line that ends it.
+    let mut paragraph: Vec<&str> = Vec::new();
+    while let Some(l) = lines.peek() {
+        if l.trim().is_empty() {
+            break;
+        }
+        paragraph.push(l);
+        lines.next();
+    }
+    if !paragraph.is_empty() {
+        // A heading is never a standfirst.
+        if !paragraph[0].trim_start().starts_with('#') {
+            standfirst = Some(paragraph.join(" ").trim().to_string());
         }
     }
     (title, standfirst)
@@ -316,7 +331,7 @@ mod tests {
     fn parses_title_and_standfirst() {
         let (title, sf) = parse_flow(SAMPLE);
         assert_eq!(title.as_deref(), Some("On Rust"));
-        assert_eq!(sf.as_deref(), Some("A meditation on ownership."));
+        assert_eq!(sf.as_deref(), Some("_A meditation on ownership._"));
     }
 
     #[test]
@@ -334,7 +349,7 @@ mod tests {
         let b = Article::load(dir.path(), "fresh").unwrap();
         assert_eq!(b.meta.state, State::Published);
         assert_eq!(b.meta.tags, vec!["rust".to_string()]);
-        assert_eq!(b.standfirst().as_deref(), Some("It begins."));
+        assert_eq!(b.standfirst().as_deref(), Some("_It begins._"));
 
         // meta.yaml exists as a sibling and holds no prose
         let meta_text =
