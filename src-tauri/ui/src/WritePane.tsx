@@ -17,6 +17,7 @@ export function WritePane({ slug, template, markdown, mediaBase, onMarkdown }: {
 }) {
   const [page, setPage] = React.useState<string | null>(null);
   const frameRef = React.useRef<HTMLIFrameElement | null>(null);
+  const bootedRef = React.useRef(false);
   // Latest values for the message handler without re-binding it mid-typing.
   const latest = React.useRef({ markdown, mediaBase, slug, template });
   latest.current = { markdown, mediaBase, slug, template };
@@ -32,25 +33,35 @@ export function WritePane({ slug, template, markdown, mediaBase, onMarkdown }: {
   }, [slug, template]);
 
   React.useEffect(() => {
+    bootedRef.current = false;
     void reload();
   }, [reload]);
 
   React.useEffect(() => {
+    const sendInit = () => {
+      frameRef.current?.contentWindow?.postMessage(
+        {
+          type: "tz-init",
+          markdown: latest.current.markdown,
+          mediaBase: latest.current.mediaBase,
+        },
+        "*",
+      );
+    };
     const handler = (event: MessageEvent) => {
       const frame = frameRef.current;
       if (!frame || event.source !== frame.contentWindow) return;
       const msg: any = event.data ?? {};
-      if (msg.type === "tz-ready") {
-        frame.contentWindow?.postMessage(
-          {
-            type: "tz-init",
-            markdown: latest.current.markdown,
-            mediaBase: latest.current.mediaBase,
-          },
-          "*",
-        );
+      if (msg.type === "tz-booted") {
+        // The editor acknowledged the init: stop retrying.
+        bootedRef.current = true;
+      } else if (msg.type === "tz-ready" || msg.type === "tz-booted") {
+        sendInit();
       } else if (msg.type === "tz-change") {
-        onMarkdown(String(msg.markdown ?? ""));
+        // Echo guard: a round-trip normalization is not an edit.
+        const md = String(msg.markdown ?? "");
+        if (md === latest.current.markdown) return;
+        onMarkdown(md);
       } else if (msg.type === "tz-image") {
         (async () => {
           try {
@@ -69,6 +80,20 @@ export function WritePane({ slug, template, markdown, mediaBase, onMarkdown }: {
         })();
       }
     };
+    const sendInitUntilBooted = () => {
+      sendInit();
+      let tries = 0;
+      const t = window.setInterval(() => {
+        tries += 1;
+        if (bootedRef.current || tries >= 12) {
+          window.clearInterval(t);
+        } else {
+          sendInit();
+        }
+      }, 350);
+      window.setTimeout(() => window.clearInterval(t), 6000);
+    };
+    sendInitUntilBooted();
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
   }, [onMarkdown]);

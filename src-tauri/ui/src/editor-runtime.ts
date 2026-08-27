@@ -31,6 +31,11 @@ const parent = window.parent !== window ? window.parent : null;
 const pending = new Map<string, (ref: string) => void>();
 let editor: Editor | null = null;
 let mediaBase = "";
+// Handshake + no-op guard state: init is retried by the host until this
+// side acks a boot, and only real content diffs are ever reported back —
+// a boot must never autosave a round-trip normalization.
+let booted = false;
+let lastKnown = "";
 
 function post(msg: Record<string, unknown>) {
   parent?.postMessage(msg, "*");
@@ -83,6 +88,12 @@ async function importImage(file: File) {
 
 async function boot(markdown: string) {
   injectCaretStyle();
+  // Re-booting (new page in this frame) must retire the old editor first:
+  // two live editors over one mount fight over the caret and the state.
+  if (editor) {
+    editor.destroy();
+    editor = null;
+  }
   const prose = document.querySelector(".article-prose");
   if (!prose) {
     log("no .article-prose in the artifact — mounting a bare host");
@@ -118,6 +129,8 @@ async function boot(markdown: string) {
     content: markdown,
     onUpdate: ({ editor: e }) => {
       const md = (e.storage as any).markdown.getMarkdown();
+      if (md === lastKnown) return; // normalization is not an edit
+      lastKnown = md;
       post({ type: "tz-change", markdown: md });
     },
     editorProps: {
@@ -150,9 +163,14 @@ async function boot(markdown: string) {
 window.addEventListener("message", (event) => {
   const msg = event.data ?? {};
   if (msg.type === "tz-init") {
+    if (booted) return; // idempotent: a booted editor never re-boots
     mediaBase = msg.mediaBase ?? "";
-    void boot(msg.markdown ?? "");
-    post({ type: "tz-ready" });
+    const markdown = msg.markdown ?? "";
+    void boot(markdown).then(() => {
+      booted = true;
+      lastKnown = markdown;
+      post({ type: "tz-booted" });
+    });
   } else if (msg.type === "tz-media") {
     const resolve = pending.get(msg.token);
     if (resolve) {
@@ -161,6 +179,10 @@ window.addEventListener("message", (event) => {
     }
   }
 });
+
+// Announce readiness the moment the listener exists. The host retries
+// tz-init until the boot ack arrives, so a lost message is harmless.
+post({ type: "tz-ready" });
 
 
 // The runtime announces itself the moment it can listen: the host answers
