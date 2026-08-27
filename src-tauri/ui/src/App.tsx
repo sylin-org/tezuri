@@ -332,6 +332,16 @@ export default function App() {
     invoke<string>("media_base").then(setMediaBase).catch(() => {});
   }, []);
 
+  // The space's theme.css dresses the editor's prose surface too — the same
+  // rules the artifact gets. Tezuri's chrome (band, rail) stays neutral:
+  // selectors are namespaced under .article-prose, which only the writing
+  // surface carries.
+  const [themeCss, setThemeCss] = useState("");
+  useEffect(() => {
+    if (!open) { setThemeCss(""); return; }
+    invoke<string>("read_theme").then(setThemeCss).catch(() => setThemeCss(""));
+  }, [open]);
+
   const showPreview = useCallback(async () => {
     const d = docRef.current;
     if (!d) return;
@@ -372,6 +382,7 @@ export default function App() {
 
   return (
     <>
+      {themeCss && <style>{themeCss}</style>}
       <header className="app-band">
         <span className="lamp" aria-hidden="true">
           <span className="lamp-halo" />

@@ -723,3 +723,35 @@ body.tezuri-dirty .state-word { color: var(--amber); }
 .rail-new-form input { font-size: 13px; }
 
 .space-manage-row.confirming { border-color: rgba(248, 113, 113, .4); }
+
+/* ---- the space's theme dresses the editor prose; chrome stays neutral ---- */
+/* theme.css is written against the artifact (.article-prose …); the writing
+   surface carries that class so the same rules land. Only size-bearing
+   editor defaults need re-asserting below the injected sheet. */
+.writer-column .tiptap.article-prose { font-size: 17px; line-height: 1.65; }
+.writer-column .tiptap.article-prose h1,
+.writer-column .tiptap.article-prose h2,
+.writer-column .tiptap.article-prose h3 { scroll-margin-top: 5rem; }
+
+/* ---- editor TOC rail (in-app navigation; artifact has its own) ---- */
+.editor-toc {
+  position: absolute; top: 130px; right: 14px; width: 210px;
+  max-height: calc(100% - 160px); overflow-y: auto;
+  padding: 4px 10px;
+  border-left: 1px solid var(--line);
+}
+.editor-toc h2 {
+  font: 400 10px var(--mono); letter-spacing: .14em; text-transform: uppercase;
+  color: var(--muted); margin: 6px 0 10px;
+}
+.editor-toc a {
+  display: block; padding: 3px 0 3px 8px; font-size: 12.5px; line-height: 1.4;
+  color: var(--muted); text-decoration: none;
+  border-left: 2px solid transparent; margin-left: -11px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.editor-toc a:hover { color: var(--ink-2); }
+.editor-toc a.current { color: var(--al); border-left-color: var(--al); }
+.editor-toc a.l3 { padding-left: 20px; }
+.editor-toc a.current.l3 { padding-left: 16px; }
+@media (max-width: 1500px) { .editor-toc { display: none; } }
