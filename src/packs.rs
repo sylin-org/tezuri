@@ -5,8 +5,6 @@
 //! ride in the binary. Picking applies through the ordinary journaled paths
 //! (templates::write, theme::write) so propose→apply stays true.
 
-use crate::templates;
-use crate::theme;
 use anyhow::Result;
 use serde::Serialize;
 use std::path::Path;
@@ -66,8 +64,8 @@ pub fn apply(publication_root: &Path, id: &str) -> Result<()> {
         .into_iter()
         .find(|p| p.id == id)
         .ok_or_else(|| anyhow::anyhow!("unknown pack: {id}"))?;
-    templates::write(publication_root, pack.article_template)?;
-    theme::write(publication_root, pack.theme_css)?;
+    crate::render::write_template(publication_root, pack.article_template)?;
+    crate::render::write_theme(publication_root, pack.theme_css)?;
     Ok(())
 }
 
@@ -87,9 +85,9 @@ mod tests {
     fn vanilla_applies_the_embedded_default_and_no_theme() {
         let dir = tempdir().unwrap();
         apply(dir.path(), "vanilla").unwrap();
-        assert!(templates::read(dir.path()).unwrap().is_some());
+        assert!(crate::render::read_template(dir.path()).unwrap().is_some());
         // Empty css removed nothing that existed; theme stays absent.
-        assert_eq!(crate::theme::read(dir.path()).unwrap(), "");
+        assert_eq!(crate::render::read_theme(dir.path()).unwrap(), "");
     }
 
     #[test]
@@ -97,11 +95,11 @@ mod tests {
         let dir = tempdir().unwrap();
         apply(dir.path(), "gposingway").unwrap();
 
-        let tpl = templates::read(dir.path()).unwrap().unwrap();
+        let tpl = crate::render::read_template(dir.path()).unwrap().unwrap();
         assert!(tpl.contains("{{ARTICLE | title-banner"), "{tpl}");
         assert!(!tpl.contains("kicker_line") && !tpl.contains("{{css}}"));
 
-        let css = crate::theme::read(dir.path()).unwrap();
+        let css = crate::render::read_theme(dir.path()).unwrap();
         // Pack css carries the prose dress; layout chrome lives in the
         // template itself.
         assert!(css.contains(".article-prose"), "{css}");

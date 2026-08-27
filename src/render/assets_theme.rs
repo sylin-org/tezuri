@@ -12,7 +12,7 @@ use anyhow::Result;
 use serde::Serialize;
 use std::path::Path;
 
-pub const FILE_NAME: &str = "theme.css";
+pub const THEME_FILE: &str = "theme.css";
 
 /// Every preset styles the same scope class, so the specimen preview and the
 /// live editor plane consume identical rules.
@@ -34,7 +34,7 @@ pub fn presets() -> Vec<Preset> {
             description: "The built-in look, made explicit: warm dark ground, serif prose, \
                           moonlit accents."
                 .into(),
-            css: include_str!("themes/garden.css").to_string(),
+            css: include_str!("../themes/garden.css").to_string(),
         },
         Preset {
             id: "sepia".into(),
@@ -42,7 +42,7 @@ pub fn presets() -> Vec<Preset> {
             description: "Paper-warm reading surface, brown-black ink — long sessions, \
                           print-flavored."
                 .into(),
-            css: include_str!("themes/sepia.css").to_string(),
+            css: include_str!("../themes/sepia.css").to_string(),
         },
         Preset {
             id: "ink".into(),
@@ -50,18 +50,18 @@ pub fn presets() -> Vec<Preset> {
             description: "Maximum contrast, sans-serif, no ornament — for drafting, not \
                           admiring."
                 .into(),
-            css: include_str!("themes/ink.css").to_string(),
+            css: include_str!("../themes/ink.css").to_string(),
         },
     ]
 }
 
-pub fn path(publication_root: &Path) -> Result<std::path::PathBuf> {
-    confine(publication_root, Path::new(FILE_NAME))
+pub fn theme_path(publication_root: &Path) -> Result<std::path::PathBuf> {
+    confine(publication_root, Path::new(THEME_FILE))
 }
 
 /// The current theme CSS, or empty when the space uses the built-in look.
-pub fn read(publication_root: &Path) -> Result<String> {
-    let p = path(publication_root)?;
+pub fn read_theme(publication_root: &Path) -> Result<String> {
+    let p = theme_path(publication_root)?;
     if !p.exists() {
         return Ok(String::new());
     }
@@ -70,8 +70,8 @@ pub fn read(publication_root: &Path) -> Result<String> {
 
 /// Persist the theme. An empty `css` removes the file: absence is the
 /// built-in look. Always journaled.
-pub fn write(publication_root: &Path, css: &str) -> Result<()> {
-    let p = path(publication_root)?;
+pub fn write_theme(publication_root: &Path, css: &str) -> Result<()> {
+    let p = theme_path(publication_root)?;
     if css.trim().is_empty() {
         if p.exists() {
             std::fs::remove_file(&p)?;
@@ -105,15 +105,18 @@ mod tests {
     #[test]
     fn write_read_clear_roundtrip() {
         let dir = tempdir().unwrap();
-        assert_eq!(read(dir.path()).unwrap(), "");
+        assert_eq!(read_theme(dir.path()).unwrap(), "");
 
-        write(dir.path(), ".theme-scope { --paper: #111; }").unwrap();
-        assert_eq!(read(dir.path()).unwrap(), ".theme-scope { --paper: #111; }");
-        assert!(path(dir.path()).unwrap().exists());
+        write_theme(dir.path(), ".theme-scope { --paper: #111; }").unwrap();
+        assert_eq!(
+            read_theme(dir.path()).unwrap(),
+            ".theme-scope { --paper: #111; }"
+        );
+        assert!(theme_path(dir.path()).unwrap().exists());
 
         // Empty write clears: absence is the built-in look.
-        write(dir.path(), "   ").unwrap();
-        assert!(!path(dir.path()).unwrap().exists());
-        assert_eq!(read(dir.path()).unwrap(), "");
+        write_theme(dir.path(), "   ").unwrap();
+        assert!(!theme_path(dir.path()).unwrap().exists());
+        assert_eq!(read_theme(dir.path()).unwrap(), "");
     }
 }

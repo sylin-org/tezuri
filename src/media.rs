@@ -108,7 +108,7 @@ pub fn store_identified(
             }
             if let Ok(existing) = fs::read(&p) {
                 if content_hash(&existing) == hash {
-                    let (id, _) = crate::media_id::split_recipe(&name)
+                    let (id, _) = crate::renditions::split_recipe(&name)
                         .context("stored media has an unrecognized name")?;
                     return Ok(StoredMedia {
                         hash,
@@ -120,7 +120,7 @@ pub fn store_identified(
         }
     }
 
-    let mut id = crate::media_id::MediaId::new(original_name);
+    let mut id = crate::renditions::MediaId::new(original_name);
     id.ext = ext.into();
     let rel = Path::new("media").join(id.base_filename());
     let target = confine(publication_root, &rel)?;

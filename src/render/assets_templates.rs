@@ -10,18 +10,18 @@ use crate::spine::{atomic_write, confine, Event, Journal};
 use anyhow::Result;
 use std::path::Path;
 
-pub const FILE_NAME: &str = "article.html";
+pub const ARTICLE_TEMPLATE_FILE: &str = "article.html";
 
 pub fn path(publication_root: &Path) -> Result<std::path::PathBuf> {
     confine(
         publication_root,
-        Path::new("templates").join(FILE_NAME).as_path(),
+        Path::new("templates").join(ARTICLE_TEMPLATE_FILE).as_path(),
     )
 }
 
 /// The space's template text, or None when none exists (the embedded
 /// default is the presentation until the author owns a copy).
-pub fn read(publication_root: &Path) -> Result<Option<String>> {
+pub fn read_template(publication_root: &Path) -> Result<Option<String>> {
     let p = path(publication_root)?;
     if !p.exists() {
         return Ok(None);
@@ -31,7 +31,7 @@ pub fn read(publication_root: &Path) -> Result<Option<String>> {
 
 /// Persist an accepted draft; empty text removes the file back to the
 /// embedded default. Always journaled.
-pub fn write(publication_root: &Path, text: &str) -> Result<()> {
+pub fn write_template(publication_root: &Path, text: &str) -> Result<()> {
     let p = path(publication_root)?;
     if text.trim().is_empty() {
         if p.exists() {
@@ -44,7 +44,7 @@ pub fn write(publication_root: &Path, text: &str) -> Result<()> {
         atomic_write(&p, text.as_bytes())?;
     }
     Journal::open(publication_root)?.record(Event::TemplateWritten {
-        name: FILE_NAME.into(),
+        name: ARTICLE_TEMPLATE_FILE.into(),
     })?;
     Ok(())
 }
@@ -57,11 +57,11 @@ mod tests {
     #[test]
     fn absent_then_written_then_cleared_with_journal() {
         let dir = tempdir().unwrap();
-        assert_eq!(read(dir.path()).unwrap(), None);
+        assert_eq!(read_template(dir.path()).unwrap(), None);
 
-        write(dir.path(), "<body>{{ARTICLE}}</body>").unwrap();
+        write_template(dir.path(), "<body>{{ARTICLE}}</body>").unwrap();
         assert_eq!(
-            read(dir.path()).unwrap().as_deref(),
+            read_template(dir.path()).unwrap().as_deref(),
             Some("<body>{{ARTICLE}}</body>")
         );
         let events = crate::spine::Journal::open(dir.path())
@@ -71,8 +71,8 @@ mod tests {
         assert!(events.iter().any(|(_, e)| e.kind() == "template-written"));
 
         // Empty write is the embedded default again.
-        write(dir.path(), "   ").unwrap();
-        assert_eq!(read(dir.path()).unwrap(), None);
+        write_template(dir.path(), "   ").unwrap();
+        assert_eq!(read_template(dir.path()).unwrap(), None);
     }
 
     #[test]
@@ -80,7 +80,10 @@ mod tests {
         let dir = tempdir().unwrap();
         let p = path(dir.path()).unwrap();
         assert!(p.starts_with(dir.path().join("templates")));
-        assert_eq!(p.file_name().and_then(|s| s.to_str()), Some(FILE_NAME));
+        assert_eq!(
+            p.file_name().and_then(|s| s.to_str()),
+            Some(ARTICLE_TEMPLATE_FILE)
+        );
     }
 
     #[test]

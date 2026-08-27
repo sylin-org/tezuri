@@ -10,8 +10,8 @@
 //! network.
 
 use crate::articles::State;
-use crate::media_id::{self, Recipe};
 use crate::render;
+use crate::renditions::{self, Recipe};
 use crate::spine::{confine, content_hash};
 use anyhow::Result;
 use std::path::Path;
@@ -113,7 +113,7 @@ pub fn scan_plan(publication_root: &Path) -> Result<SettlePlan> {
                 continue; // already a rendition, never a source
             }
             for recipe in PREWARM {
-                if let Some(target) = media_id::rendition_target(&p, &recipe) {
+                if let Some(target) = renditions::rendition_target(&p, &recipe) {
                     if !target.exists() {
                         plan.renditions
                             .push((format!("media/{name}"), recipe.clone()));
@@ -181,7 +181,7 @@ pub fn settle(
     crate::spine::atomic_write(&fingerprint_path(publication_root)?, fp.as_bytes())?;
 
     for (base, recipe) in &plan.renditions {
-        let _ = media_id::resolve_for_display(publication_root, base, recipe.clone());
+        let _ = renditions::resolve_for_display(publication_root, base, recipe.clone());
         done += 1;
         progress("rendition", done, total);
     }

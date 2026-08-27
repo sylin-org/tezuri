@@ -400,7 +400,7 @@ pub struct PresetView {
 
 #[tauri::command]
 fn theme_presets() -> Vec<PresetView> {
-    tezuri::theme::presets()
+    tezuri::render::presets()
         .into_iter()
         .map(|p| PresetView {
             id: p.id,
@@ -414,14 +414,14 @@ fn theme_presets() -> Vec<PresetView> {
 /// The open space's theme CSS; empty means the built-in look.
 #[tauri::command]
 fn read_theme(session: State<Session>) -> Result<String, CommandError> {
-    tezuri::theme::read(&root(&session)?).map_err(err)
+    tezuri::render::read_theme(&root(&session)?).map_err(err)
 }
 
 /// Persist the theme; an empty string clears it back to the built-in look.
 #[tauri::command]
 fn write_theme(css: String, session: State<Session>) -> Result<(), CommandError> {
     let current = root(&session)?;
-    tezuri::theme::write(&current, &css).map_err(err)?;
+    tezuri::render::write_theme(&current, &css).map_err(err)?;
     enqueue_settle(current);
     Ok(())
 }
@@ -447,7 +447,7 @@ fn write_compose(
 /// is the presentation. Conduct edits drafts of this.
 #[tauri::command]
 fn read_template(session: State<Session>) -> Result<Option<String>, CommandError> {
-    tezuri::templates::read(&root(&session)?).map_err(err)
+    tezuri::render::read_template(&root(&session)?).map_err(err)
 }
 
 /// The embedded default template's bytes, so conducting can seed a draft
@@ -462,7 +462,7 @@ fn default_template() -> String {
 #[tauri::command]
 fn write_template(text: String, session: State<Session>) -> Result<(), CommandError> {
     let current = root(&session)?;
-    tezuri::templates::write(&current, &text).map_err(err)?;
+    tezuri::render::write_template(&current, &text).map_err(err)?;
     enqueue_settle(current);
     Ok(())
 }
