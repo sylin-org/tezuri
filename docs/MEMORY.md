@@ -22,6 +22,10 @@ gitignored. See [`local/README.md`](../local/README.md).
 
 ## Durable learnings
 
+- **Chirps, not ceremony.** The app takes care of the background and stays silent about it: small
+  activity chirps when something is worth knowing, a question only when an answer is truly needed —
+  and questions are asked inline where the object lives, never as blocking dialogs. Modals are an
+  antipattern in this product, full stop.
 - **Interrogate the premise before optimising its machinery.** Disproportionate complexity is a
   reason to re-check the requirement and model, not merely to add another abstraction.
 - **Every view is downstream of the file.** Editor surfaces render projections of the source

@@ -10,6 +10,22 @@ replacements.
 
 ---
 
+## 2026-08-26 — Work in the background; ask in the flow, never over it
+
+Tezuri takes care of itself. Derived work — settling, rendering, rendition derivation — happens
+without being asked, and surfaces only small, temporary chirps in the band facts while it runs.
+Questions are asked only when an answer is truly needed, and then **in the flow of the object**:
+adding a space shows an inline form card in the grid; removing one turns its row into a two-step
+inline confirmation; a new article's slug and title are asked in the rail; link and image targets
+are edited in anchored popovers beside their toolbar button. There are no modal dialogs. A modal
+seizes the whole window, breaks context, and interrupts thought — the exact opposite of a calm
+desk. Native file/folder pickers remain the one OS-level interruption, because choosing a folder
+is genuinely the user's job.
+
+This replaces the promise-based modal system (`prompts.tsx`, ModalHost/askForm/askConfirm) that
+had replaced the webview's silent no-op `window.prompt`/`confirm`; the modal was the wrong
+replacement, not the wrong implementation.
+
 ## 2026-08-26 — Settle lazily: derived artifacts heal in the background
 
 Loading a current-state repository is a normal state, not an error state: pages not yet emitted,
