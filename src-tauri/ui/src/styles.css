@@ -768,6 +768,13 @@ body.tezuri-dirty .state-word { color: var(--amber); }
 }
 
 /* ---- conduct: catalog-driven slot menus, try-first ---- */
+.wc-editor-wrap { position: relative; flex: 1; min-height: 0;
+  display: flex; flex-direction: column; }
+.wc-editor-tools { position: absolute; top: 6px; right: 10px; z-index: 20; }
+.wc-editor-tools .slot-menu-btn { opacity: .75; }
+.wc-editor-tools .slot-menu { left: auto; right: 0; }
+.wc-editor-tools .slot-menu-btn:hover,
+.wc-editor-tools .slot-menu-host:focus-within .slot-menu-btn { opacity: 1; }
 .wc-frame { position: relative; opacity: 1; font-size: inherit; padding: 0 24px; }
 .slot-menu-host { position: relative; display: inline-block; margin-left: 6px; }
 .slot-menu-btn { background: var(--panel); border: 1px solid var(--line);

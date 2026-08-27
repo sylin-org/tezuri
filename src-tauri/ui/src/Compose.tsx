@@ -63,23 +63,39 @@ export function WriteComposePlane(p: ComposePlaneProps) {
   return (
     <div className="write-composition">
       {p.compose.segments.map((seg, i) => {
+        // Stable occurrence ordinals: identical raw expressions are menued
+        // individually; counted once per segment, per render walk.
+        const occ =
+          seg.kind === "slot" || seg.kind === "article_flow"
+            ? ordOf(seg.raw)
+            : -1;
         if (seg.kind === "text") {
           // Trusted bytes: the desktop composed them from the space's own
           // template through the slot engine, shell stripped.
           return <div key={i} className="wc-text" dangerouslySetInnerHTML={{ __html: seg.html }} />;
         }
         if (seg.kind === "article_flow") {
+          const entry = entryOf("ARTICLE");
           const frame = seg.frame ? (
-            <ConductableFrame
+            <div
               key={`${i}-frame`}
-              html={seg.frame}
-              raw={seg.raw}
-              hints={seg.hints}
-              occurrence={ordOf(seg.raw)}
-              entry={entryOf("ARTICLE")}
-              onConduct={p.onConduct}
+              className="wc-text wc-frame"
+              dangerouslySetInnerHTML={{ __html: seg.frame }}
             />
           ) : null;
+          // The article's conduct affordance must exist even in plain mode —
+          // frame or none, the catalog's controls belong to the article.
+          const chip =
+            entry && entry.options.length > 0 && !seg.mirror ? (
+              <SlotMenu
+                key={`${i}-chip`}
+                raw={seg.raw}
+                hints={seg.hints}
+                occurrence={occ}
+                entry={entry}
+                onApply={p.onConduct}
+              />
+            ) : null;
           if (seg.mirror) {
             return (
               <>
@@ -94,9 +110,10 @@ export function WriteComposePlane(p: ComposePlaneProps) {
             );
           }
           return (
-            <>
+            <div key={i} className="wc-editor-wrap">
+              <span className="wc-editor-tools">{chip}</span>
               {frame}
-              <div key={i} className="wc-editor-host">
+              <div className="wc-editor-host">
                 <Writer
                   initialMarkdown={p.markdown}
                   slug={p.slug}
@@ -105,35 +122,15 @@ export function WriteComposePlane(p: ComposePlaneProps) {
                   words={p.words}
                 />
               </div>
-            </>
+            </div>
           );
         }
-        const occ = ordOf(seg.raw);
         return seg.editable
           ? <EditableSlot key={i} instance={seg} {...editPropsOf(seg.name, p)} />
           : <StaticSlot key={i} instance={seg} mediaBase={p.mediaBase}
                         catalogEntry={entryOf(seg.name)}
                         occurrence={occ} onConduct={p.onConduct} />;
       })}
-    </div>
-  );
-}
-
-/** The frame block around a flow (title-banner etc.) conducts too. */
-function ConductableFrame({ html, raw, hints, occurrence, entry, onConduct }: {
-  html: string;
-  raw: string;
-  hints: string[];
-  occurrence: number;
-  entry?: CatalogEntry;
-  onConduct: ComposePlaneProps["onConduct"];
-}) {
-  return (
-    <div className="wc-text wc-frame" data-frame>
-      <span dangerouslySetInnerHTML={{ __html: html }} />
-      {entry && entry.options.length > 0 && (
-        <SlotMenu raw={raw} hints={hints} occurrence={occurrence} entry={entry} onApply={onConduct} />
-      )}
     </div>
   );
 }
