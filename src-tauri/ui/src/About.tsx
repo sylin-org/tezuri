@@ -83,11 +83,12 @@ async function collectFacts(): Promise<{
   const reg = await invoke<{ publications: { root: string }[] }>("registry_load").catch(() => ({ publications: [] }));
   let articles = 0;
   let words = 0;
+  // Read-only stats: the About page never binds the open session.
   for (const p of reg.publications) {
     try {
-      const info = await invoke<{ articles: number; words: number }>("open_publication", { path: p.root });
-      articles += info.articles;
-      words += info.words;
+      const s = await invoke<{ articles: number; words: number }>("space_stats", { path: p.root });
+      articles += s.articles;
+      words += s.words;
     } catch { /* an unreadable space costs its counts, not the page */ }
   }
   return { version, spaces: reg.publications.length, articles, words };

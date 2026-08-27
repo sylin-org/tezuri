@@ -122,6 +122,9 @@ fn open_publication(
     }
     *session.0.lock().unwrap() = Some(p.clone());
     let d = Desk::rebuild(&p).map_err(err)?;
+    // A loaded space heals in the background: missing pages and renditions
+    // derive quietly while the author works.
+    enqueue_settle(p);
     Ok(PublicationsInfo {
         path,
         articles: d.entries.len(),
@@ -134,6 +137,74 @@ pub struct PublicationsInfo {
     pub path: String,
     pub articles: usize,
     pub words: usize,
+}
+
+/// Read-only stats for any folder — used by the About page, which must never
+/// bind or disturb the open session.
+#[derive(Serialize)]
+pub struct SpaceStats {
+    pub articles: usize,
+    pub words: usize,
+}
+
+#[tauri::command]
+fn space_stats(path: String) -> Result<SpaceStats, CommandError> {
+    let p = PathBuf::from(&path);
+    if !p.is_dir() {
+        return Err(err("that folder does not exist"));
+    }
+    let d = Desk::rebuild(&p).map_err(err)?;
+    Ok(SpaceStats {
+        articles: d.entries.len(),
+        words: d.momentum().total_words,
+    })
+}
+
+// -- settling ----------------------------------------------------------------
+
+#[derive(Clone, serde::Serialize)]
+struct SettleEv {
+    kind: String,
+    done: usize,
+    total: usize,
+}
+
+fn settle_progress(kind: &str, done: usize, total: usize) {
+    if let Some(handle) = APP_HANDLE.get() {
+        use tauri::Emitter;
+        let _ = handle.emit(
+            "tezuri:settle",
+            SettleEv {
+                kind: kind.into(),
+                done,
+                total,
+            },
+        );
+    }
+}
+
+/// Queue a background reconciliation for this space. One worker, sequential
+/// jobs: derivation is deliberately calm, never a thundering herd.
+fn enqueue_settle(root: PathBuf) {
+    static TX: std::sync::OnceLock<std::sync::mpsc::Sender<PathBuf>> = std::sync::OnceLock::new();
+    let tx = TX.get_or_init(|| {
+        let (tx, rx) = std::sync::mpsc::channel::<PathBuf>();
+        let spawned = std::thread::Builder::new()
+            .name("settler".into())
+            .spawn(move || {
+                for root in rx {
+                    if let Ok(plan) = tezuri::derive::scan_plan(&root) {
+                        if plan.is_empty() {
+                            continue;
+                        }
+                        let _ = tezuri::derive::settle(&root, &plan, &mut settle_progress);
+                    }
+                }
+            });
+        spawned.expect("settler thread");
+        tx
+    });
+    let _ = tx.send(root);
 }
 
 // -- identity ----------------------------------------------------------------
@@ -199,7 +270,9 @@ fn save_identity(
     if current != std::path::Path::new(&path) {
         return Err(err("that publication is not the open session"));
     }
-    identity.save(&current).map_err(err)
+    identity.save(&current).map_err(err)?;
+    enqueue_settle(current);
+    Ok(())
 }
 
 // -- desk ------------------------------------------------------------------
@@ -251,7 +324,10 @@ fn read_theme(session: State<Session>) -> Result<String, CommandError> {
 /// Persist the theme; an empty string clears it back to the built-in look.
 #[tauri::command]
 fn write_theme(css: String, session: State<Session>) -> Result<(), CommandError> {
-    tezuri::theme::write(&root(&session)?, &css).map_err(err)
+    let current = root(&session)?;
+    tezuri::theme::write(&current, &css).map_err(err)?;
+    enqueue_settle(current);
+    Ok(())
 }
 
 /// Compile one article into its final page — the preview is this exact
@@ -501,6 +577,7 @@ pub fn run() {
             get_last_opened,
             pick_folder,
             open_publication,
+            space_stats,
             read_theme,
             read_identity,
             save_identity,

@@ -81,3 +81,12 @@ export function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<
   if (!t?.core?.invoke) throw new Error("Tauri bridge not ready");
   return t.core.invoke(cmd, args) as Promise<T>;
 }
+
+/** Subscribe to the settler's progress (named events from the shell). */
+export function onSettle(
+  cb: (p: { kind: string; done: number; total: number }) => void
+): Promise<() => void> {
+  const t = (window as any).__TAURI__;
+  if (!t?.event?.listen) return Promise.resolve(() => {});
+  return t.event.listen("tezuri:settle", (e: any) => cb(e.payload)) as Promise<() => void>;
+}

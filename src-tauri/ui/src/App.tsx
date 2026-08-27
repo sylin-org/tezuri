@@ -8,7 +8,7 @@ import { SpaceRail, type Workspace } from "./Space";
 import { About } from "./About";
 import { Config } from "./Config";
 import { ModalHost, askForm, askConfirm } from "./prompts";
-import { invoke } from "./bridge";
+import { invoke, onSettle } from "./bridge";
 import type { Identity, PublicationInfo } from "./bridge";
 
 type Surface = "landing" | "space" | "config" | "about";
@@ -23,6 +23,18 @@ export default function App() {
   const [open, setOpen] = useState<PublicationInfo | null>(null);
   const [landingError, setLandingError] = useState("");
   const [note, setNote] = useState("");
+  // The settler's quiet progress: "healing this space" counts in the band.
+  const [settle, setSettle] = useState<{ done: number; total: number } | null>(null);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    onSettle((p) => {
+      setSettle(p.done < p.total ? { done: p.done, total: p.total } : null);
+    })
+      .then((u) => { unlisten = u; })
+      .catch(() => {});
+    return () => { unlisten?.(); };
+  }, []);
   // ---- space state ----------------------------------------------------------
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [entries, setEntries] = useState<any[]>([]);
@@ -381,6 +393,7 @@ export default function App() {
               ? <><b>{identity?.name || pubList.find(p2 => open.path.startsWith(p2.root))?.name || open.path}</b>
                  &nbsp;· {open.articles} articles · {open.words.toLocaleString()} words</>
               : <>{pubList.length} {pubList.length === 1 ? "space" : "spaces"} registered</>}
+            {settle && <>&nbsp;· settling {settle.done}/{settle.total}</>}
           </span>
         </span>
         <span style={{ flex: 1 }} />
