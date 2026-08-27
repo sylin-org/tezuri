@@ -109,6 +109,102 @@ fn dirs_home() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
+// -- media protocol ----------------------------------------------------------
+//
+// The bundled webview cannot read the filesystem, so article images inside
+// the app are served through this scheme. It streams only from the *open
+// session's* media directory, path-confined like every other access. The
+// artifact on disk keeps its relative `../media/` paths — this is purely the
+// in-app view seam.
+
+fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' && i + 2 < b.len() + 1 && i + 2 < b.len() + 1 {
+            let hex = b.get(i + 1..i + 3).and_then(|h| {
+                std::str::from_utf8(h)
+                    .ok()
+                    .and_then(|h| u8::from_str_radix(h, 16).ok())
+            });
+            if let Some(byte) = hex {
+                out.push(byte);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+fn mime_of(ext: &str) -> &'static str {
+    match ext {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        _ => "application/octet-stream",
+    }
+}
+
+fn serve_media(
+    handle: tauri::AppHandle,
+    request: tauri::http::Request<Vec<u8>>,
+) -> tauri::http::Response<Vec<u8>> {
+    use tauri::Manager;
+    let not_found = |msg: &str| {
+        tauri::http::Response::builder()
+            .status(404)
+            .header("Content-Type", "text/plain")
+            .body(msg.as_bytes().to_vec())
+            .unwrap()
+    };
+    let root = handle
+        .try_state::<Session>()
+        .and_then(|s| s.0.lock().unwrap().clone());
+    let Some(root) = root else {
+        return not_found("no publication is open");
+    };
+    let raw = request.uri().path().trim_start_matches('/');
+    let rel = percent_decode(raw);
+    // Only the media tree is reachable through this scheme.
+    if !rel.starts_with("media/") {
+        return not_found("only media/ is served here");
+    }
+    let Ok(path) = tezuri::spine::confine(&root, std::path::Path::new(&rel)) else {
+        return not_found("path refused");
+    };
+    match std::fs::read(&path) {
+        Ok(bytes) => {
+            let ext = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            tauri::http::Response::builder()
+                .header("Content-Type", mime_of(&ext))
+                .header("Cache-Control", "max-age=3600")
+                .body(bytes)
+                .unwrap()
+        }
+        Err(_) => not_found("not found"),
+    }
+}
+
+#[tauri::command]
+fn media_base() -> String {
+    // Windows serves custom schemes at http://<name>.localhost; other
+    // platforms at <name>://.
+    if cfg!(windows) {
+        "http://media.localhost/".into()
+    } else {
+        "media://".into()
+    }
+}
+
 // -- session ---------------------------------------------------------------
 
 #[tauri::command]
@@ -564,6 +660,9 @@ fn remote_head(session: State<Session>) -> Result<Option<String>, CommandError> 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .register_uri_scheme_protocol("media", |ctx, request| {
+            serve_media(ctx.app_handle().clone(), request)
+        })
         .setup(|app| {
             let _ = APP_HANDLE.set(app.handle().clone());
             Ok(())
@@ -578,6 +677,7 @@ pub fn run() {
             pick_folder,
             open_publication,
             space_stats,
+            media_base,
             read_theme,
             read_identity,
             save_identity,

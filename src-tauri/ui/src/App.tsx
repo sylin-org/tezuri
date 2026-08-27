@@ -325,6 +325,12 @@ export default function App() {
   const [mode, setMode] = useState<"write" | "source" | "preview">("write");
   const [previewHtml, setPreviewHtml] = useState("");
   const [emitted, setEmitted] = useState<string[] | null>(null);
+  // The app-side origin of the open session's media (custom protocol), so
+  // article images resolve inside the webview. Disk artifacts stay relative.
+  const [mediaBase, setMediaBase] = useState("");
+  useEffect(() => {
+    invoke<string>("media_base").then(setMediaBase).catch(() => {});
+  }, []);
 
   const showPreview = useCallback(async () => {
     const d = docRef.current;
@@ -333,12 +339,14 @@ export default function App() {
     if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current);
     await flushRef.current();
     try {
-      setPreviewHtml(await invoke<string>("render_article", { slug: d.slug }));
+      const html = await invoke<string>("render_article", { slug: d.slug });
+      // View-side seam: point ../media/ at the session's media origin.
+      setPreviewHtml(mediaBase ? html.replaceAll('../media/', mediaBase) : html);
       setMode("preview");
     } catch (e: any) {
       setNote(e.message ?? String(e));
     }
-  }, []);
+  }, [mediaBase]);
 
   async function doEmit() {
     try {
@@ -490,6 +498,7 @@ export default function App() {
                 ) : (
                   <Writer
                     key={doc.slug} initialMarkdown={text} slug={doc.slug}
+                    mediaBase={mediaBase}
                     onChange={(md) => { setText(md); touch(); }}
                     words={text.split(/\s+/).filter(Boolean).length}
                   />

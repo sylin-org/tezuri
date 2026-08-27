@@ -41,8 +41,21 @@ import {
 export interface WriterProps {
   initialMarkdown: string;
   slug: string;
+  /** App-side origin of the session's media (custom protocol), or empty. */
+  mediaBase?: string;
   onChange: (md: string) => void;
   words: number;
+}
+
+// Display-only mapping: `media/x` in the document resolves against the
+// session's media origin inside the webview. The document itself never
+// changes, so saved Markdown keeps the plain relative path.
+function makeDisplaySrc(mediaBase: string | undefined) {
+  return (src?: string | null) => {
+    const s = src ?? "";
+    if (mediaBase && s.startsWith("media/")) return mediaBase + s.slice("media/".length);
+    return s;
+  };
 }
 
 // The live editor instance, reachable from editorProps handlers (which fire
@@ -88,9 +101,11 @@ async function importImageFiles(files: File[], editor: Editor | null): Promise<v
   }
 }
 
-export function Writer({ initialMarkdown, slug, onChange, words }: WriterProps) {
+export function Writer({ initialMarkdown, slug, mediaBase, onChange, words }: WriterProps) {
   const [focusMode, setFocusMode] = React.useState(false);
   const suppressUpdate = React.useRef(false);
+  const displaySrc = React.useMemo(() => makeDisplaySrc(mediaBase), [mediaBase]);
+  void suppressUpdate;
 
   return (
     <div className="writer-column">
@@ -121,15 +136,16 @@ export function Writer({ initialMarkdown, slug, onChange, words }: WriterProps) 
               const node = $pos.parent.childAfter($pos.parentOffset).node;
               if (!node || node.type.name !== "image") return <NodeViewWrapper />;
               const collect: { src: string; alt?: string }[] = [];
+              const imgSrc = (s?: string | null) => displaySrc(s);
               let isFirstOfRun = !$pos.nodeBefore || $pos.nodeBefore.type.name !== "image";
               if (isFirstOfRun) {
-                collect.push({ src: node.attrs.src as string, alt: node.attrs.alt as string });
+                collect.push({ src: imgSrc(node.attrs.src), alt: node.attrs.alt as string });
                 let scan = pos + node.nodeSize;
                 for (;;) {
                   const $scan = doc.resolve(scan);
                   const next = $scan.parent.childAfter($scan.parentOffset);
                   if (next.node?.type.name === "image" && next.offset === 0) {
-                    collect.push({ src: next.node.attrs.src as string, alt: next.node.attrs.alt as string });
+                    collect.push({ src: imgSrc(next.node.attrs.src), alt: next.node.attrs.alt as string });
                     scan += next.node.nodeSize;
                   } else break;
                   if (collect.length > 12) break;
@@ -153,7 +169,7 @@ export function Writer({ initialMarkdown, slug, onChange, words }: WriterProps) 
               return (
                 <NodeViewWrapper className="figure-wrapper">
                   <img
-                    src={node.attrs.src}
+                    src={displaySrc(node.attrs.src)}
                     alt={caption || node.attrs.alt || ""}
                     className="solo-img"
                     style={{ maxWidth: "100%", maxHeight: "60vh", width: "auto",
