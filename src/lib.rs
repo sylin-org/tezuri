@@ -18,6 +18,7 @@ pub mod desk;
 pub mod identity;
 pub mod media;
 pub mod media_id;
+pub mod packs;
 pub mod publications;
 pub mod render;
 pub mod ship;

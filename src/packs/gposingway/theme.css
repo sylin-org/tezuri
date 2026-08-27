@@ -1,0 +1,476 @@
+/* GPosingway space style — tokens + article prose, ported verbatim from
+   bundlingways-emporium.v2 Spa styles. Styles the rendered article only. */
+
+.article-prose {
+  --color-surface-2: #1d1813;
+  --color-surface-raised: #14110d;
+  --color-rule: #221d16;
+  --color-rule-strong: #34291b;
+  --color-fg-primary: #ede6d6;
+  --color-fg-muted: #968b78;
+  --color-fg-faint: #57503f;
+  --color-accent: #4a8bb8;
+  --color-accent-soft: #2a5775;
+  --font-family-display: "Instrument Serif", "Newsreader", Georgia;
+  --font-family-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo;
+}
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Article content - typography + directive styles
+ *
+ * Wraps the server-rendered RenderedHtml of an article body inside
+ * `.article-prose`. Every selector is namespaced under that class so styles
+ * never leak into the rest of the SPA chrome.
+ *
+ * The kbd treatment, admonition palette, and gallery grid match the
+ * Claude Design A.2 mockup (resources/template/A.2 (1).html).
+ * ───────────────────────────────────────────────────────────────────────── */
+
+.article-prose {
+  --article-rule: rgba(237, 230, 214, 0.12);
+  --article-rule-strong: rgba(237, 230, 214, 0.22);
+  --article-kbd-bg-top: rgb(42, 34, 26);
+  --article-kbd-bg-bottom: rgb(28, 22, 18);
+  --article-kbd-border: rgb(52, 41, 27);
+  --article-kbd-border-top: rgb(58, 46, 34);
+  --article-kbd-border-bottom: rgb(20, 17, 13);
+  --article-kbd-text: rgb(237, 230, 214);
+
+  color: var(--color-fg-primary);
+  font-family: var(--font-family-display), serif;
+  font-size: 17px;
+  line-height: 1.65;
+  max-width: 72ch;
+}
+
+.article-prose p,
+.article-prose ul,
+.article-prose ol,
+.article-prose blockquote,
+.article-prose pre,
+.article-prose figure,
+.article-prose aside,
+.article-prose details,
+.article-prose table {
+  margin-block: 1.1em;
+}
+
+.article-prose h1,
+.article-prose h2,
+.article-prose h3,
+.article-prose h4 {
+  font-family: var(--font-family-display), serif;
+  font-weight: 400;
+  font-style: italic;
+  color: var(--color-fg-primary);
+  letter-spacing: -0.005em;
+  margin-block: 2em 0.6em;
+  scroll-margin-top: 5rem;
+}
+
+.article-prose h2 {
+  font-size: clamp(26px, 2.4vw, 34px);
+  line-height: 1.15;
+}
+.article-prose h3 {
+  font-size: clamp(20px, 1.6vw, 24px);
+  line-height: 1.25;
+}
+.article-prose h4 {
+  font-size: 18px;
+}
+
+.article-prose a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-decoration-color: rgba(237, 191, 132, 0.4);
+  text-underline-offset: 3px;
+  transition: color 0.15s;
+}
+.article-prose a:hover {
+  color: var(--color-accent-soft);
+}
+
+.article-prose strong,
+.article-prose b {
+  font-weight: 600;
+  color: var(--color-fg-primary);
+}
+.article-prose em,
+.article-prose i {
+  font-style: italic;
+}
+.article-prose code:not(pre code) {
+  font-family: var(--font-family-mono), monospace;
+  font-size: 0.88em;
+  background: rgba(237, 230, 214, 0.06);
+  padding: 0.12em 0.42em;
+  border-radius: 3px;
+  color: var(--color-fg-primary);
+}
+
+.article-prose pre {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--article-rule);
+  border-radius: 4px;
+  padding: 1em 1.2em;
+  overflow-x: auto;
+  font-family: var(--font-family-mono), monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.article-prose blockquote {
+  border-left: 3px solid var(--color-accent);
+  padding: 0.2em 0 0.2em 1.2em;
+  color: var(--color-fg-muted);
+  font-style: italic;
+}
+
+.article-prose hr {
+  border: none;
+  border-top: 1px dashed var(--article-rule-strong);
+  margin-block: 3em;
+}
+
+/*
+ * Tailwind v4 preflight zeroes `list-style` on every <ul>/<ol> as part of
+ * its reset. Article bodies aren't UI chrome, they're prose, so restore
+ * the standard markers explicitly. Nested unordered lists step down
+ * disc → circle → square to give visual hierarchy.
+ */
+.article-prose ul,
+.article-prose ol {
+  padding-left: 1.4em;
+}
+.article-prose ul {
+  list-style: disc;
+}
+.article-prose ul ul {
+  list-style: circle;
+}
+.article-prose ul ul ul {
+  list-style: square;
+}
+.article-prose ol {
+  list-style: decimal;
+}
+.article-prose li {
+  margin-block: 0.25em;
+}
+.article-prose li::marker {
+  color: var(--color-fg-muted);
+}
+
+.article-prose center {
+  display: block;
+  text-align: center;
+}
+.article-prose small {
+  font-size: 0.85em;
+  color: var(--color-fg-muted);
+}
+
+/* ── :::gallery ──────────────────────────────────────────────────────────── */
+.article-prose .article-gallery {
+  display: grid;
+  gap: 8px;
+  margin: 1.6em -20px; /* slight bleed past the prose column */
+}
+/* When two galleries are authored back-to-back the inter-gallery margin would otherwise dwarf
+   the inner 8px grid gap. Pack adjacent galleries so the vertical gap matches the horizontal -
+   the two figures read as a single visual block instead of two distinct ones. */
+.article-prose .article-gallery:has(+ .article-gallery) {
+  margin-bottom: 8px;
+}
+.article-prose .article-gallery + .article-gallery {
+  margin-top: 0;
+}
+.article-prose .article-gallery--cols-1 {
+  grid-template-columns: 1fr;
+}
+.article-prose .article-gallery--cols-2 {
+  grid-template-columns: 1fr 1fr;
+}
+.article-prose .article-gallery--cols-3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+@media (max-width: 640px) {
+  .article-prose .article-gallery--cols-2,
+  .article-prose .article-gallery--cols-3 {
+    grid-template-columns: 1fr;
+  }
+}
+.article-prose .article-gallery__item {
+  margin: 0;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--color-surface-2);
+  border: 1px solid var(--article-rule);
+}
+/* Legacy: kept for any pre-migration content that still wraps in an anchor. New renderer emits
+   a bare <img>; both selectors land the same rules. */
+.article-prose .article-gallery__item a {
+  display: block;
+  text-decoration: none;
+  border: none;
+}
+.article-prose .article-gallery__item img {
+  display: block;
+  width: 100%;
+  height: auto;
+  transition: transform 0.5s;
+}
+/* Multi-image grids force a uniform 16:10 tile so all images share the same row height; the
+   crop is acceptable when the user can click through to the full-res lightbox. Single-image
+   galleries (cols-1) keep the natural aspect ratio - forcing 16:10 there mangles portraits. */
+.article-prose
+  .article-gallery:not(.article-gallery--cols-1)
+  .article-gallery__item
+  img {
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+}
+/* The SPA's ArticleGalleryLightbox opens these on click; the cursor cue communicates that the
+   image isn't decorative. */
+.article-prose .article-gallery__item img[data-pswp-src] {
+  cursor: zoom-in;
+}
+.article-prose .article-gallery__item:hover img {
+  transform: scale(1.03);
+}
+.article-prose .article-gallery__item figcaption {
+  font-family: var(--font-family-mono), monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--color-fg-muted);
+  padding: 8px 12px;
+  border-top: 1px solid var(--article-rule);
+}
+
+/* ── :::keys (shortcuts) - Claude Design A.2 kbd treatment ────────────────── */
+.article-prose .article-shortcuts {
+  border: 1px solid var(--color-rule-strong, var(--article-rule));
+  border-radius: 6px;
+  padding: 20px 24px;
+  /* Distinct surface above the page background so the panel reads as a callout, not as inline body.
+     50% alpha so the panel doesn't compete visually with the opaque kbd chips inside it. */
+  background: color-mix(
+    in srgb,
+    var(--color-surface-2, #1d1813) 50%,
+    transparent
+  );
+  box-shadow: inset 0 1px 0 rgba(237, 230, 214, 0.03);
+  margin-block: 1.8em;
+}
+.article-prose .article-shortcuts__title {
+  font-family: var(--font-family-mono), monospace;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--color-accent);
+  margin-bottom: 14px;
+}
+.article-prose .article-shortcuts__context {
+  color: var(--color-fg-muted);
+}
+.article-prose .article-shortcuts__list {
+  margin: 0;
+  display: grid;
+  gap: 0;
+}
+.article-prose .article-shortcuts__row {
+  display: grid;
+  grid-template-columns: minmax(140px, max-content) 1fr;
+  gap: 16px;
+  align-items: center;
+  padding: 7px 0;
+  border-top: 1px dashed rgba(237, 230, 214, 0.08);
+}
+.article-prose .article-shortcuts__row:first-child {
+  border-top: none;
+}
+.article-prose .article-shortcuts__combo {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin: 0;
+  font-family: var(--font-family-mono), monospace;
+}
+.article-prose .article-shortcuts__plus {
+  color: var(--color-fg-muted);
+  font-size: 12px;
+  padding: 0 2px;
+}
+.article-prose .article-shortcuts__then {
+  color: var(--color-fg-muted);
+  font-size: 14px;
+  padding: 0 8px;
+}
+.article-prose .article-shortcuts__action {
+  margin: 0;
+  font-family: var(--font-family-display), serif;
+  font-style: italic;
+  font-size: 15px;
+  color: var(--color-fg-primary);
+}
+.article-prose .article-shortcuts kbd,
+.article-prose kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 26px;
+  padding: 0 8px;
+  font-family: var(--font-family-mono), monospace;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--article-kbd-text);
+  background: linear-gradient(
+    var(--article-kbd-bg-top),
+    var(--article-kbd-bg-bottom)
+  );
+  border: 1px solid var(--article-kbd-border);
+  border-top-color: var(--article-kbd-border-top);
+  border-bottom-color: var(--article-kbd-border-bottom);
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* ── :::admonition variants ───────────────────────────────────────────────── */
+.article-prose .article-admonition {
+  border-left: 3px solid var(--admonition-accent, var(--color-accent));
+  padding: 14px 18px;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 0 4px 4px 0;
+  margin-block: 1.6em;
+}
+.article-prose .article-admonition__title {
+  font-family: var(--font-family-mono), monospace;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--admonition-accent, var(--color-accent));
+  margin-bottom: 6px;
+}
+.article-prose .article-admonition__body p:last-child {
+  margin-bottom: 0;
+}
+.article-prose .article-admonition--note {
+  --admonition-accent: #6ec1d6;
+}
+.article-prose .article-admonition--tip {
+  --admonition-accent: #c9a86a;
+}
+.article-prose .article-admonition--warning {
+  --admonition-accent: #d49d56;
+}
+.article-prose .article-admonition--caution {
+  --admonition-accent: #d97a5a;
+}
+.article-prose .article-admonition--important {
+  --admonition-accent: #e57373;
+}
+
+/* ── :::video ─────────────────────────────────────────────────────────────── */
+.article-prose .article-video {
+  margin: 1.6em -20px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--color-surface-2);
+  border: 1px solid var(--article-rule);
+}
+.article-prose .article-video video {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* ── :::compare ───────────────────────────────────────────────────────────── */
+.article-prose .article-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin: 1.6em -20px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.article-prose .article-compare__before,
+.article-prose .article-compare__after {
+  position: relative;
+  background: var(--color-surface-2);
+  border: 1px solid var(--article-rule);
+  overflow: hidden;
+}
+.article-prose .article-compare img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+}
+.article-prose .article-compare__label {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  font-family: var(--font-family-mono), monospace;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--color-fg-primary);
+  padding: 4px 10px;
+  border-radius: 3px;
+}
+
+/* ── :::details ───────────────────────────────────────────────────────────── */
+.article-prose .article-details {
+  border: 1px solid var(--article-rule);
+  border-radius: 4px;
+  padding: 12px 18px;
+  background: rgba(0, 0, 0, 0.18);
+}
+.article-prose .article-details summary {
+  cursor: pointer;
+  font-family: var(--font-family-mono), monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--color-accent);
+}
+.article-prose .article-details[open] summary {
+  margin-bottom: 12px;
+}
+
+/* ── Inline images outside directives ─────────────────────────────────────── */
+.article-prose > p img,
+.article-prose > div img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 3px;
+  border: 1px solid var(--article-rule);
+}
+
+/* ── Tables ───────────────────────────────────────────────────────────────── */
+.article-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.article-prose th,
+.article-prose td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--article-rule);
+}
+.article-prose th {
+  font-family: var(--font-family-mono), monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--color-fg-muted);
+  font-weight: 400;
+}
+
+

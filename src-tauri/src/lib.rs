@@ -724,6 +724,23 @@ fn save_assistant_catalog(
     catalog.save(&root(&session)?).map_err(err)
 }
 
+// -- packs -------------------------------------------------------------------
+
+#[tauri::command]
+fn packs_list() -> Vec<tezuri::packs::PackView> {
+    tezuri::packs::view()
+}
+
+/// Pick a presentation for the open space: template + css become the
+/// space's own files via the journaled write paths. Deliberate overwrite.
+#[tauri::command]
+fn pack_apply(id: String, session: State<Session>) -> Result<(), CommandError> {
+    let current = root(&session)?;
+    tezuri::packs::apply(&current, &id).map_err(err)?;
+    enqueue_settle(current);
+    Ok(())
+}
+
 // -- ship --------------------------------------------------------------------
 
 #[derive(Serialize)]
@@ -823,6 +840,8 @@ pub fn run() {
             write_compose_draft,
             render_specimen,
             slot_catalog,
+            packs_list,
+            pack_apply,
             emit_render,
             desk,
             read_article,
