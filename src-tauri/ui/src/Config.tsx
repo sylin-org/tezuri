@@ -5,9 +5,9 @@
 // Tezuri itself — the registered spaces. The landing stays the launcher;
 // this page is the manager.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "./bridge";
-import type { Assistant, Identity, ThemePreset } from "./bridge";
+import type { Assistant, CatalogEntry, Identity, ThemePreset } from "./bridge";
 
 const EMPTY_ID: Identity = { name: "", byline: "", persona: "" };
 
@@ -344,6 +344,26 @@ function LayoutSection() {
   const [specimen, setSpecimen] = useState("");
   const [notes, setNotes] = useState<string[]>([]);
   const [error, setError] = useState("");
+  const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+
+  /** Insert a slot expression at the caret, replacing any selection. */
+  const insertAtCursor = (expr: string) => {
+    const ta = editorRef.current;
+    if (!ta) { setDraft((d) => (d ?? "") + expr); return; }
+    const start = ta.selectionStart ?? ta.value.length;
+    const end = ta.selectionEnd ?? start;
+    const next = ta.value.slice(0, start) + expr + ta.value.slice(end);
+    setDraft(next);
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.setSelectionRange(start + expr.length, start + expr.length);
+    });
+  };
+
+  useEffect(() => {
+    invoke<CatalogEntry[]>("slot_catalog").then(setCatalog).catch(() => {});
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -417,7 +437,20 @@ function LayoutSection() {
         )}
         {dirty && fileText === null && <span className="mono-fact">unsaved</span>}
       </div>
+      {catalog.length > 0 && (
+        <div className="slot-palette" role="toolbar" aria-label="Insert a slot">
+          <span className="slot-menu-label">Insert</span>
+          {catalog.map((c) => (
+            <button key={c.name} type="button"
+                    title={c.doc}
+                    onClick={() => insertAtCursor(`{{${c.name}}}`)}>
+              {`{{${c.name}}}`}
+            </button>
+          ))}
+        </div>
+      )}
       <textarea
+        ref={editorRef}
         className="layout-editor"
         spellCheck={false}
         value={draft ?? ""}

@@ -853,3 +853,9 @@ body.tezuri-dirty .state-word { color: var(--amber); }
   font: 400 12.5px/1.6 var(--mono); padding: 12px; resize: vertical;
   white-space: pre; tab-size: 2; }
 .config-error { color: #e5484d; font-size: 12.5px; }
+.slot-palette { display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
+  margin-top: 10px; }
+.slot-palette button { background: var(--panel); border: 1px solid var(--line);
+  border-radius: 6px; color: var(--ink-2); cursor: pointer;
+  font: 400 11px var(--mono); padding: 2px 7px; }
+.slot-palette button:hover { border-color: var(--al); color: var(--al); }
