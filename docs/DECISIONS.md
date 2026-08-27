@@ -10,6 +10,80 @@ replacements.
 
 ---
 
+## 2026-08-26 — The template language: five rules, live slots, conducted
+
+The presentation layer gets a frozen v1 contract. Content is sacred (`.md` + `meta.yaml`);
+presentation (`theme.css`, `templates/*.html`) is the space's own files, optional, with a
+deliberately dumb default: the entire built-in template is `{{ARTICLE}}` over a GitHub-calm
+stylesheet. Gorgeousness — the gposingway look — is a *starter pack* the author picks and then
+owns as plain files. One pipeline serves everything (Gather → evaluate context → substitute →
+behaviors); the article page, the index, a feed, an embeddable card, and Write mode itself are
+all template + context through the same engine.
+
+**The five rules.** (1) Slots are English, not code. (2) A slot never contains logic, and an
+empty slot renders zero bytes — "no next article?" is a CSS question (`nav:empty`), never a
+template one. (3) One optional hint after `|`, arguments as English data (`{{date | long}}`,
+`{{article-list | count:8}}`), never control flow. (4) The template owns layout and `<head>`;
+Tezuri owns behaviors (scroll-spy, lightbox) and theme application — `{{css}}` is gone, templates
+never reference the theme. (5) A mistake is a whisper: unknown slot renders empty plus one editor
+note; missing `{{ARTICLE}}` falls back to plain flow with a chirp; the page never breaks.
+
+**Grammar.** UPPERCASE = the one required slot; lowercase = optional. `{{ARTICLE}}` is the
+page's reason to exist and the live editing surface in Write mode.
+
+**Slot vocabulary v1.**
+- Content: `title`, `standfirst`, `date | long/iso`, `reading_time`, `tags | pills/text`,
+  `cover_img`, `excerpt | N`
+- Navigation: `toc`, `prev_link`/`prev_title`, `next_link`/`next_title`, `home_link`,
+  `body_class` (context classes like `is-article is-published`, Ghost's cheap trick)
+- Site: `site_name`, `byline`, `site_cta`
+- Collections: `article-list | count:N / newest / around / similar`; for index/feed/card
+  outputs: `items`, `site_url`, `updated`
+
+**Slot semantics.** Published only, always — lists never leak drafts. Current article excluded.
+`around` = a timeline window centered on this article; `similar` = ranked by shared-tag count,
+date tiebreak. First has no prev, last has no next — until the published set changes, at which
+point affected pages re-derive through the existing lazy settle (a published-index fingerprint
+joins the staleness check). Feed = `templates/feed.xml`, card = `templates/card.html`: RSS is a
+template, not a feature. Unknown slots render empty and are surfaced once in the editor.
+
+**Styling contracts** (theme surface, documented): `.article-prose`, `.tagpill`,
+`ul.article-list > li.article-list-item > a`, `body_class` values.
+
+**The projection rule — Write mode is the render.** Every slot renders its live projection in
+the editor: first-class fields get inline editors (`{{tags}}` → pill editor fed by the space's
+tag vocabulary, `{{date}}` → date control, `{{cover_img}}` → media picker); flow-derived fields
+(title, standfirst) stay click-to-edit in the `{{ARTICLE}}` flow, and additional template
+instances of them are live-synced mirrors — one content state, many slots, no dual carets.
+Behaviors are Tezuri's natively; scripts are stripped in-app and re-provided bound to the
+template's classes. No-blocks boundary holds in v1: loops and conditionals are deliberately
+absent; pipeline-composed lists and boundary-aware nav cover the 90%, and a template item
+fragment is the named-but-deferred escape hatch. Preview remains the byte-exact proof lens —
+the emitted bytes themselves.
+
+**Conduct, don't configure.** Every slot in Write mode is menuable: click its rendered content
+and a small anchored popover offers the hints the registry declares for it — Pills/Text for
+tags, Long/ISO for dates, Newest/Around/Similar with counts for lists, some with live
+mini-previews. A choice re-renders that slot in place and rewrites the template *draft*
+(specimen follows); saving to `templates/article.html` follows the usual propose→apply and is
+journaled. Multi-instance slots are menued per instance. View-only toggles (such as
+mirror-vs-editable for a repeated title) are session-only and never touch the file. No custom
+expressions, no modal. The menu is the docs, wearing the product.
+
+**Editor delight commitments.** Ghost hints for the bare default template; `{{` autocomplete
+with one-line docs; an insert palette of unused slots; the template editor's live specimen
+renders a real article through the real pipeline; starter packs (Vanilla, GPosingway) copied
+into the space on pick. An earlier hardcoded in-editor TOC is superseded by this contract —
+navigation exists if and only if the template says `{{toc}}`.
+
+Prior art behind the stance: Liquid's learnable restraint vs Go templates' debugging tax
+(Jekyll/Hugo comparisons); Eleventy's everything-is-a-template feeds; Ghost's prev/next and
+`body_class` patterns (adopted pre-composed, without block syntax); Typora's live-preview
+devotion and theme-by-pure-CSS culture ("most have a clunky two-pane window… which is just
+terrible"); Publii's desktop-CMS shape with internally-held content — the gap Tezuri's
+files-are-truth fills. This supersedes the render-stage entry's template details where they
+conflict (embedded default template, `{{cover_section}}`/`{{cta}}`/`{{css}}` placeholders).
+
 ## 2026-08-26 — Work in the background; ask in the flow, never over it
 
 Tezuri takes care of itself. Derived work — settling, rendering, rendition derivation — happens
