@@ -36,7 +36,8 @@ The current working-tree deletions are intentional. Preserve them and all other 
 - **Publishing is explicit.** Saving must never commit, push, switch branches, or rewrite history.
 - **The target repository's build is authoritative.** Do not build a competing renderer.
 - **Local, single-user software.** No accounts, roles, tenancy, telemetry, update pings, crash
-  reporting, or silent network work. Only an explicit git fetch or push may use the network.
+  reporting, or silent network work. The network is used only when the user explicitly asks: git
+  fetch/push, and bounded asset downloads from the picker.
 - **Only the application session the user opened may mutate data.** Keep the native-command,
   capability, path, symlink, command, log-redaction, and credential boundaries intact.
 - **User input never becomes executable shell text.** Programs and argument arrays stay separate,

@@ -4,29 +4,54 @@ This file records consequential implementation decisions that are currently in f
 contract belongs in [`PRODUCT-BRIEF.md`](PRODUCT-BRIEF.md) and is not repeated here.
 
 The log starts from the implementation reset. Earlier implementation choices are intentionally not
-carried forward; repository history remains history, not architecture guidance. Entries whose model
-was wiped with the first tree have been removed rather than left in force alongside their
-replacements.
+carried forward; repository history remains history, not architecture guidance.
 
 ---
 
-## 2026-08-27 — Preview retires; Write wears the artifact's dress
+## 2026-08-27 — The Write plane is the artifact page; the pipeline re-founded
 
-The two-lens arrangement is superseded by the owner's standing decision:
-Write mode IS the representation — correct fonts, the space's layout dress,
-editing in place. The composer now returns the artifact's head CSS (fonts
-imports, the template's own style blocks, the calm baseline) alongside the
-segments; the desk scopes it to the Write plane — the page's own
-`html`/`body`/`:root` dress folds onto the plane element itself, every
-other rule is prefixed as its descendant, and nothing escapes the scope, so
-the desk chrome stays neutral. The dress is worn in the artifact's own
-cascade order — calm baseline early, then theme.css, the template's own
-styles last — so the same rules win on the plane as on the emitted page.
-The Preview tab
-and its iframe are gone. Byte-exactness does not die with it: the emitted
-files under `render/` remain the untouched proof, surfaced through the ship
-rail's render step and the filesystem — the proof moved from a tab to the
-artifact itself.
+The Write plane is no longer a composed projection. `write_page` assembles the article through the
+real pipeline — the space's theme, the space's template, the same cascade the emitted artifact
+carries — and the host serves that page in an iframe. A small editor runtime (`tezuri-editor.js`,
+a fixed-name second vite entry) mounts TipTap over the article prose inside the frame and
+round-trips markdown with the desk over postMessage: content changes autosave, pasted or dropped
+images flow through `add_media` and insert. Fidelity is by construction, not approximation.
+
+Superseded and deleted: the scoped-dress machinery (`scopeCss`, head-dress cascade ordering, the
+`:not(.write-composition *)` desk exclusions), the portal/segment WriteCompose protocol, and the
+React overlay plane (`Writer.tsx`, `Compose.tsx`). The desk can no longer style the plane or vice
+versa — different documents, one bridge. This supersedes the "Preview retires" entry below where
+they conflict: Write does not wear a scoped dress; Write IS the artifact page.
+
+**Division of labor in the surface.** Write edits content only; presentation choices ride the
+space's settings. Article Details owns the facts: the article's uuidv7 id, state (draft |
+published — the three-state model is retired; legacy `review` sidecars surface as published),
+cover, tags, date, and the author override that falls back to the space byline.
+
+**Header style** (publication.yaml `header_style`) decides how article headers present. Normal
+leaves the flow untouched regardless of template hints. Banner lets a `title-banner`-carrying
+template feed its hero from the markdown's first `# ` heading and first paragraph after it — the
+standfirst is positional, no marker syntax — and consumes them from the flow. Write always edits
+the document as written.
+
+## 2026-08-27 — The asset library: official, downloaded, remembered
+
+Packs and theme presets are replaced by a single asset library. Official themes and templates ship
+embedded with manifests (name, creator). A user-commanded download fetches a single `.css`/`.html`
+file — bounded in time and size — into `~/.tezuri/downloads/`; the picker merges both sources.
+Applying an asset copies its bytes into the space's own `theme.css` / `templates/*.html` through
+the journaled write paths, and joins a ten-slot per-space history ring (snapshots in app state)
+that the picker's back/forward arrows walk. The network law's wording is amended accordingly: the
+network is used only when the user explicitly asks — git operations and picker downloads — and
+never for telemetry or background work.
+
+## 2026-08-27 — Slot parsing masks author regions
+
+`<style>` blocks and HTML comments never yield slots: a `{{slot}}` there is prose, not an
+occurrence. A CSS comment documenting the frame once consumed the "first banner wins" rule and
+silently retired every hero (found in a shipped pack). The mask is equal-length, so text slices
+stay byte-honest.
+
 
 ## 2026-08-27 — Cards: per-article embeddable snippets
 
