@@ -273,13 +273,33 @@ pub fn render_article(publication_root: &Path, slug: &str) -> Result<String> {
         .collect::<Vec<_>>()
         .join(" ");
 
-    let cover_section = match &a.meta.cover {
+    let cover_img = match &a.meta.cover {
         Some(c) if !c.is_empty() => format!(
-            "<div class=\"hero\" style=\"background-image:url('../{c}')\"></div>",
+            "<img class=\"hero-img\" src=\"../{c}\" alt=\"\" loading=\"eager\">",
             c = esc(c)
         ),
         _ => String::new(),
     };
+    // The hero kicker: the first tag in their vocabulary, else the byline.
+    let kicker_line = match a.meta.tags.first() {
+        Some(t) => format!("<p class=\"kicker\">{}</p>", esc(t)),
+        None if !byline.is_empty() => format!("<p class=\"kicker\">{}</p>", esc(&byline)),
+        None => String::new(),
+    };
+    // A call-to-action anchor from the space's own extras (publication.yaml
+    // `discord: <invite-url>`), for templates that offer one.
+    let cta = identity
+        .extra
+        .get("discord")
+        .and_then(|v| v.as_str())
+        .map(|url| {
+            format!(
+                "<section><a class=\"cta\" href=\"{url}\" target=\"_blank\" \
+                 rel=\"noopener noreferrer\">Discuss on Discord <span aria-hidden=\"true\">→</span></a></section>",
+                url = esc(url)
+            )
+        })
+        .unwrap_or_default();
 
     let tpl = load_template(publication_root, "article.html", ARTICLE_TEMPLATE)?;
     Ok(subst(
@@ -302,7 +322,9 @@ pub fn render_article(publication_root: &Path, slug: &str) -> Result<String> {
             ("body", body),
             ("toc", toc_html(&headings)),
             ("css", css),
-            ("cover_section", cover_section),
+            ("cover_img", cover_img),
+            ("kicker_line", kicker_line),
+            ("cta", cta),
         ],
     ))
 }
