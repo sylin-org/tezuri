@@ -86,6 +86,9 @@ pub enum Event {
     IdentityWritten,
     /// The space's theme.css was written or cleared.
     ThemeWritten,
+    /// The space's own presentation template (templates/article.html) was
+    /// written or removed.
+    TemplateWritten { name: String },
     /// Pages were compiled into render/.
     #[serde(rename_all = "camelCase")]
     Rendered { pages: usize },
@@ -112,6 +115,7 @@ impl Event {
             Event::ArticleWritten { .. } => "article-written",
             Event::IdentityWritten => "identity-written",
             Event::ThemeWritten => "theme-written",
+            Event::TemplateWritten { .. } => "template-written",
             Event::Rendered { .. } => "rendered",
             Event::MediaStored { .. } => "media-stored",
             Event::ConsultAdvised { .. } => "consult-advised",

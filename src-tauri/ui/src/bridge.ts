@@ -83,7 +83,17 @@ export interface SlotInstance {
 /** One ordered piece of the Write-mode page, from the desktop's composer. */
 export type Seg =
   | { kind: "text"; html: string }
-  | { kind: "article_flow"; mirror: boolean }
+  | {
+      kind: "article_flow";
+      mirror: boolean;
+      /** Declared presentation around the flow (title-banner modes). */
+      frame: string;
+      /** The bare article prose — where the editor mounts. */
+      prose: string;
+      /** The exact slot expression, for conduct splicing. */
+      raw: string;
+      hints: string[];
+    }
   | ({ kind: "slot" } & SlotInstance);
 
 export interface WriteCompose {
@@ -91,6 +101,78 @@ export interface WriteCompose {
   segments: Seg[];
   notes: string[];
   space_template: boolean;
+}
+
+// -- slot catalog ------------------------------------------------------------
+
+export interface CatalogControl {
+  kind: "toggle" | "choice" | "count";
+  values: string[];
+  default: string;
+}
+
+export interface CatalogOption {
+  key: string;
+  label: string;
+  control: CatalogControl;
+}
+
+export interface CatalogEntry {
+  name: string;
+  doc: string;
+  hosts: string[];
+  options: CatalogOption[];
+}
+
+/** Re-splice one slot's raw expression in template bytes. The parse holds
+ *  each occurrence; identical raws are disambiguated by occurrence index. */
+export function spliceSlot(
+  template: string,
+  oldRaw: string,
+  occurrence: number,
+  nextHints: string[]
+): string {
+  const name = oldRaw
+    .replace(/^\{\{/, "")
+    .replace(/\}\}$/, "")
+    .split("|")[0]
+    .trim();
+
+  // Occurrence counting must consider exact-byte matches of the raw text.
+  let at = -1;
+  for (let k = 0; k <= occurrence; k++) {
+    at = template.indexOf(oldRaw, at + 1);
+    if (at < 0) return template; // draft drifted; do not guess
+  }
+
+  const hints = nextHints.slice();
+  let raw = `{{${name}`;
+  if (hints.length > 0) {
+    // ARTICLE keeps mode tokens first — positional vocabulary reads best.
+    if (name === "ARTICLE") hints.sort((a, b) => Number(isModeToken(b)) - Number(isModeToken(a)));
+    raw += ` | ${hints.join(", ")}`;
+  }
+  raw += "}}";
+  return template.slice(0, at) + raw + template.slice(at + oldRaw.length);
+}
+
+function isModeToken(hint: string): boolean {
+  return !hint.includes(":");
+}
+
+/** Compute the hint list after conducting one option to a new value. */
+export function nextHintsFor(
+  current: string[],
+  optKey: string,
+  value: string | null
+): string[] {
+  const kept = current.filter((h) => {
+    if (optKey) return !h.startsWith(`${optKey}:`);
+    return true;
+  });
+  if (value === null || value === "") return kept;
+  const token = optKey ? `${optKey}:${value}` : value;
+  return kept.includes(token) ? kept : [...kept, token];
 }
 
 export interface ProofResult {

@@ -8,8 +8,8 @@ import { Landing } from "./Landing";
 import { SpaceRail, type Workspace } from "./Space";
 import { About } from "./About";
 import { Config } from "./Config";
-import { invoke, onSettle } from "./bridge";
-import type { Identity, PublicationInfo } from "./bridge";
+import { invoke, onSettle, spliceSlot } from "./bridge";
+import type { Identity, PublicationInfo, CatalogEntry } from "./bridge";
 
 type Surface = "landing" | "space" | "config" | "about";
 
@@ -51,6 +51,12 @@ export default function App() {
   const [text, setText] = useState("");
   // The space's template, projected live for Write mode.
   const [compose, setCompose] = useState<any | null>(null);
+  // Conduct: the working copy of templates/article.html (seeded from the
+  // file when one exists, else from the embedded default), the bytes on
+  // disk it sprang from, and the catalog menus read from.
+  const [templateDraft, setTemplateDraft] = useState<string | null>(null);
+  const [templateFile, setTemplateFile] = useState<string | null>(null);
+  const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "dirty">("saved");
 
   // ---- shared chrome state ----------------------------------------------------
@@ -67,10 +73,25 @@ export default function App() {
   docRef.current = doc;
   const textRef = useRef(text);
   textRef.current = text;
+  const slugRef = useRef<string | null>(null);
+  textRef.current = text;
 
   const refreshDesk = useCallback(async () => {
     const d = await invoke<{ entries: any[] }>("desk");
     setEntries(d.entries);
+  }, []);
+
+  /** Compose projections from the working template copy when conducting,
+   *  else straight from the space's file. */
+  const refreshCompose = useCallback(async (slug: string, draft: string | null) => {
+    try {
+      const c = draft !== null
+        ? await invoke<any>("write_compose_draft", { slug, template: draft })
+        : await invoke<any>("write_compose", { slug });
+      setCompose(c);
+    } catch {
+      setCompose(null);
+    }
   }, []);
 
   const flush = useCallback(async () => {
@@ -91,9 +112,7 @@ export default function App() {
       setSaveStatus("saved");
       await refreshDesk();
       // Projections follow the file: the composer re-reads what just saved.
-      invoke("write_compose", { slug: d.slug })
-        .then(setCompose)
-        .catch(() => {});
+      void refreshCompose(d.slug, templateDraft);
     } catch (e: any) {
       setSaveStatus("dirty");
       setNote(e.message ?? String(e));
@@ -102,6 +121,16 @@ export default function App() {
 
   const flushRef = useRef(flush);
   flushRef.current = flush;
+
+  // Conduct: splice the slot's bytes in the working copy, then re-project.
+  const conduct = useCallback((raw: string, occurrence: number, hints: string[]) => {
+    setTemplateDraft((prev) => {
+      if (prev === null) return prev;
+      const next = spliceSlot(prev, raw, occurrence, hints);
+      void refreshCompose(slugRef.current ?? "", next);
+      return next;
+    });
+  }, [refreshCompose]);
 
   const touch = useCallback(() => {
     if (!docRef.current) return;
@@ -228,6 +257,7 @@ export default function App() {
   // ---- articles -------------------------------------------------------------
   async function loadArticle(slug: string) {
     try {
+      slugRef.current = slug;
       const a = await invoke<any>("read_article", { slug });
       setDoc({
         slug: a.article.meta.slug,
@@ -238,7 +268,26 @@ export default function App() {
         tags: a.article.meta.tags ?? [],
       });
       setText(a.raw);
-      invoke<any>("write_compose", { slug }).then(setCompose).catch(() => setCompose(null));
+      // Conduct seed: the space's file when it owns one, else the embedded
+      // default. templateFile records disk truth; the draft starts equal.
+      let source: string | null;
+      try {
+        const t = await invoke<string | null>("read_template");
+        if (t === null) {
+          source = await invoke<string>("default_template");
+          setTemplateFile(null);
+        } else {
+          source = t;
+          setTemplateFile(t);
+        }
+      } catch {
+        source = null;
+      }
+      setTemplateDraft(source);
+      if (catalog.length === 0) {
+        invoke<CatalogEntry[]>("slot_catalog").then(setCatalog).catch(() => {});
+      }
+      await refreshCompose(slug, source);
       setSaveStatus("saved");
       dirtyRef.current = false;
       setActiveSlug(slug);
@@ -475,6 +524,25 @@ export default function App() {
                   </div>
                   <button onClick={() => setAssistOpen(!assistOpen)}
                           title="Advisory help: polish, voice, facts">Assistant</button>
+                  {templateDraft !== templateFile && templateDraft !== null && (
+                    <span className="conduct-bar" role="group" aria-label="Layout changes">
+                      <span className="mono-fact">layout changed</span>
+                      <button
+                        className="primary"
+                        onClick={async () => {
+                          try {
+                            await invoke("write_template", { text: templateDraft });
+                            setTemplateFile(templateDraft);
+                            await refreshCompose(doc.slug, templateDraft);
+                            setNote("layout saved to templates/article.html");
+                          } catch (e: any) { setNote(e.message ?? String(e)); }
+                        }}
+                      >Save layout</button>
+                      <button
+                        onClick={() => { setTemplateDraft(templateFile ?? ""); void refreshCompose(doc.slug, templateFile); }}
+                      >Discard</button>
+                    </span>
+                  )}
                   <button
                     className={saveStatus === "dirty" ? "primary" : ""}
                     onClick={() => { if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current); void flush(); }}
@@ -529,8 +597,10 @@ export default function App() {
                           entries.flatMap((e) => e.tags ?? [])
                         ),
                       ]}
-                      onMarkdown={(md) => { setText(md); touch(); }}
                       words={text.split(/\s+/).filter(Boolean).length}
+                      catalog={catalog}
+                      onConduct={conduct}
+                      onMarkdown={(md) => { setText(md); touch(); }}
                       onMetaChange={(patch) => {
                         setDoc((d0) => d0 ? { ...d0, ...patch } : d0);
                         touch();

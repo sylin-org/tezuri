@@ -183,6 +183,12 @@ fn rewrite_paths(html_in: &str) -> String {
         .replace(".md\"", ".html\"")
 }
 
+/// The embedded default template's bytes, so a conduct session can seed its
+/// draft before the space owns a file.
+pub fn embedded_article_template() -> &'static str {
+    ARTICLE_TEMPLATE
+}
+
 // ---------------------------------------------------------------------------
 // Gather → compose → decorate
 // ---------------------------------------------------------------------------
@@ -337,9 +343,15 @@ pub enum Seg {
     Text {
         html: String,
     },
-    /// The article flow — where the TipTap surface mounts.
+    /// The article flow. `frame` carries declared presentation around it
+    /// (title-banner modes); `prose` is what the editor mounts at. Raw and
+    /// hints ride along so conduct can re-splice the expression in place.
     ArticleFlow {
         mirror: bool,
+        frame: String,
+        prose: String,
+        raw: String,
+        hints: Vec<String>,
     },
     Slot(SlotInstance),
 }
@@ -377,10 +389,20 @@ pub struct WriteCompose {
 /// wrote between slots survives byte-honest, whatever brace or shell trick
 /// the template holds cannot misplace a segment.
 pub fn compose_write_view(publication_root: &Path, slug: &str) -> Result<WriteCompose> {
-    let ctx = gather_article_ctx(publication_root, slug)?;
     let tpl_raw = load_template(publication_root, "article.html", ARTICLE_TEMPLATE)?;
+    compose_write_view_with(publication_root, slug, &tpl_raw)
+}
+
+/// Compose the Write-mode view against a *draft* template rather than the
+/// space's file: conduct happens here first, bytes only move on acceptance.
+pub fn compose_write_view_with(
+    publication_root: &Path,
+    slug: &str,
+    template: &str,
+) -> Result<WriteCompose> {
+    let ctx = gather_article_ctx(publication_root, slug)?;
     let space_template = confine(publication_root, Path::new("templates/article.html"))?.exists();
-    let parts = slots::parse_template(&tpl_raw);
+    let parts = slots::parse_template(template);
 
     let (page, notes, toks) = slots::compose_marked(&parts, &ctx);
     let body = carve_to_body(&page);
@@ -402,10 +424,12 @@ pub fn compose_write_view(publication_root: &Path, slug: &str) -> Result<WriteCo
             });
         }
         match parse_token(inner) {
-            Token::Article => {
-                segments.push(Seg::ArticleFlow {
-                    mirror: saw_article,
-                });
+            Token::Article(idx) => {
+                let (html, raw, hints) = match toks.get(idx) {
+                    Some(t) => (t.html.clone(), t.raw.clone(), t.hints.clone()),
+                    None => (String::new(), String::new(), vec![]),
+                };
+                segments.push(split_article_flow(html, saw_article, raw, hints));
                 saw_article = true;
             }
             Token::Slot(idx) => {
@@ -432,7 +456,6 @@ pub fn compose_write_view(publication_root: &Path, slug: &str) -> Result<WriteCo
             html: rest.to_string(),
         });
     }
-
     Ok(WriteCompose {
         slug: slug.to_string(),
         segments,
@@ -441,25 +464,51 @@ pub fn compose_write_view(publication_root: &Path, slug: &str) -> Result<WriteCo
     })
 }
 
+/// Split one ARTICLE token's evaluated HTML into its declared frame
+/// (title-banner modes) and the bare prose wrapper the editor mounts at.
+/// Plain mode has no frame; bytes never disappear in either shape.
+fn split_article_flow(html: String, mirror: bool, raw: String, hints: Vec<String>) -> Seg {
+    const WRAP: &str = "<div class=\"article-prose\">";
+    match html.find(WRAP) {
+        Some(p) => {
+            let prose_start = p + WRAP.len();
+            let prose_end = html.rfind("</div>").filter(|e| *e >= prose_start);
+            let (frame, prose) = match prose_end {
+                Some(e) => (html[..p].to_string(), html[prose_start..e].to_string()),
+                None => (String::new(), html.clone()),
+            };
+            Seg::ArticleFlow {
+                mirror,
+                frame,
+                prose,
+                raw,
+                hints,
+            }
+        }
+        None => Seg::ArticleFlow {
+            mirror,
+            frame: String::new(),
+            prose: html,
+            raw,
+            hints,
+        },
+    }
+}
+
 #[derive(Debug, Clone)]
 enum Token {
-    Article,
+    Article(usize),
     Slot(usize),
     Junk,
 }
 
 fn parse_token(inner: &str) -> Token {
+    let parse_num = |s: &str| s.parse::<usize>().ok();
     if let Some(n) = inner.strip_prefix('A') {
-        if n.parse::<usize>().is_ok() {
-            return Token::Article;
-        }
-        return Token::Junk;
+        return parse_num(n).map(Token::Article).unwrap_or(Token::Junk);
     }
     if let Some(n) = inner.strip_prefix('S') {
-        if let Ok(idx) = n.parse::<usize>() {
-            return Token::Slot(idx);
-        }
-        return Token::Junk;
+        return parse_num(n).map(Token::Slot).unwrap_or(Token::Junk);
     }
     Token::Junk
 }
@@ -548,6 +597,7 @@ pub fn gather_article_ctx(publication_root: &Path, slug: &str) -> Result<Ctx> {
         },
         cta,
         site_url,
+        footer_md: extras_str(&identity.extra, &["footer"]),
         publishable,
         require_article: true,
     })
@@ -627,10 +677,20 @@ pub fn render_article(publication_root: &Path, slug: &str) -> Result<String> {
 
 /// Same compilation, surfacing editor notes alongside — the Write-mode seam.
 pub fn render_article_warned(publication_root: &Path, slug: &str) -> Result<(String, Vec<String>)> {
-    let ctx = gather_article_ctx(publication_root, slug)?;
     let tpl = load_template(publication_root, "article.html", ARTICLE_TEMPLATE)?;
+    render_article_with(publication_root, slug, &tpl)
+}
+
+/// The full page compiled against a draft template — the template editor's
+/// live specimen, byte-shaped like the eventual artifact.
+pub fn render_article_with(
+    publication_root: &Path,
+    slug: &str,
+    template: &str,
+) -> Result<(String, Vec<String>)> {
+    let ctx = gather_article_ctx(publication_root, slug)?;
     let theme_css = crate::theme::read(publication_root)?;
-    Ok(render_template(&tpl, &ctx, &theme_css))
+    Ok(render_template(template, &ctx, &theme_css))
 }
 
 /// Compile one article and write its page. Returns the written path
@@ -672,6 +732,7 @@ pub fn write_index(publication_root: &Path) -> Result<String> {
         },
         cta: site_cta_of(&identity),
         site_url: extras_str(&identity.extra, &["site_url", "url"]),
+        footer_md: extras_str(&identity.extra, &["footer"]),
         publishable,
         require_article: false,
     };
@@ -884,6 +945,44 @@ mod tests {
     }
 
     #[test]
+    fn draft_compose_and_specimen_render_through_supplied_bytes() {
+        let dir = tempdir().unwrap();
+        setup(dir.path(), "drafty", DOC);
+        std::fs::create_dir_all(dir.path().join("media")).unwrap();
+        std::fs::write(dir.path().join("media").join("drafty.png"), b"x").unwrap();
+        let mut a = Article::load(dir.path(), "drafty").unwrap();
+        a.meta.cover = Some("media/drafty.png".into());
+        a.save(dir.path()).unwrap();
+
+        let draft = "<html><body>{{ARTICLE | title-banner, cover:fill}}</body></html>";
+        let c = compose_write_view_with(dir.path(), "drafty", draft).unwrap();
+        let flow = c
+            .segments
+            .iter()
+            .find_map(|s| match s {
+                Seg::ArticleFlow {
+                    mirror: false,
+                    frame,
+                    prose,
+                    ..
+                } => Some((frame.clone(), prose.clone())),
+                _ => None,
+            })
+            .expect("article segment");
+        assert!(flow.0.contains("title-banner"), "{flow:?}");
+        assert!(flow.0.contains("cover-fill"), "{flow:?}");
+        // The prose the editor mounts at carries no H1 — the banner owns it.
+        assert!(!flow.1.contains("<h1>"), "{flow:?}");
+        assert!(!c.space_template);
+
+        // The specimen renders the same mode through the whole pipeline.
+        let (page, notes) = render_article_with(dir.path(), "drafty", draft).unwrap();
+        assert!(notes.is_empty());
+        assert!(page.contains("<section class=\"title-banner\">"), "{page}");
+        assert!(!page.contains("<style id=\"tezuri-baseline\"><h1>"));
+    }
+
+    #[test]
     fn compose_write_view_keeps_order_and_marks_the_flow() {
         let dir = tempdir().unwrap();
         setup(dir.path(), "wv", DOC);
@@ -955,7 +1054,7 @@ mod tests {
         for s in &c.segments {
             match s {
                 Seg::Text { html } => order.push(format!("text:{html:?}")),
-                Seg::ArticleFlow { mirror } => order.push(format!("flow:{mirror}")),
+                Seg::ArticleFlow { mirror, .. } => order.push(format!("flow:{mirror}")),
                 Seg::Slot(sl) => order.push(format!("slot:{}:{}", sl.name, sl.mirror)),
             }
         }

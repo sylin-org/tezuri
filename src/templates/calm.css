@@ -52,6 +52,31 @@ a:hover { text-decoration: underline; }
 
 .neighbor-link, .home-link { text-decoration: none; }
 
+/* ---- title-banner: {{ARTICLE | title-banner}} frame mode ---- */
+.title-banner { position: relative; overflow: hidden;
+  border-radius: 10px; margin: 0 0 2em;
+  background: #f3f6fb; border: 1px solid #e4e9f0; }
+.title-banner--cover { position: absolute; inset: 0;
+  background-size: cover; background-position: center; }
+.title-banner--cover.cover-fill { background-size: 100% 100%; }
+.title-banner--cover.cover-contain { background-size: contain;
+  background-repeat: no-repeat; background-position: center; }
+.title-banner--inner { position: relative; max-width: 46em;
+  margin: 0 auto; padding: clamp(2.2rem, 6vw, 4.4rem) clamp(1.1rem, 4vw, 2.2rem); }
+.title-banner--title { font: 400 2.1em/1.25 Georgia, serif;
+  margin: 0 0 .35em; letter-spacing: -.01em; color: inherit; }
+.title-banner--standfirst { font-style: italic; opacity: .78;
+  font-size: 1.12em; margin: 0 0 .8em; }
+.title-banner--meta { display: flex; flex-wrap: wrap; gap: .55em 1.1em;
+  align-items: baseline; font: 400 .72rem/1.5 ui-monospace, Consolas, monospace;
+  letter-spacing: .09em; text-transform: uppercase; opacity: .82; }
+
+/* ---- site footer furniture (publication.yaml footer:) ---- */
+.site-footer { font-size: .85rem; line-height: 1.6; color: #57606a;
+  border-top: 1px solid #d8dee4; padding: 1.1rem 24px; margin-top: 3.5em; }
+.site-footer--sticky { position: sticky; bottom: 0;
+  background: rgba(255,255,255,.94); border-top: 1px solid #d8dee4; }
+
 ul.article-list { list-style: none; margin: 1.6em 0; padding: 0; }
 ul.article-list > li.article-list-item { padding: .9em 0; border-bottom: 1px solid #eaeef2; }
 ul.article-list > li.article-list-item > a { font-size: 1.15em; font-weight: 500; }
@@ -75,6 +100,13 @@ ul.article-list .item-date { display: block; margin-top: .15em;
   ul.article-list > li.article-list-item, .toc, .tagpill { border-color: #21262d; }
   ul.article-list > li.article-list-item { border-bottom: 1px solid #21262d; }
   .site-cta a:hover { background: #12203240; }
+
+  .title-banner { background: #161b27; border-color: #232b3b; }
+  .title-banner--cover { opacity: .82; }
+  .title-banner--inner { color: #dbe2ee; }
+  .title-banner--meta { opacity: .72; }
+  .site-footer { color: #8b949e; border-top-color: #21262d; }
+  .site-footer--sticky { background: rgba(13,17,23,.94); }
 }
 
 @media (prefers-reduced-motion: no-preference) {

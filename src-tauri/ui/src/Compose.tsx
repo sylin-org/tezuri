@@ -8,7 +8,8 @@
 // many slots, no dual carets: mirrors are views, editors write to doc.
 
 import React from "react";
-import type { SlotInstance, WriteCompose } from "./bridge";
+import type { CatalogEntry, SlotInstance, WriteCompose } from "./bridge";
+import { nextHintsFor } from "./bridge";
 import { invoke } from "./bridge";
 import { Writer } from "./Writer";
 
@@ -22,11 +23,25 @@ export interface ComposePlaneProps {
   cover: string | null;
   tagVocabulary: string[];
   words: number;
+  catalog: CatalogEntry[];
+  /** Conduct one slot occurrence: draft splice + recompose, upstream. */
+  onConduct: (raw: string, occurrence: number, hints: string[]) => void;
   onMarkdown: (md: string) => void;
   onMetaChange: (patch: { date?: string | null; tags?: string[]; cover?: string | null }) => void;
 }
 
 export function WriteComposePlane(p: ComposePlaneProps) {
+  // Occurrence ordinals: identical raw expressions are menued individually,
+  // so each render pass counts prior same-raw instances.
+  const ordinal = React.useRef(new Map<string, number>());
+  const ordOf = (raw: string): number => {
+    const n = ordinal.current.get(raw) ?? 0;
+    ordinal.current.set(raw, n + 1);
+    return n;
+  };
+  const entryOf = (name: string): CatalogEntry | undefined =>
+    p.catalog.find((e) => e.name === name);
+
   // The composer arrives one invoke after the article opens; until then the
   // plain writing surface stands in. A failed composition degrades to the
   // same thing — the page never breaks while the desk thinks.
@@ -43,6 +58,8 @@ export function WriteComposePlane(p: ComposePlaneProps) {
       </div>
     );
   }
+  ordinal.current = new Map(); // re-seed per segment walk
+
   return (
     <div className="write-composition">
       {p.compose.segments.map((seg, i) => {
@@ -52,31 +69,152 @@ export function WriteComposePlane(p: ComposePlaneProps) {
           return <div key={i} className="wc-text" dangerouslySetInnerHTML={{ __html: seg.html }} />;
         }
         if (seg.kind === "article_flow") {
-          return seg.mirror ? (
-            <div key={i} className="wc-mirror-flow wc-text"
-                 title="A second {{ARTICLE}} — a mirror of your writing"
-                 aria-hidden="true">
-              <p className="mono-fact">mirror of your article</p>
-              <pre className="wc-mirror-pre">{p.markdown}</pre>
-            </div>
-          ) : (
-            <div key={i} className="wc-editor-host">
-              <Writer
-                initialMarkdown={p.markdown}
-                slug={p.slug}
-                mediaBase={p.mediaBase}
-                onChange={p.onMarkdown}
-                words={p.words}
-              />
-            </div>
+          const frame = seg.frame ? (
+            <ConductableFrame
+              key={`${i}-frame`}
+              html={seg.frame}
+              raw={seg.raw}
+              hints={seg.hints}
+              occurrence={ordOf(seg.raw)}
+              entry={entryOf("ARTICLE")}
+              onConduct={p.onConduct}
+            />
+          ) : null;
+          if (seg.mirror) {
+            return (
+              <>
+                {frame}
+                <div key={i} className="wc-mirror-flow wc-text"
+                     title="A second {{ARTICLE}} — a mirror of your writing"
+                     aria-hidden="true">
+                  <p className="mono-fact">mirror of your article</p>
+                  <pre className="wc-mirror-pre">{p.markdown}</pre>
+                </div>
+              </>
+            );
+          }
+          return (
+            <>
+              {frame}
+              <div key={i} className="wc-editor-host">
+                <Writer
+                  initialMarkdown={p.markdown}
+                  slug={p.slug}
+                  mediaBase={p.mediaBase}
+                  onChange={p.onMarkdown}
+                  words={p.words}
+                />
+              </div>
+            </>
           );
         }
+        const occ = ordOf(seg.raw);
         return seg.editable
           ? <EditableSlot key={i} instance={seg} {...editPropsOf(seg.name, p)} />
-          : <StaticSlot key={i} instance={seg} mediaBase={p.mediaBase} />;
+          : <StaticSlot key={i} instance={seg} mediaBase={p.mediaBase}
+                        catalogEntry={entryOf(seg.name)}
+                        occurrence={occ} onConduct={p.onConduct} />;
       })}
     </div>
   );
+}
+
+/** The frame block around a flow (title-banner etc.) conducts too. */
+function ConductableFrame({ html, raw, hints, occurrence, entry, onConduct }: {
+  html: string;
+  raw: string;
+  hints: string[];
+  occurrence: number;
+  entry?: CatalogEntry;
+  onConduct: ComposePlaneProps["onConduct"];
+}) {
+  return (
+    <div className="wc-text wc-frame" data-frame>
+      <span dangerouslySetInnerHTML={{ __html: html }} />
+      {entry && entry.options.length > 0 && (
+        <SlotMenu raw={raw} hints={hints} occurrence={occurrence} entry={entry} onApply={onConduct} />
+      )}
+    </div>
+  );
+}
+
+/** Small anchored popover listing an entry's controls. Try-first: changes
+ *  fire onConduct; nothing touches files until the desk saves the draft. */
+function SlotMenu({ raw, hints, occurrence, entry, onApply }: {
+  raw: string;
+  hints: string[];
+  occurrence: number;
+  entry: CatalogEntry;
+  onApply: (raw: string, occurrence: number, hints: string[]) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const btnId = `conduct-${entry.name}-${occurrence}`;
+  return (
+    <span className="slot-menu-host">
+      <button type="button" className="slot-menu-btn" id={btnId}
+              title={`Conduct ${entry.name}`}
+              onClick={() => setOpen((v) => !v)}>
+        ⋯
+      </button>
+      {open && (
+        <span className="slot-menu" role="menu" aria-label={`Options for ${entry.name}`}>
+          <span className="slot-menu-doc">{entry.doc}</span>
+          <SlotMenuControls raw={raw} hints={hints} occurrence={occurrence} entry={entry} onPick={(nh) => { onApply(raw, occurrence, nh); }} onClose={() => setOpen(false)} />
+        </span>
+      )}
+    </span>
+  );
+}
+
+function SlotMenuControls({ raw, hints, occurrence, entry, onPick, onClose }: {
+  raw: string;
+  hints: string[];
+  occurrence: number;
+  entry: CatalogEntry;
+  onPick: (nextHints: string[]) => void;
+  onClose: () => void;
+}) {
+  void raw; // hints fully determine next value; raw is identity upstream
+  return (
+    <>
+      {entry.options.map((o) => (
+        <span className="slot-menu-opt" key={o.key}>
+          <span className="slot-menu-label">{o.label}</span>
+          {o.control.kind === "toggle" ? (
+            o.control.values.map((v) => (
+              <button type="button" key={v}
+                      className={hintValue(hints, o.key) === v ? "active" : ""}
+                      onClick={() => { onPick(nextHintsFor(hints, o.key, v)); }}>
+                {v}
+              </button>
+            ))
+          ) : (
+            o.control.values.map((v) => (
+              <button type="button" key={v}
+                      className={hintValue(hints, o.key) === v ? "active" : ""}
+                      onClick={() => {
+                        onPick(nextHintsFor(hints, o.key, v));
+                        onClose();
+                      }}>
+                {o.key === "count" ? `${v} words` : v}
+              </button>
+            ))
+          )}
+        </span>
+      ))}
+      {entry.options.length === 0 && (
+        <span className="slot-menu-none">no variations yet</span>
+      )}
+    </>
+  );
+}
+
+function hintValue(hints: string[], key: string): string | undefined {
+  for (const h of hints) {
+    if (h.startsWith(`${key}:`)) return h.slice(key.length + 1);
+    if (!h.includes(":")) return h; // bare form carries the single value
+  }
+  return undefined;
 }
 
 function editPropsOf(name: string, p: ComposePlaneProps) {
@@ -245,19 +383,37 @@ function TagView({ html }: { html: string }) {
   return <span dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-/** Everything else shows its evaluated projection in place. */
-function StaticSlot({ instance, mediaBase, innerHtml }: {
+/** Everything else shows its evaluated projection in place — and, when the
+ *  catalog declares controls, a conduct affordance beside it. */
+function StaticSlot({ instance, mediaBase, innerHtml, catalogEntry, occurrence, onConduct }: {
   instance?: SlotInstance;
   mediaBase?: string;
   innerHtml?: string;
+  catalogEntry?: CatalogEntry;
+  occurrence?: number;
+  onConduct?: ComposePlaneProps["onConduct"];
 }) {
   const raw = innerHtml ?? instance?.html ?? "";
   const html = mediaBase && !innerHtml ? raw.replaceAll("../media/", mediaBase) : raw;
   const name = innerHtml ? undefined : instance?.name;
+  const menu =
+    instance && !instance.mirror && catalogEntry && occurrence !== undefined && onConduct ? (
+      <SlotMenu
+        raw={instance.raw}
+        hints={instance.hints}
+        occurrence={occurrence}
+        entry={catalogEntry}
+        onApply={onConduct}
+      />
+    ) : null;
   return (
-    <span className={`wc-slot${instance?.mirror ? " wc-mirror" : ""}`}
-          data-slot={name}
-          dangerouslySetInnerHTML={{ __html: html }} />
+    <span className={`wc-slot${instance?.mirror ? " wc-mirror" : ""}`} data-slot={name}>
+      <span dangerouslySetInnerHTML={{ __html: html }} />
+      {menu}
+      {!innerHtml && !html.trim() && (
+        <span className="wc-ghost">{`{{${name}}}`}</span>
+      )}
+    </span>
   );
 }
 

@@ -23,4 +23,5 @@ pub mod render;
 pub mod ship;
 pub mod slots;
 pub mod spine;
+pub mod templates;
 pub mod theme;

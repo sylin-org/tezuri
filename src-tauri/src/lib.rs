@@ -443,6 +443,123 @@ fn write_compose(
     tezuri::render::compose_write_view(&root(&session)?, &slug).map_err(err)
 }
 
+/// The space's own article template text; None means the embedded default
+/// is the presentation. Conduct edits drafts of this.
+#[tauri::command]
+fn read_template(session: State<Session>) -> Result<Option<String>, CommandError> {
+    tezuri::templates::read(&root(&session)?).map_err(err)
+}
+
+/// The embedded default template's bytes, so conducting can seed a draft
+/// even before the space owns a file.
+#[tauri::command]
+fn default_template() -> String {
+    tezuri::render::embedded_article_template().to_string()
+}
+
+/// Persist an accepted layout draft. Empty string removes the file so the
+/// embedded default speaks again. Journaled; settling follows.
+#[tauri::command]
+fn write_template(text: String, session: State<Session>) -> Result<(), CommandError> {
+    let current = root(&session)?;
+    tezuri::templates::write(&current, &text).map_err(err)?;
+    enqueue_settle(current);
+    Ok(())
+}
+
+/// Compose against a *draft* (conduct in session): same payload as
+/// write_compose but from supplied bytes, never touching files.
+#[tauri::command]
+fn write_compose_draft(
+    slug: String,
+    template: String,
+    session: State<Session>,
+) -> Result<tezuri::render::WriteCompose, CommandError> {
+    tezuri::render::compose_write_view_with(&root(&session)?, &slug, &template).map_err(err)
+}
+
+/// The template editor's live specimen: one real article through the real
+/// pipeline under draft bytes — the byte-exact lens before anything saves.
+#[tauri::command]
+fn render_specimen(
+    slug: String,
+    template: String,
+    session: State<Session>,
+) -> Result<(String, Vec<String>), CommandError> {
+    tezuri::render::render_article_with(&root(&session)?, &slug, &template).map_err(err)
+}
+
+// -- catalog -----------------------------------------------------------------
+
+#[derive(serde::Serialize)]
+pub struct ControlView {
+    kind: String,
+    values: Vec<String>,
+    default: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct OptionView {
+    key: String,
+    label: String,
+    control: ControlView,
+}
+
+#[derive(serde::Serialize)]
+pub struct SlotCatalogEntry {
+    name: String,
+    doc: String,
+    hosts: Vec<String>,
+    options: Vec<OptionView>,
+}
+
+/// The characterized vocabulary: menus, palettes, and autocomplete are all
+/// views over what this returns.
+#[tauri::command]
+fn slot_catalog() -> Vec<SlotCatalogEntry> {
+    use tezuri::slots::{registry, Control, Host};
+    registry()
+        .into_iter()
+        .map(|d| SlotCatalogEntry {
+            name: d.name.to_string(),
+            doc: d.doc.to_string(),
+            hosts: d
+                .hosts
+                .iter()
+                .map(|h| match h {
+                    Host::Flow => "flow".to_string(),
+                    Host::Rail => "rail".to_string(),
+                })
+                .collect(),
+            options: d
+                .options
+                .iter()
+                .map(|o| OptionView {
+                    key: o.key.to_string(),
+                    label: o.label.to_string(),
+                    control: match &o.control {
+                        Control::Toggle => ControlView {
+                            kind: "toggle".into(),
+                            values: vec!["on".into(), "off".into()],
+                            default: o.default.to_string(),
+                        },
+                        Control::Choice(vs) => ControlView {
+                            kind: "choice".into(),
+                            values: vs.iter().map(|s| s.to_string()).collect(),
+                            default: o.default.to_string(),
+                        },
+                        Control::Count { min, max } => ControlView {
+                            kind: "count".into(),
+                            values: vec![min.to_string(), max.to_string()],
+                            default: o.default.to_string(),
+                        },
+                    },
+                })
+                .collect(),
+        })
+        .collect()
+}
+
 /// Compile every article into render/ inside the publication.
 #[tauri::command]
 fn emit_render(session: State<Session>) -> Result<Vec<String>, CommandError> {
@@ -700,6 +817,12 @@ pub fn run() {
             write_theme,
             render_article,
             write_compose,
+            read_template,
+            default_template,
+            write_template,
+            write_compose_draft,
+            render_specimen,
+            slot_catalog,
             emit_render,
             desk,
             read_article,
