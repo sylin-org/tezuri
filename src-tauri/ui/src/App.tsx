@@ -8,7 +8,7 @@ import { Landing } from "./Landing";
 import { SpaceRail, type Workspace } from "./Space";
 import { About } from "./About";
 import { Config } from "./Config";
-import { invoke, onSettle, spliceSlot } from "./bridge";
+import { invoke, onSettle, spliceSlot, insertSlotAt } from "./bridge";
 import type { Identity, PublicationInfo, CatalogEntry } from "./bridge";
 
 type Surface = "landing" | "space" | "config" | "about";
@@ -130,6 +130,19 @@ export default function App() {
       return next;
     });
   }, [refreshCompose]);
+
+  // Insertion: same contract — draft bytes move, projections follow.
+  const insertSlot = useCallback(
+    (anchorRaw: string, anchorOcc: number, where: "before" | "after", name: string) => {
+      setTemplateDraft((prev) => {
+        if (prev === null) return prev;
+        const next = insertSlotAt(prev, anchorRaw, anchorOcc, where, name);
+        void refreshCompose(slugRef.current ?? "", next);
+        return next;
+      });
+    },
+    [refreshCompose]
+  );
 
   const touch = useCallback(() => {
     if (!docRef.current) return;
@@ -603,6 +616,7 @@ export default function App() {
                       catalog={catalog}
                       editorSlot={<WriterEditor />}
                       onConduct={conduct}
+                      onInsert={insertSlot}
                       onMetaChange={(patch) => {
                         setDoc((d0) => d0 ? { ...d0, ...patch } : d0);
                         touch();

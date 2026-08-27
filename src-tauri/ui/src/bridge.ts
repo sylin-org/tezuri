@@ -175,6 +175,31 @@ export function nextHintsFor(
   return kept.includes(token) ? kept : [...kept, token];
 }
 
+/** Insert `{{name}}` beside an existing slot occurrence in the draft.
+ *  Anchoring by exact bytes keeps insertion honest: no offsets, no guesses;
+ *  a drifted draft simply refuses to change rather than corrupting. */
+export function insertSlotAt(
+  template: string,
+  anchorRaw: string,
+  anchorOccurrence: number,
+  where: "before" | "after",
+  name: string
+): string {
+  let at = -1;
+  for (let k = 0; k <= anchorOccurrence; k++) {
+    at = template.indexOf(anchorRaw, at + 1);
+    if (at < 0) return template; // drifted: refuse rather than guess
+  }
+  const pos = where === "after" ? at + anchorRaw.length : at;
+  // Keep lines tidy: never glue a slot onto existing text.
+  const beforeChar = pos > 0 ? template[pos - 1] : "\n";
+  const afterChar = template[pos] ?? "\n";
+  let ins = `{{${name}}}`;
+  if (beforeChar !== "\n") ins = `\n${ins}`;
+  if (afterChar !== "\n") ins = `${ins}\n`;
+  return template.slice(0, pos) + ins + template.slice(pos);
+}
+
 export interface ProofResult {
   verdict: string;
   evidence: string;

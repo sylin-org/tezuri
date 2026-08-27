@@ -25,6 +25,8 @@ export interface ComposePlaneProps {
   editorSlot: React.ReactNode;
   /** Conduct one slot occurrence: draft splice + recompose, upstream. */
   onConduct: (raw: string, occurrence: number, hints: string[]) => void;
+  /** Insert a new slot element beside rendered blocks (draft splice). */
+  onInsert: (anchorRaw: string, anchorOcc: number, where: "before" | "after", name: string) => void;
   onMetaChange: (patch: { date?: string | null; tags?: string[]; cover?: string | null }) => void;
 }
 
@@ -48,70 +50,149 @@ export function WriteComposePlane(p: ComposePlaneProps) {
   }
   ordinal.current = new Map(); // re-seed per segment walk
 
+  // Visible walk: content and projections with insertion rows between them.
+  // Each row anchors to the nearest raw-bearing segment, so splicing stays
+  // byte-honest even though scaffold text is invisible here.
+  const out: React.ReactNode[] = [];
+  let last: { raw: string; occ: number } | null = null;
+  const pushInsert = (key: string, fallbackNext?: { raw: string; occ: number }) => {
+    out.push(
+      <InsertRow
+        key={key}
+        catalog={p.catalog}
+        before={last}
+        after={fallbackNext ?? null}
+        onInsert={p.onInsert}
+      />
+    );
+  };
+  let pendingKey = 0;
+  for (let i = 0; i < p.compose.segments.length; i++) {
+    const seg = p.compose.segments[i];
+    if (seg.kind === "text") continue;
+    const occ =
+      seg.kind === "slot" || seg.kind === "article_flow" ? ordOf(seg.raw) : -1;
+    pushInsert(`ins-${pendingKey++}`, { raw: seg.raw, occ });
+    last = { raw: seg.raw, occ };
+
+    if (seg.kind === "article_flow") {
+      const entry = entryOf("ARTICLE");
+      const frame = seg.frame ? (
+        <div
+          key={`${i}-frame`}
+          className="wc-frame"
+          dangerouslySetInnerHTML={{ __html: seg.frame }}
+        />
+      ) : null;
+      const chip =
+        entry && entry.options.length > 0 && !seg.mirror ? (
+          <SlotMenu
+            key={`${i}-chip`}
+            raw={seg.raw}
+            hints={seg.hints}
+            occurrence={occ}
+            entry={entry}
+            onApply={p.onConduct}
+          />
+        ) : null;
+      if (seg.mirror) {
+        out.push(
+          <div key={i} className="wc-mirror-flow"
+               title="A second {{ARTICLE}} — a mirror of your writing"
+               aria-hidden="true">
+            <p className="mono-fact">mirror of your article</p>
+            <pre className="wc-mirror-pre">{p.markdown}</pre>
+          </div>
+        );
+        continue;
+      }
+      out.push(
+        <div key={i} className="wc-editor-wrap">
+          <span className="wc-editor-tools">{chip}</span>
+          {frame}
+          <div className="wc-editor-host">{p.editorSlot}</div>
+        </div>
+      );
+      continue;
+    }
+    out.push(
+      seg.editable
+        ? <EditableSlot key={i} instance={seg} {...editPropsOf(p)} />
+        : <StaticSlot key={i} instance={seg} mediaBase={p.mediaBase}
+                      catalogEntry={entryOf(seg.name)}
+                      occurrence={occ} onConduct={p.onConduct} />
+    );
+  }
+  pushInsert(`ins-${pendingKey++}`);
+
   return (
     <div className="write-composition">
-      {p.compose.segments.map((seg, i) => {
-        // Stable occurrence ordinals: identical raw expressions are menued
-        // individually; counted once per segment, per render walk.
-        const occ =
-          seg.kind === "slot" || seg.kind === "article_flow"
-            ? ordOf(seg.raw)
-            : -1;
-        if (seg.kind === "text") {
-          // Structural scaffolding: the page layout Preview owns. Write mode
-          // renders content and projections only.
-          return null;
-        }
-        if (seg.kind === "article_flow") {
-          const entry = entryOf("ARTICLE");
-          const frame = seg.frame ? (
-            <div
-              key={`${i}-frame`}
-              className="wc-frame"
-              dangerouslySetInnerHTML={{ __html: seg.frame }}
-            />
-          ) : null;
-          // The article's conduct affordance must exist even in plain mode —
-          // frame or none, the catalog's controls belong to the article.
-          const chip =
-            entry && entry.options.length > 0 && !seg.mirror ? (
-              <SlotMenu
-                key={`${i}-chip`}
-                raw={seg.raw}
-                hints={seg.hints}
-                occurrence={occ}
-                entry={entry}
-                onApply={p.onConduct}
-              />
-            ) : null;
-          if (seg.mirror) {
-            return (
-              <div key={i} className="wc-mirror-flow"
-                   title="A second {{ARTICLE}} — a mirror of your writing"
-                   aria-hidden="true">
-                <p className="mono-fact">mirror of your article</p>
-                <pre className="wc-mirror-pre">{p.markdown}</pre>
-              </div>
-            );
-          }
-          return (
-            <div key={i} className="wc-editor-wrap">
-              <span className="wc-editor-tools">{chip}</span>
-              {frame}
-              <div className="wc-editor-host">{p.editorSlot}</div>
-            </div>
-          );
-        }
-        return seg.editable
-          ? <EditableSlot key={i} instance={seg} {...editPropsOf(p)} />
-          : <StaticSlot key={i} instance={seg} mediaBase={p.mediaBase}
-                        catalogEntry={entryOf(seg.name)}
-                        occurrence={occ} onConduct={p.onConduct} />;
-      })}
+      {out}
       {p.compose.notes.length > 0 && (
         <p className="wc-whispers" title="Editor notes from this template">
           {p.compose.notes.join(" · ")}
         </p>
+      )}
+    </div>
+  );
+}
+
+/** A quiet band between blocks: reveals a + on approach, opening the
+ *  insert palette grouped by the catalog's declared hosts. Each pick states
+ *  its position relative to the nearest rendered neighbors. */
+function InsertRow({ catalog, before, after, onInsert }: {
+  catalog: CatalogEntry[];
+  before: { raw: string; occ: number } | null;
+  after: { raw: string; occ: number } | null;
+  onInsert: (anchorRaw: string, anchorOcc: number, where: "before" | "after", name: string) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const insertWith = (anchor: { raw: string; occ: number } | null, where: "before" | "after", name: string) => {
+    if (!anchor) return;
+    onInsert(anchor.raw, anchor.occ, where, name);
+    setOpen(false);
+  };
+  const groups: [string, string][] = [["flow", "Flow"], ["rail", "Rail & furniture"]];
+  return (
+    <div className={`wc-insert${open ? " open" : ""}`}>
+      <button type="button" className="wc-insert-btn"
+              title="Insert an element here" aria-label="Insert an element here"
+              onClick={() => setOpen((v) => !v)}>+</button>
+      {open && (
+        <div className="slot-menu wc-insert-menu" role="menu" aria-label="Insert an element">
+          <span className="slot-menu-doc">
+            Elements land beside your rendered blocks; saved only from the pinbar.
+          </span>
+          {!before && !after && (
+            <span className="slot-menu-none">nothing to anchor to yet</span>
+          )}
+          {groups.map(([host, label]) => {
+            const entries = catalog.filter((e) => e.name !== "ARTICLE" && e.hosts.includes(host));
+            if (entries.length === 0) return null;
+            return (
+              <span className="insert-group" key={host}>
+                <span className="slot-menu-label">{label}</span>
+                {entries.map((e) => (
+                  <span key={`${host}-${e.name}`} className="insert-pick-row">
+                    <span className="insert-name">{e.name}</span>
+                    {before && (
+                      <button type="button" title={`Insert ${e.name} after ${before.raw}`}
+                              onClick={() => insertWith(before, "after", e.name)}>
+                        after ↑
+                      </button>
+                    )}
+                    {after && (
+                      <button type="button" title={`Insert ${e.name} before ${after.raw}`}
+                              onClick={() => insertWith(after, "before", e.name)}>
+                        before ↓
+                      </button>
+                    )}
+                  </span>
+                ))}
+              </span>
+            );
+          })}
+        </div>
       )}
     </div>
   );

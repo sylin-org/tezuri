@@ -821,3 +821,26 @@ body.tezuri-dirty .state-word { color: var(--amber); }
 .cover-strip-thumb { height: 26px; width: auto; border-radius: 4px; }
 .post-strip button { font-size: 11.5px; padding: 2px 9px; }
 .tag-editor input { min-width: 90px; }
+
+/* ---- insertion rows: quiet bands with a +, palette on demand ---- */
+.wc-insert { position: relative; display: flex; justify-content: center;
+  min-height: 4px; }
+.wc-insert::before { content: ""; position: absolute; left: 24px; right: 24px;
+  top: 50%; height: 1px; background: var(--line); opacity: 0; }
+.wc-insert:hover::before, .wc-insert.open::before { opacity: .6; }
+.wc-insert-btn { position: relative; z-index: 5; background: var(--panel);
+  border: 1px solid var(--line); color: var(--muted); cursor: pointer;
+  font-size: 12px; line-height: 1; border-radius: 999px;
+  width: 20px; height: 20px; opacity: 0; transform: translateY(-1px);
+}
+.wc-insert:hover .wc-insert-btn, .wc-insert.open .wc-insert-btn { opacity: 1; }
+.wc-insert-menu { position: absolute; z-index: 30; top: 24px; left: 50%;
+  transform: translateX(-50%); width: 320px; max-height: 46vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 8px; }
+.insert-group { display: flex; flex-direction: column; gap: 4px; }
+.insert-pick-row { display: flex; align-items: center; gap: 6px; }
+.insert-name { flex: 1; font-size: 12px; color: var(--ink-2); }
+.insert-pick-row button { background: none; border: 1px solid var(--line);
+  border-radius: 999px; color: var(--ink-1); cursor: pointer;
+  font-size: 10.5px; padding: 1px 8px; white-space: nowrap; }
+.insert-pick-row button:hover { border-color: var(--al); color: var(--al); }
