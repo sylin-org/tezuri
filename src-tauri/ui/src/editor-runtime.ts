@@ -163,10 +163,6 @@ window.addEventListener("message", (event) => {
 });
 
 
-// main() is invoked by the tz-init message; the flag guards double boots.
-void (function guard() {
-  if (!parent) {
-    // Opened standalone: nothing to bridge.
-    log("standalone");
-  }
-})();
+// The runtime announces itself the moment it can listen: the host answers
+// with tz-init (markdown + media base), and boot mounts the editor.
+post({ type: "tz-ready" });
