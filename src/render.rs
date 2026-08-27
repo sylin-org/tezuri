@@ -25,6 +25,7 @@ pub const RENDER_DIR: &str = "render";
 
 const ARTICLE_TEMPLATE: &str = include_str!("templates/article.html");
 const INDEX_TEMPLATE: &str = include_str!("templates/index.html");
+const FEED_TEMPLATE: &str = include_str!("templates/feed.xml");
 const BASELINE_CSS: &str = include_str!("templates/calm.css");
 
 // ---------------------------------------------------------------------------
@@ -705,15 +706,20 @@ pub fn write_page(publication_root: &Path, slug: &str) -> Result<String> {
     Ok(rel)
 }
 
-/// (Re)write the index page from the current publishable set.
-pub fn write_index(publication_root: &Path) -> Result<String> {
+/// Site-level context shared by the index and feed outputs.
+fn site_ctx(publication_root: &Path) -> Result<(crate::identity::Identity, Ctx)> {
     let identity = crate::identity::Identity::load(publication_root)?;
     let publishable = publishable_entries(publication_root)?;
-
+    let name = site_display_name(publication_root, &identity.name);
+    let byline = if identity.byline.is_empty() {
+        identity.persona.clone()
+    } else {
+        identity.byline.clone()
+    };
     let ctx = Ctx {
         output: Output::Index,
         slug: String::new(),
-        title: site_display_name(publication_root, &identity.name),
+        title: name.clone(),
         standfirst: None,
         raw_date: None,
         words: 0,
@@ -724,23 +730,35 @@ pub fn write_index(publication_root: &Path) -> Result<String> {
         flow_html: String::new(),
         headings: vec![],
         neighbors: Default::default(),
-        site_name: site_display_name(publication_root, &identity.name),
-        byline: if identity.byline.is_empty() {
-            identity.persona.clone()
-        } else {
-            identity.byline.clone()
-        },
+        site_name: name,
+        byline,
         cta: site_cta_of(&identity),
         site_url: extras_str(&identity.extra, &["site_url", "url"]),
         footer_md: extras_str(&identity.extra, &["footer"]),
         publishable,
         require_article: false,
     };
+    Ok((identity, ctx))
+}
 
+/// (Re)write the index page from the current publishable set.
+pub fn write_index(publication_root: &Path) -> Result<String> {
+    let (_, ctx) = site_ctx(publication_root)?;
     let index_rel = format!("{RENDER_DIR}/index.html");
     let bytes = composed_bytes(publication_root, "index.html", INDEX_TEMPLATE, &ctx)?;
     atomic_write(&confine(publication_root, Path::new(&index_rel))?, &bytes)?;
     Ok(index_rel)
+}
+
+/// (Re)write the RSS feed from the current publishable set. The space may
+/// own templates/feed.xml; an embedded channel ships otherwise.
+pub fn write_feed(publication_root: &Path) -> Result<String> {
+    let (_, mut ctx) = site_ctx(publication_root)?;
+    ctx.output = Output::Feed;
+    let rel = format!("{RENDER_DIR}/feed.xml");
+    let bytes = composed_bytes(publication_root, "feed.xml", FEED_TEMPLATE, &ctx)?;
+    atomic_write(&confine(publication_root, Path::new(&rel))?, &bytes)?;
+    Ok(rel)
 }
 
 fn composed_bytes(
@@ -764,8 +782,10 @@ pub fn emit_render(publication_root: &Path) -> Result<Vec<String>> {
         written.push(write_page(publication_root, &e.slug)?);
     }
     written.push(write_index(publication_root)?);
+    written.push(write_feed(publication_root)?);
+    // The event counts article pages; index and feed are site furniture.
     Journal::open(publication_root)?.record(Event::Rendered {
-        pages: written.len().saturating_sub(1),
+        pages: written.len().saturating_sub(2),
     })?;
     Ok(written)
 }
@@ -844,7 +864,11 @@ mod tests {
         Article::create(dir.path(), "secret-draft", "Secret").unwrap();
 
         let written = emit_render(dir.path()).unwrap();
-        assert_eq!(written.len(), 3, "two pages + index; drafts never emit");
+        assert_eq!(
+            written.len(),
+            4,
+            "two pages + index + feed; drafts never emit"
+        );
         assert!(dir.path().join("render/alpha.html").exists());
         assert!(dir.path().join("render/beta.html").exists());
         assert!(!dir.path().join("render/secret-draft.html").exists());
@@ -852,6 +876,11 @@ mod tests {
         assert!(index.contains("href=\"alpha.html\""));
         assert!(index.contains("href=\"beta.html\""));
         assert!(!index.contains("secret-draft"));
+        let feed = std::fs::read_to_string(dir.path().join("render/feed.xml")).unwrap();
+        assert!(feed.contains("<rss version=\"2.0\">"), "{feed}");
+        assert!(feed.contains("<link>alpha.html</link>"), "{feed}");
+        assert!(feed.contains("<link>beta.html</link>"), "{feed}");
+        assert!(!feed.contains("secret-draft"), "{feed}");
 
         let events = crate::spine::Journal::open(dir.path())
             .unwrap()

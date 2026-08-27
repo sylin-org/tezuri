@@ -488,6 +488,9 @@ pub fn is_article(name: &str) -> bool {
 pub enum Output {
     Article,
     Index,
+    /// RSS channel: items compose as pre-built <item> blocks; links
+    /// absolutize against site_url.
+    Feed,
 }
 
 /// A section heading bound to its emitted id.
@@ -922,7 +925,13 @@ fn evaluate(slot: &RawSlot, ctx: &Ctx) -> (String, Vec<String>) {
         "byline" => (esc(&ctx.byline), vec![]),
         "site_cta" => cta_value(ctx),
         "article-list" => (list_value(&hints, ctx), vec![]),
-        "items" => (list_markup(&ctx.publishable), vec![]),
+        "items" => (
+            match ctx.output {
+                Output::Feed => feed_items(ctx),
+                _ => list_markup(&ctx.publishable),
+            },
+            vec![],
+        ),
         "site_url" => (esc(&ctx.site_url), vec![]),
         "updated" => updated_value(ctx),
         "footer" => footer_value(&hints, ctx, &unknown(&["sticky:"])),
@@ -1050,6 +1059,7 @@ fn body_class_value(ctx: &Ctx) -> String {
             classes
         }
         Output::Index => "is-index".to_string(),
+        Output::Feed => "is-feed".to_string(),
     }
 }
 
@@ -1297,6 +1307,49 @@ fn updated_value(ctx: &Ctx) -> (String, Vec<String>) {
         Some(d) => (esc(&d), vec![]),
         None => (String::new(), vec![]),
     }
+}
+
+/// RSS <item> blocks, newest first. Links absolutize against site_url when
+/// the space declares one; dates render RFC-2822 at noon UTC (date-only
+/// sources, deterministic bytes). Everything escapes through esc.
+fn feed_items(ctx: &Ctx) -> String {
+    let rfc2822 = |date: &str| -> String {
+        chrono::NaiveDate::parse_from_str(date.trim(), "%Y-%m-%d")
+            .ok()
+            .and_then(|d| d.and_hms_opt(12, 0, 0))
+            .map(|dt| {
+                use chrono::TimeZone;
+                chrono::Utc.from_utc_datetime(&dt).to_rfc2822()
+            })
+            .unwrap_or_default()
+    };
+
+    let base = ctx.site_url.trim_end_matches('/');
+    let mut out = String::new();
+    for e in &ctx.publishable {
+        let link = if base.is_empty() {
+            format!("{}.html", esc(&e.slug))
+        } else {
+            format!("{}/{}.html", esc(base), esc(&e.slug))
+        };
+        let pub_date = e.date.as_deref().map(&rfc2822).unwrap_or_default();
+        let pub_tag = if pub_date.is_empty() {
+            String::new()
+        } else {
+            format!("<pubDate>{pub_date}</pubDate>")
+        };
+        let _ = write!(
+            out,
+            "<item><title>{t}</title><link>{l}</link>\
+             <guid isPermaLink=\"true\">{l}</guid>{p}\
+             <description></description></item>",
+            t = esc(&e.title),
+            l = link,
+            p = pub_tag
+        );
+        out.push('\n');
+    }
+    out
 }
 
 fn esc(s: &str) -> String {
@@ -1714,6 +1767,41 @@ mod tests {
         ctx.site_name = "Tom & Jerry".to_string();
         let (t, _) = compose(&parse_template("{{title}} {{site_name}}"), &ctx);
         assert_eq!(t, "&lt;script&gt;alert(1)&lt;/script&gt; Tom &amp; Jerry");
+    }
+
+    #[test]
+    fn feed_items_absolutize_and_date_rfc2822() {
+        let mut ctx = ctx_parts(
+            "",
+            vec![
+                entry("b", "B", Some("2026-02-14"), &[]),
+                entry("a", "A", Some("2026-05-30"), &[]),
+            ],
+            "index",
+        );
+        ctx.output = Output::Feed;
+        ctx.site_url = "https://example.com/".into();
+        let (items, notes) = compose(&parse_template("{{items}}"), &ctx);
+        assert_eq!(notes.len(), 0);
+        assert!(
+            items.contains("<item><title>B</title><link>https://example.com/b.html</link>"),
+            "{items}"
+        );
+        assert!(items.contains("<guid isPermaLink=\"true\">https://example.com/b.html</guid>"));
+        // 2026-02-14 noon UTC → Sat, 14 Feb 2026 12:00:00 +0000
+        assert!(
+            items.contains("<pubDate>Sat, 14 Feb 2026 12:00:00 +0000</pubDate>"),
+            "{items}"
+        );
+    }
+
+    #[test]
+    fn feed_without_site_url_stays_relative_not_broken() {
+        let mut ctx = ctx_parts("", vec![entry("b", "B", None, &[])], "index");
+        ctx.output = Output::Feed;
+        ctx.site_url = String::new();
+        let (items, _) = compose(&parse_template("{{items}}"), &ctx);
+        assert!(items.contains("<link>b.html</link>"), "{items}");
     }
 
     #[test]
