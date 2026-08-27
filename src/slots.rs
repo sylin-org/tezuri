@@ -40,28 +40,66 @@ pub struct RawSlot {
 /// Parse a template. Stray or invalid brace expressions pass through as
 /// literal text: parsing never destroys bytes.
 pub fn parse_template(src: &str) -> Vec<Part> {
+    // Author regions — <style> blocks and HTML comments — never yield
+    // slots: a `{{slot}}` there is prose, not an occurrence. A CSS comment
+    // documenting the frame once consumed the "first banner wins" rule and
+    // silently retired the hero on every page (found in the shipped pack).
+    // The mask is equal-length, so text slices out of the original bytes.
+    let masked = mask_author_regions(src);
     let mut parts = Vec::new();
-    let mut rest = src;
-    while let Some(start) = rest.find("{{") {
+    let mut scan = masked.as_str();
+    let mut lit = src;
+    while let Some(start) = scan.find("{{") {
         if start > 0 {
-            parts.push(Part::Text(rest[..start].to_string()));
+            parts.push(Part::Text(lit[..start].to_string()));
         }
-        let after = &rest[start..];
-        let Some(end_rel) = after.find("}}") else {
-            parts.push(Part::Text(after.to_string()));
+        let after_mask = &scan[start..];
+        let after_lit = &lit[start..];
+        let Some(end_rel) = after_mask.find("}}") else {
+            parts.push(Part::Text(after_lit.to_string()));
             return parts;
         };
-        let raw = after[..end_rel + 2].to_string();
+        let raw = after_lit[..end_rel + 2].to_string();
         match slot_of_raw(&raw) {
             Some(s) => parts.push(Part::Slot(s)),
             None => parts.push(Part::Text(raw)),
         }
-        rest = &after[end_rel + 2..];
+        scan = &after_mask[end_rel + 2..];
+        lit = &after_lit[end_rel + 2..];
     }
-    if !rest.is_empty() {
-        parts.push(Part::Text(rest.to_string()));
+    if !lit.is_empty() {
+        parts.push(Part::Text(lit.to_string()));
     }
     parts
+}
+
+/// Blank out `<style>…</style>` and `<!--…-->` regions with spaces. Same
+/// byte length as the source, so offsets stay interchangeable. Unterminated
+/// regions mask to the end — a whisper, never a break.
+fn mask_author_regions(src: &str) -> String {
+    let bytes = src.as_bytes();
+    let mut masked = bytes.to_vec();
+    let mut i = 0;
+    while i < bytes.len() {
+        let (open, close) = if bytes[i..].starts_with(b"<style") {
+            ("<style", "</style>".as_bytes())
+        } else if bytes[i..].starts_with(b"<!--") {
+            ("<!--", "-->".as_bytes())
+        } else {
+            i += 1;
+            continue;
+        };
+        let from = i + open.len();
+        let end = bytes[from..]
+            .windows(close.len())
+            .position(|w| w == close)
+            .map_or(bytes.len(), |p| from + p + close.len());
+        for b in &mut masked[i..end] {
+            *b = b' ';
+        }
+        i = end;
+    }
+    String::from_utf8(masked).unwrap_or_else(|_| src.to_string())
 }
 
 fn slot_of_raw(raw: &str) -> Option<RawSlot> {
@@ -1381,6 +1419,42 @@ fn esc(s: &str) -> String {
 mod tests {
     use super::*;
     use crate::articles::State;
+
+    #[test]
+    fn style_blocks_and_comments_never_yield_slots() {
+        // A shipped pack once documented its frame inside a CSS comment; the
+        // scan saw a second {{ARTICLE}} there, whose "first banner wins"
+        // fallback silently retired the hero on every page.
+        let tpl = concat!(
+            "<html><head><style>",
+            "/* frame: {{ARTICLE | title-banner}} */\n",
+            ".banner{color:red}</style></head>\n",
+            "<body>{{ARTICLE | title-banner}}</body></html>"
+        );
+        let parts = parse_template(tpl);
+        let articles: Vec<&str> = parts
+            .iter()
+            .filter_map(|p| match p {
+                Part::Slot(s) if s.name == "ARTICLE" => Some(s.raw.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            articles,
+            vec!["{{ARTICLE | title-banner}}"],
+            "the style-comment occurrence must not parse as a slot"
+        );
+        // Author regions still ride through as literal bytes, untouched.
+        let joined: String = parts
+            .iter()
+            .filter_map(|p| match p {
+                Part::Text(t) => Some(t.clone()),
+                _ => None,
+            })
+            .collect();
+        assert!(joined.contains("/* frame: {{ARTICLE | title-banner}} */"));
+        assert!(joined.contains(".banner{color:red}"));
+    }
 
     fn entry(slug: &str, title: &str, date: Option<&str>, tags: &[&str]) -> DeskEntry {
         DeskEntry {
