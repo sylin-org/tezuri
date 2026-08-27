@@ -8,7 +8,8 @@
 // composer said {{ARTICLE}} sits.
 
 import React from "react";
-import type { CatalogEntry, SlotInstance, WriteCompose } from "./bridge";
+import { createPortal } from "react-dom";
+import type { CatalogEntry, Seg, SlotInstance, WriteCompose } from "./bridge";
 import { nextHintsFor, scopeCss } from "./bridge";
 import { invoke } from "./bridge";
 
@@ -50,48 +51,80 @@ export function WriteComposePlane(p: ComposePlaneProps) {
   }
   ordinal.current = new Map(); // re-seed per segment walk
 
-  // Visible walk: content and projections with insertion rows between them.
-  // Each row anchors to the nearest raw-bearing segment, so splicing stays
-  // byte-honest even though scaffold text is invisible here.
-  const out: React.ReactNode[] = [];
-  let last: { raw: string; occ: number } | null = null;
-  const pushInsert = (key: string, fallbackNext?: { raw: string; occ: number }) => {
-    out.push(
-      <InsertRow
-        key={key}
-        catalog={p.catalog}
-        before={last}
-        after={fallbackNext ?? null}
-        onInsert={p.onInsert}
-      />
-    );
-  };
-  let pendingKey = 0;
-  for (let i = 0; i < p.compose.segments.length; i++) {
-    const seg = p.compose.segments[i];
-    if (seg.kind === "text") continue;
-    const occ =
-      seg.kind === "slot" || seg.kind === "article_flow" ? ordOf(seg.raw) : -1;
-    pushInsert(`ins-${pendingKey++}`, { raw: seg.raw, occ });
-    last = { raw: seg.raw, occ };
+  return <StructuredPlane {...p} ordOf={ordOf} entryOf={entryOf} />;
+}
 
+/** The artifact's body, worn for real: the composed structure renders once
+ *  (grid, rails, literal labels) and each slot occurrence portals its widget
+ *  into the mount point the composer left in the structure. Re-conduct or
+ *  save swaps the structure only when its bytes change, so the editor's
+ *  mount survives ordinary saves. */
+function StructuredPlane(p: ComposePlaneProps & {
+  ordOf: (raw: string) => number;
+  entryOf: (name: string) => CatalogEntry | undefined;
+}) {
+  const hostRef = React.useRef<HTMLDivElement | null>(null);
+  const [tick, setTick] = React.useState(0);
+  const [dbg, setDbg] = React.useState("");
+  const bodyHtml = p.compose.body_html;
+  // Portals may only query mounts after the structure for THIS body_html is
+  // committed; the tick re-renders once per structure change.
+  React.useEffect(() => {
+    setTick((v) => v + 1);
+  }, [bodyHtml]);
+  // TEMP diagnostics — remove before commit.
+  React.useEffect(() => {
+    const t = window.setInterval(() => {
+      const g = hostRef.current?.querySelector(".pagegrid");
+      const a = hostRef.current?.querySelector(".toc-rail");
+      if (g && a) {
+        const gs = getComputedStyle(g);
+        const r = a.getBoundingClientRect();
+        const kids = Array.from(g.children).map((c) => {
+          const cs2 = getComputedStyle(c as Element);
+          const cr = (c as Element).getBoundingClientRect();
+          return `${(c as Element).className || c.nodeName}[${cs2.display}] col=${cs2.gridColumn} row=${cs2.gridRow} y=${Math.round(cr.y)} h=${Math.round(cr.height)}`;
+        });
+        setDbg(
+          `DBG grid=${gs.display} cols=${gs.gridTemplateColumns} aside=${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.width)}x${Math.round(r.height)} vw=${window.innerWidth} kids=${kids.join(" ;; ")}`
+        );
+        window.clearInterval(t);
+      }
+    }, 400);
+    return () => window.clearInterval(t);
+  }, [tick]);
+
+  const interceptClicks = (e: React.MouseEvent) => {
+    const a = (e.target as HTMLElement).closest("a");
+    if (!a) return;
+    const href = a.getAttribute("href") ?? "";
+    if (href.startsWith("#")) {
+      // The artifact's own anchor (toc) scrolls; it never navigates the app.
+      e.preventDefault();
+      hostRef.current
+        ?.querySelector(href)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else if (href.endsWith(".html")) {
+      e.preventDefault(); // cross-article links stay inert in the plane
+    }
+  };
+
+  const widget = (seg: Exclude<Seg, { kind: "text" }>, occ: number): React.ReactNode => {
     if (seg.kind === "article_flow") {
-      const entry = entryOf("ARTICLE");
-        const frame = seg.frame ? (
-          <div
-            key={`${i}-frame`}
-            className="wc-frame"
-            dangerouslySetInnerHTML={{
-              __html: p.mediaBase
-                ? seg.frame.replaceAll("../media/", p.mediaBase)
-                : seg.frame,
-            }}
-          />
-        ) : null;
+      const entry = p.entryOf("ARTICLE");
+      const frame = seg.frame ? (
+        <div
+          className="wc-frame"
+          dangerouslySetInnerHTML={{
+            __html: p.mediaBase
+              ? seg.frame.replaceAll("../media/", p.mediaBase)
+              : seg.frame,
+          }}
+        />
+      ) : null;
       const chip =
         entry && entry.options.length > 0 && !seg.mirror ? (
           <SlotMenu
-            key={`${i}-chip`}
             raw={seg.raw}
             hints={seg.hints}
             occurrence={occ}
@@ -100,37 +133,69 @@ export function WriteComposePlane(p: ComposePlaneProps) {
           />
         ) : null;
       if (seg.mirror) {
-        out.push(
-          <div key={i} className="wc-mirror-flow"
+        return (
+          <div className="wc-mirror-flow"
                title="A second {{ARTICLE}} — a mirror of your writing"
                aria-hidden="true">
             <p className="mono-fact">mirror of your article</p>
             <pre className="wc-mirror-pre">{p.markdown}</pre>
           </div>
         );
-        continue;
       }
-      out.push(
-        <div key={i} className="wc-editor-wrap">
+      return (
+        <div className="wc-editor-wrap">
           <span className="wc-editor-tools">{chip}</span>
           {frame}
           <div className="wc-editor-host">{p.editorSlot}</div>
         </div>
       );
-      continue;
     }
-    out.push(
-      seg.editable
-        ? <EditableSlot key={i} instance={seg} {...editPropsOf(p)} />
-        : <StaticSlot key={i} instance={seg} mediaBase={p.mediaBase}
-                      catalogEntry={entryOf(seg.name)}
-                      occurrence={occ} onConduct={p.onConduct} />
-    );
+    return seg.editable
+      ? <EditableSlot instance={seg} {...editPropsOf(p)} />
+      : <StaticSlot instance={seg} mediaBase={p.mediaBase}
+                    catalogEntry={p.entryOf(seg.name)}
+                    occurrence={occ} onConduct={p.onConduct} />;
+  };
+
+  // Widget manifests in order, portaled into their mounts. A mount that the
+  // structure lacks (attribute-nested slots and other shell tricks) falls
+  // back to flat rendering — the page never breaks.
+  const portals: React.ReactNode[] = [];
+  const fallbacks: React.ReactNode[] = [];
+  let last: { raw: string; occ: number } | null = null;
+  if (tick > 0 && hostRef.current) {
+    const host = hostRef.current;
+    for (let i = 0; i < p.compose.segments.length; i++) {
+      const seg = p.compose.segments[i];
+      if (seg.kind === "text") continue;
+      const occ = p.ordOf(seg.raw);
+      const w = widget(seg, occ);
+      // First raw-bearing segment anchors a "before" row at the top; the
+      // rest anchor "after" the previous segment — same splice positions
+      // the flat walk used.
+      const row = last ? (
+        <InsertRow key={`ins-${i}`} catalog={p.catalog} before={last}
+                   after={null} onInsert={p.onInsert} />
+      ) : (
+        <InsertRow key={`ins-${i}`} catalog={p.catalog} before={null}
+                   after={{ raw: seg.raw, occ }} onInsert={p.onInsert} />
+      );
+      last = { raw: seg.raw, occ };
+      const target = host.querySelector(`[data-tz="${seg.mount}"]`);
+      if (target) {
+        portals.push(createPortal(<>{row}{w}</>, target, `tz-${seg.mount}`));
+      } else {
+        fallbacks.push(<React.Fragment key={`fb-${i}`}>{row}{w}</React.Fragment>);
+      }
+    }
   }
-  pushInsert(`ins-${pendingKey++}`);
+
+  const planeClass = p.compose.body_class
+    ? `write-composition ${p.compose.body_class}`
+    : "write-composition";
 
   return (
-    <div className="write-composition">
+    <div className={planeClass}>
       {p.compose.css && (
         <style
           key={p.compose.css.length}
@@ -139,7 +204,21 @@ export function WriteComposePlane(p: ComposePlaneProps) {
           }}
         />
       )}
-      {out}
+      <div
+        ref={hostRef}
+        className="wc-structure"
+        onClick={interceptClicks}
+        dangerouslySetInnerHTML={{
+          __html: p.mediaBase
+            ? bodyHtml.replaceAll("../media/", p.mediaBase)
+            : bodyHtml,
+        }}
+      />
+      {portals}
+      {fallbacks.length > 0 && <div className="wc-fallback">{fallbacks}</div>}
+      {dbg && <p className="mono-fact">{dbg}</p>}
+      <InsertRow key="ins-tail" catalog={p.catalog} before={last} after={null}
+                 onInsert={p.onInsert} />
       {p.compose.notes.length > 0 && (
         <p className="wc-whispers" title="Editor notes from this template">
           {p.compose.notes.join(" · ")}

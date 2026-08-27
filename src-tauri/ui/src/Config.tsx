@@ -268,13 +268,15 @@ const SPECIMEN =
  *  as plain files. Applying overwrites template + theme deliberately, so
  *  the ask is a two-step inline confirmation in the card. */
 function PresentationSection() {
-  const [packs, setPacks] = useState<{ id: string; name: string; description: string }[] | null>(null);
+  const [packs, setPacks] = useState<{ id: string; name: string; creator: string; kind: string; source: string; description: string }[] | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [receipt, setReceipt] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
-    invoke<any[]>("packs_list").then(setPacks).catch((e) => setError(e.message ?? String(e)));
+    invoke<any>("picker_list")
+      .then((r: any) => setPacks([...r.themes, ...r.templates]))
+      .catch((e) => setError(e.message ?? String(e)));
   }, []);
 
   if (!packs) return null;
@@ -282,14 +284,14 @@ function PresentationSection() {
     <div className="config-section">
       <h2>Presentation</h2>
       <p className="config-hint">
-        A starter pack copies its layout and dress into this space — after that the
-        files are yours. Picking replaces the current template and theme.
+        Official themes and templates — plus anything you download — copy into
+        this space as plain files. Picking replaces that file deliberately.
       </p>
       {packs.map((p) => (
         <div className="pack-row" key={p.id}>
           <div>
             <b>{p.name}</b>
-            <span className="config-hint"> — {p.description}</span>
+            <span className="config-hint"> — {p.creator} · {p.kind} · {p.description}</span>
           </div>
           {!confirming || confirming !== p.id ? (
             <button onClick={() => { setConfirming(p.id); setReceipt(""); setError(""); }}>
@@ -300,14 +302,14 @@ function PresentationSection() {
               <button className="primary"
                       onClick={async () => {
                         try {
-                          await invoke("pack_apply", { id: p.id });
+                          await invoke("picker_apply", { kind: p.kind, id: p.id });
                           setReceipt(`${p.name} applied — your space now owns its files.`);
                         } catch (e: any) {
                           setError(e.message ?? String(e));
                         }
                         setConfirming(null);
                       }}>
-                Replace layout &amp; theme
+                Replace this {p.kind}
               </button>
               <button onClick={() => setConfirming(null)}>Keep mine</button>
             </span>

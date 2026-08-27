@@ -228,7 +228,9 @@ export function WriterProvider({ initialMarkdown, slug, mediaBase, onChange, wor
         Dropcursor,
         Gapcursor,
         CharacterCount.configure({ limit: null }),
-        Markdown.configure({ html: false, tightLists: true, linkify: true, breaks: false }),
+        // html:true: the artifact renders the file's inline HTML, so the
+        // editor must too — what you see has to be what emits.
+        Markdown.configure({ html: true, tightLists: true, linkify: true, breaks: false }),
       ]}
       content={initialMarkdown}
       onUpdate={({ editor }) => onChange((editor.storage as any).markdown.getMarkdown())}

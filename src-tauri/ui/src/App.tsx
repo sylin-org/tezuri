@@ -58,6 +58,15 @@ export default function App() {
   const [templateFile, setTemplateFile] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "dirty">("saved");
+  // A banner mode claimed the article frame: the H1 (and standfirst) live in
+  // the frame's projection, so the editor mounts the body only. `framed` is
+  // only true while the file's actual bytes still start with the prefix the
+  // composer stripped — the save path re-attaches it, byte-exact.
+  const framed = !!(
+    compose?.frame_claimed &&
+    compose?.title_prefix &&
+    text.startsWith(compose.title_prefix)
+  );
 
   // ---- shared chrome state ----------------------------------------------------
   const [assistOpen, setAssistOpen] = useState(false);
@@ -568,11 +577,16 @@ export default function App() {
                   </div>
                 ) : (
                   <WriterProvider
-                    key={doc.slug}
-                    initialMarkdown={text}
+                    key={doc.slug + (framed ? "+framed" : "")}
+                    initialMarkdown={
+                      framed ? text.slice((compose.title_prefix as string).length) : text
+                    }
                     slug={doc.slug}
                     mediaBase={mediaBase}
-                    onChange={(md) => { setText(md); touch(); }}
+                    onChange={(md) => {
+                      setText(framed ? (compose.title_prefix as string) + md : md);
+                      touch();
+                    }}
                     words={text.split(/\s+/).filter(Boolean).length}
                   >
                     <WriteComposePlane

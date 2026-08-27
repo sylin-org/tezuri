@@ -61,6 +61,14 @@ pub fn atomic_write(target: &Path, bytes: &[u8]) -> Result<()> {
 }
 
 /// Content hash (sha256 hex) used for media addressing and change detection.
+/// The user's home directory — parent of the app-state home. Preferences
+/// and caches live there; canonical content never does.
+pub fn home() -> Option<std::path::PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(std::path::PathBuf::from)
+}
+
 pub fn content_hash(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
     let mut h = Sha256::new();

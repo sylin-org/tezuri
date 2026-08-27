@@ -398,19 +398,6 @@ pub struct PresetView {
     pub css: String,
 }
 
-#[tauri::command]
-fn theme_presets() -> Vec<PresetView> {
-    tezuri::render::presets()
-        .into_iter()
-        .map(|p| PresetView {
-            id: p.id,
-            name: p.name,
-            description: p.description,
-            css: p.css,
-        })
-        .collect()
-}
-
 /// The open space's theme CSS; empty means the built-in look.
 #[tauri::command]
 fn read_theme(session: State<Session>) -> Result<String, CommandError> {
@@ -723,21 +710,56 @@ fn save_assistant_catalog(
     catalog.save(&root(&session)?).map_err(err)
 }
 
-// -- packs -------------------------------------------------------------------
+// -- asset library: official + downloaded, with selection history -----------
 
-#[tauri::command]
-fn packs_list() -> Vec<tezuri::packs::PackView> {
-    tezuri::packs::view()
+#[derive(Serialize)]
+struct PickerList {
+    themes: Vec<tezuri::render::PickerEntry>,
+    templates: Vec<tezuri::render::PickerEntry>,
 }
 
-/// Pick a presentation for the open space: template + css become the
-/// space's own files via the journaled write paths. Deliberate overwrite.
+/// Everything the picker offers: official assets first, downloads after.
 #[tauri::command]
-fn pack_apply(id: String, session: State<Session>) -> Result<(), CommandError> {
+fn picker_list() -> Result<PickerList, CommandError> {
+    let (themes, templates) = tezuri::render::picker_list().map_err(err)?;
+    Ok(PickerList { themes, templates })
+}
+
+/// Apply a theme or template asset: its bytes become the space's own file,
+/// journaled, and the selection joins the space's history ring.
+#[tauri::command]
+fn picker_apply(kind: String, id: String, session: State<Session>) -> Result<String, CommandError> {
     let current = root(&session)?;
-    tezuri::packs::apply(&current, &id).map_err(err)?;
+    let kind = tezuri::render::picker_apply(&current, &kind, &id).map_err(err)?;
     enqueue_settle(current);
-    Ok(())
+    Ok(kind)
+}
+
+/// History depth for both kinds (theme, template).
+#[tauri::command]
+fn picker_history(session: State<Session>) -> Result<(usize, usize), CommandError> {
+    tezuri::render::picker_history(&root(&session)?).map_err(err)
+}
+
+/// Step the history ring (-1 back, +1 forward) and re-apply. Returns the
+/// new position.
+#[tauri::command]
+fn picker_history_step(
+    kind: String,
+    delta: i32,
+    session: State<Session>,
+) -> Result<i64, CommandError> {
+    let current = root(&session)?;
+    let pos = tezuri::render::picker_history_step(&current, &kind, delta).map_err(err)?;
+    enqueue_settle(current);
+    Ok(pos)
+}
+
+/// Fetch one asset file over the network, on the user's explicit command.
+/// Bounded; stored under the app-state home, never inside a publication.
+#[tauri::command]
+fn download_asset(url: String) -> Result<String, CommandError> {
+    tezuri::render::download_asset(&url).map_err(err)
 }
 
 // -- ship --------------------------------------------------------------------
@@ -828,7 +850,6 @@ pub fn run() {
             open_about_link,
             read_assistant_catalog,
             save_assistant_catalog,
-            theme_presets,
             read_theme,
             write_theme,
             render_article,
@@ -839,8 +860,11 @@ pub fn run() {
             write_compose_draft,
             render_specimen,
             slot_catalog,
-            packs_list,
-            pack_apply,
+            picker_list,
+            picker_apply,
+            picker_history,
+            picker_history_step,
+            download_asset,
             emit_render,
             desk,
             read_article,

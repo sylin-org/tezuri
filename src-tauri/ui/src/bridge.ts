@@ -72,6 +72,8 @@ export interface ThemePreset {
 }
 
 export interface SlotInstance {
+  /** The mount-point element (`[data-tz=…]`) this occurrence portals into. */
+  mount: string;
   name: string;
   raw: string;
   hints: string[];
@@ -85,6 +87,7 @@ export type Seg =
   | { kind: "text"; html: string }
   | {
       kind: "article_flow";
+      mount: string;
       mirror: boolean;
       /** Declared presentation around the flow (title-banner modes). */
       frame: string;
@@ -104,6 +107,16 @@ export interface WriteCompose {
   /** The artifact's head dress (font imports, template styles, baseline) —
    *  the desk scopes it to the Write plane. */
   css: string;
+  /** The composed body region — the artifact's real structure (grid, rails,
+   *  literal labels) with every occurrence replaced by a data-tz mount. */
+  body_html: string;
+  /** The composed `<body class>`, worn as context classes on the plane. */
+  body_class: string;
+  /** True when a banner mode claimed the frame: the editor mounts the body
+   *  only, and title_prefix is the exact markdown stripped off — the save
+   *  path re-attaches it so the file never loses its title. */
+  frame_claimed: boolean;
+  title_prefix: string;
 }
 
 /** Rewrite artifact CSS so it wears the Write plane, not the desk.

@@ -6,6 +6,7 @@ mod assets_theme;
 mod behaviors;
 mod emit;
 mod gather;
+mod library;
 mod markdown;
 mod pipeline;
 #[cfg(test)]
@@ -18,6 +19,7 @@ pub use assets_theme::*;
 pub(crate) use behaviors::*;
 pub(crate) use emit::*;
 pub(crate) use gather::*;
+pub use library::{download_asset, picker_apply, picker_history, picker_history_step, picker_list, PickerEntry};
 pub(crate) use markdown::*;
 pub(crate) use pipeline::*;
 

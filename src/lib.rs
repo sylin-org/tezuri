@@ -17,7 +17,6 @@ pub mod derive;
 pub mod desk;
 pub mod identity;
 pub mod media;
-pub mod packs;
 pub mod publications;
 pub mod render;
 pub mod renditions;
