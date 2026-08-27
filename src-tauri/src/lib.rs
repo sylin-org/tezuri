@@ -433,6 +433,16 @@ fn render_article(slug: String, session: State<Session>) -> Result<String, Comma
     tezuri::render::render_article(&root(&session)?, &slug).map_err(err)
 }
 
+/// Compose the Write-mode page: template segments in order with every slot's
+/// live projection; the editor mounts where {{ARTICLE}} sits.
+#[tauri::command]
+fn write_compose(
+    slug: String,
+    session: State<Session>,
+) -> Result<tezuri::render::WriteCompose, CommandError> {
+    tezuri::render::compose_write_view(&root(&session)?, &slug).map_err(err)
+}
+
 /// Compile every article into render/ inside the publication.
 #[tauri::command]
 fn emit_render(session: State<Session>) -> Result<Vec<String>, CommandError> {
@@ -689,6 +699,7 @@ pub fn run() {
             read_theme,
             write_theme,
             render_article,
+            write_compose,
             emit_render,
             desk,
             read_article,

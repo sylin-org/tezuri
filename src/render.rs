@@ -323,6 +323,183 @@ fn esc_style(css: &str) -> String {
     css.replace("</style", "<\\/style")
 }
 
+// ---------------------------------------------------------------------------
+// Write-mode composition: parse the template, project every slot live
+// ---------------------------------------------------------------------------
+
+/// One ordered piece of the Write-mode page. The editor mounts at the first
+/// `ArticleFlow`; later instances mirror it. Slots carry their evaluated
+/// value plus the raw expression so the desk can re-conduct them.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Seg {
+    /// A literal run of the template, shown as inert content.
+    Text {
+        html: String,
+    },
+    /// The article flow — where the TipTap surface mounts.
+    ArticleFlow {
+        mirror: bool,
+    },
+    Slot(SlotInstance),
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SlotInstance {
+    pub name: String,
+    pub raw: String,
+    pub hints: Vec<String>,
+    /// Current projection for non-editable slots (safe HTML from evaluation).
+    pub html: String,
+    /// True when a real inline editor replaces the static projection.
+    pub editable: bool,
+    /// The second occurrence onward of the same slot mirrors the first.
+    pub mirror: bool,
+}
+
+/// The Write-mode page: template order preserved, {{ARTICLE}} marked.
+#[derive(Debug, serde::Serialize)]
+pub struct WriteCompose {
+    pub slug: String,
+    pub segments: Vec<Seg>,
+    pub notes: Vec<String>,
+    /// Template came from templates/article.html rather than the built-in.
+    pub space_template: bool,
+}
+
+/// Compose the Write-mode view of one article: template segments in order,
+/// every slot carrying its live projection. Whispers ride along as notes;
+/// the page never breaks here either.
+///
+/// Mechanism: the page is composed once with unique invisible sentinels at
+/// every editable boundary, then the document shell (head, styles, script,
+/// pre-body noise) is sliced away from the full result. Whatever the author
+/// wrote between slots survives byte-honest, whatever brace or shell trick
+/// the template holds cannot misplace a segment.
+pub fn compose_write_view(publication_root: &Path, slug: &str) -> Result<WriteCompose> {
+    let ctx = gather_article_ctx(publication_root, slug)?;
+    let tpl_raw = load_template(publication_root, "article.html", ARTICLE_TEMPLATE)?;
+    let space_template = confine(publication_root, Path::new("templates/article.html"))?.exists();
+    let parts = slots::parse_template(&tpl_raw);
+
+    let (page, notes, toks) = slots::compose_marked(&parts, &ctx);
+    let body = carve_to_body(&page);
+
+    let mut segments: Vec<Seg> = Vec::new();
+    let mut seen_counts: std::collections::BTreeMap<String, usize> = Default::default();
+    let mut saw_article = false;
+    let mut rest = body.as_str();
+
+    while let Some(open_at) = rest.find(slots::MARK_OPEN) {
+        let Some(close_rel) = rest[open_at..].find(slots::MARK_CLOSE) else {
+            break; // stray open: the tail is inert text
+        };
+        let token_end_rel = open_at + close_rel + slots::MARK_CLOSE_LEN;
+        let inner = &rest[open_at + slots::MARK_OPEN.len()..open_at + close_rel];
+        if !rest[..open_at].is_empty() {
+            segments.push(Seg::Text {
+                html: rest[..open_at].to_string(),
+            });
+        }
+        match parse_token(inner) {
+            Token::Article => {
+                segments.push(Seg::ArticleFlow {
+                    mirror: saw_article,
+                });
+                saw_article = true;
+            }
+            Token::Slot(idx) => {
+                if let Some(tok) = toks.get(idx).cloned() {
+                    let mirror = *seen_counts.entry(tok.name.clone()).or_default() > 0;
+                    *seen_counts.entry(tok.name.clone()).or_default() += 1;
+                    let editable = matches!(tok.name.as_str(), "date" | "tags" | "cover_img");
+                    segments.push(Seg::Slot(SlotInstance {
+                        name: tok.name,
+                        raw: tok.raw,
+                        hints: tok.hints,
+                        html: tok.html,
+                        editable: !mirror && editable,
+                        mirror,
+                    }));
+                }
+            }
+            Token::Junk => {} // never surface malformed markers as text
+        }
+        rest = &rest[token_end_rel..];
+    }
+    if !rest.is_empty() {
+        segments.push(Seg::Text {
+            html: rest.to_string(),
+        });
+    }
+
+    Ok(WriteCompose {
+        slug: slug.to_string(),
+        segments,
+        notes,
+        space_template,
+    })
+}
+
+#[derive(Debug, Clone)]
+enum Token {
+    Article,
+    Slot(usize),
+    Junk,
+}
+
+fn parse_token(inner: &str) -> Token {
+    if let Some(n) = inner.strip_prefix('A') {
+        if n.parse::<usize>().is_ok() {
+            return Token::Article;
+        }
+        return Token::Junk;
+    }
+    if let Some(n) = inner.strip_prefix('S') {
+        if let Ok(idx) = n.parse::<usize>() {
+            return Token::Slot(idx);
+        }
+        return Token::Junk;
+    }
+    Token::Junk
+}
+
+/// The written body region of a composed page: after the <body …> opener's
+/// `>`, before `</body>`; whole-document fallbacks for templates that skip
+/// conventional shells.
+fn carve_to_body(page: &str) -> String {
+    let start = page
+        .find("<body")
+        .and_then(|b| page[b..].find('>').map(|g| b + g + 1))
+        .or_else(|| page.find("</head>").map(|h| h + "</head>".len()))
+        .unwrap_or(0);
+    let end = page.rfind("</body>").unwrap_or(page.len());
+    end.checked_sub(start)
+        .map(|n| strip_blocks(&page[start..start + n]))
+        .unwrap_or_default()
+}
+
+/// Remove complete style/script blocks from a run; Tezuri owns behaviors and
+/// themes ride globally on the desk, so neither belongs in Write mode.
+fn strip_blocks(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s;
+    while let Some(p) = rest.find("<script").or_else(|| rest.find("<style")) {
+        let tag_len = 7; // "<script" and "<style" both span 7 bytes
+        let close_tag = if rest[p..].starts_with("<script") {
+            "</script>"
+        } else {
+            "</style>"
+        };
+        out.push_str(&rest[..p]);
+        match rest[p + tag_len..].find(close_tag) {
+            Some(c) => rest = &rest[p + tag_len + c + close_tag.len()..],
+            None => return out, // unterminated block: drop the remainder
+        }
+    }
+    out.push_str(rest);
+    out
+}
 fn site_display_name(publication_root: &Path, name: &str) -> String {
     if !name.is_empty() {
         return name.to_string();
@@ -704,6 +881,165 @@ mod tests {
         );
         assert!(cover_src(dir.path(), &Some("media/missing.png".into())).is_none());
         assert!(cover_src(dir.path(), &Some("bare-name.png".into())).is_none());
+    }
+
+    #[test]
+    fn compose_write_view_keeps_order_and_marks_the_flow() {
+        let dir = tempdir().unwrap();
+        setup(dir.path(), "wv", DOC);
+
+        let c = compose_write_view(dir.path(), "wv").unwrap();
+        assert!(!c.space_template, "default template: nothing in the space");
+        assert!(c.notes.is_empty());
+        let kinds: Vec<&str> = c
+            .segments
+            .iter()
+            .map(|s| match s {
+                Seg::Text { .. } => "text",
+                Seg::ArticleFlow { .. } => "flow",
+                Seg::Slot(_) => "slot",
+            })
+            .collect();
+        assert_eq!(
+            kinds,
+            vec![
+                "text", // body opener + page + article wrappers
+                "flow", "text", // closing wrappers before </body>
+            ]
+        );
+        // The head never leaks: no doctype, no injected baseline styles.
+        let joined = c
+            .segments
+            .iter()
+            .map(|s| match s {
+                Seg::Text { html } => html.clone(),
+                _ => String::new(),
+            })
+            .collect::<Vec<_>>()
+            .join("");
+        assert!(joined.contains("<div class=\"page\">"), "{joined}");
+        assert!(!joined.contains("<!DOCTYPE") && !joined.contains("tezuri-baseline"));
+        assert!(c.segments[0..].iter().all(|s| !matches!(s, Seg::Slot(_))));
+    }
+
+    #[test]
+    fn compose_write_view_projects_slots_in_order() {
+        let dir = tempdir().unwrap();
+        Article::create(dir.path(), "proj", "Proj").unwrap();
+        let mut a = Article::load(dir.path(), "proj").unwrap();
+        a.document = "# Proj\n\n_Standfast._\n\nBody.\n".into();
+        a.meta.tags = vec!["rust".into()];
+        a.save(dir.path()).unwrap();
+
+        let tpl_dir = dir.path().join("templates");
+        std::fs::create_dir_all(&tpl_dir).unwrap();
+        std::fs::write(
+            tpl_dir.join("article.html"),
+            concat!(
+                "<html><head><style>s{}</style><title>{{title}}</title></head>\n",
+                "<body class=\"{{body_class}}\">\n",
+                "<header>{{site_name}}</header>{{standfirst}}\n",
+                "{{ARTICLE}}\n",
+                "<footer>{{tags | pills}}{{toc}}{{sparkle}}</footer>",
+                "<script>void</script></body></html>"
+            ),
+        )
+        .unwrap();
+
+        let c = compose_write_view(dir.path(), "proj").unwrap();
+        assert!(c.space_template);
+        let one_unknown = c.notes.iter().any(|n| n.contains("{{sparkle}}"));
+        assert!(one_unknown);
+
+        let mut order: Vec<String> = Vec::new();
+        for s in &c.segments {
+            match s {
+                Seg::Text { html } => order.push(format!("text:{html:?}")),
+                Seg::ArticleFlow { mirror } => order.push(format!("flow:{mirror}")),
+                Seg::Slot(sl) => order.push(format!("slot:{}:{}", sl.name, sl.mirror)),
+            }
+        }
+        // Head is cut (title lives there), attributes before <body>'s `>` too.
+        assert_eq!(order.len(), 10, "{order:?}");
+        assert!(order[0].starts_with("text:")); // "\n<header>"
+        assert_eq!(order[1], "slot:site_name:false");
+        assert!(order[2].contains("</header>"));
+        assert_eq!(order[3], "slot:standfirst:false");
+        assert_eq!(order[4], "text:\"\\n\"");
+        assert_eq!(order[5], "flow:false");
+        assert_eq!(order[6], "text:\"\\n<footer>\"");
+        assert_eq!(order[7], "slot:tags:false");
+        assert_eq!(order[8], "slot:toc:false");
+        assert_eq!(order[9], "text:\"</footer>\"");
+
+        let standfirst_html = match &c.segments[3] {
+            Seg::Slot(sl) => sl.html.clone(),
+            _ => unreachable!(),
+        };
+        assert_eq!(standfirst_html, "<p class=\"standfirst\">Standfast.</p>");
+        let tags_html = match &c.segments[7] {
+            Seg::Slot(sl) => sl.html.clone(),
+            _ => unreachable!("{order:?}"),
+        };
+        assert_eq!(tags_html, "<span class=\"tagpill\">#rust</span>");
+
+        // Scripts after </body> are stripped from the plane.
+        let joined = c
+            .segments
+            .iter()
+            .filter_map(|s| match s {
+                Seg::Text { html } => Some(html.as_str()),
+                _ => None,
+            })
+            .collect::<String>();
+        assert!(!joined.contains("<script"), "{joined}");
+    }
+
+    #[test]
+    fn missing_article_marker_still_hands_the_editor_over() {
+        let dir = tempdir().unwrap();
+        setup(dir.path(), "noart", "# No art\n\nplain.\n");
+        // A deliberately flow-less template: the editor must still mount.
+        let tpl_dir = dir.path().join("templates");
+        std::fs::create_dir_all(&tpl_dir).unwrap();
+        std::fs::write(
+            tpl_dir.join("article.html"),
+            "<html><body><p>layout without a flow</p></body></html>",
+        )
+        .unwrap();
+
+        let c = compose_write_view(dir.path(), "noart").unwrap();
+        let flows: Vec<&Seg> = c
+            .segments
+            .iter()
+            .filter(|s| matches!(s, Seg::ArticleFlow { .. }))
+            .collect();
+        assert_eq!(flows.len(), 1, "the editor still mounts exactly once");
+        assert!(c.notes.iter().any(|n| n.contains("{{ARTICLE}}")));
+    }
+
+    #[test]
+    fn duplicate_slots_mirror_the_first() {
+        let dir = tempdir().unwrap();
+        Article::create(dir.path(), "dup", "Dup").unwrap();
+        let tpl_dir = dir.path().join("templates");
+        std::fs::create_dir_all(&tpl_dir).unwrap();
+        std::fs::write(
+            tpl_dir.join("article.html"),
+            "<html><body><h1>{{title}}</h1>{{ARTICLE}}<small>{{title}}</small></body></html>",
+        )
+        .unwrap();
+
+        let c = compose_write_view(dir.path(), "dup").unwrap();
+        let titles: Vec<bool> = c
+            .segments
+            .iter()
+            .filter_map(|s| match s {
+                Seg::Slot(sl) if sl.name == "title" => Some(sl.mirror),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(titles, vec![false, true], "second instance mirrors first");
     }
 
     #[test]

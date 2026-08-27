@@ -3,6 +3,7 @@ import CodeMirror from "@uiw/react-codemirror";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { Writer } from "./Writer";
+import { WriteComposePlane } from "./Compose";
 import { Landing } from "./Landing";
 import { SpaceRail, type Workspace } from "./Space";
 import { About } from "./About";
@@ -48,6 +49,8 @@ export default function App() {
     cover: string | null; date: string | null; tags: string[] | null;
   } | null>(null);
   const [text, setText] = useState("");
+  // The space's template, projected live for Write mode.
+  const [compose, setCompose] = useState<any | null>(null);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "dirty">("saved");
 
   // ---- shared chrome state ----------------------------------------------------
@@ -87,6 +90,10 @@ export default function App() {
       dirtyRef.current = false;
       setSaveStatus("saved");
       await refreshDesk();
+      // Projections follow the file: the composer re-reads what just saved.
+      invoke("write_compose", { slug: d.slug })
+        .then(setCompose)
+        .catch(() => {});
     } catch (e: any) {
       setSaveStatus("dirty");
       setNote(e.message ?? String(e));
@@ -231,6 +238,7 @@ export default function App() {
         tags: a.article.meta.tags ?? [],
       });
       setText(a.raw);
+      invoke<any>("write_compose", { slug }).then(setCompose).catch(() => setCompose(null));
       setSaveStatus("saved");
       dirtyRef.current = false;
       setActiveSlug(slug);
@@ -507,12 +515,28 @@ export default function App() {
                     />
                   </div>
                 ) : (
-                  <Writer
-                    key={doc.slug} initialMarkdown={text} slug={doc.slug}
-                    mediaBase={mediaBase}
-                    onChange={(md) => { setText(md); touch(); }}
-                    words={text.split(/\s+/).filter(Boolean).length}
-                  />
+                  <div className="writer-wrap">
+                    <WriteComposePlane
+                      compose={compose}
+                      markdown={text}
+                      slug={doc.slug}
+                      mediaBase={mediaBase}
+                      date={doc.date}
+                      tags={doc.tags}
+                      cover={doc.cover}
+                      tagVocabulary={[
+                        ...new Set(
+                          entries.flatMap((e) => e.tags ?? [])
+                        ),
+                      ]}
+                      onMarkdown={(md) => { setText(md); touch(); }}
+                      words={text.split(/\s+/).filter(Boolean).length}
+                      onMetaChange={(patch) => {
+                        setDoc((d0) => d0 ? { ...d0, ...patch } : d0);
+                        touch();
+                      }}
+                    />
+                  </div>
                 )}
               </>
             )}

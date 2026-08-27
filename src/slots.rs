@@ -292,6 +292,103 @@ impl Ctx {
 // Evaluation
 // ---------------------------------------------------------------------------
 
+/// Invisible marker characters wrapping Write-mode tokens. Chosen from the
+/// Unicode punctuation block so authored bytes never collide.
+pub const MARK_OPEN: &str = "\u{2063}";
+pub const MARK_CLOSE: &str = "\u{2064}";
+pub const MARK_OPEN_LEN: usize = 3;
+pub const MARK_CLOSE_LEN: usize = 3;
+
+/// One evaluated slot occurrence recorded for the Write plane.
+#[derive(Debug, Clone)]
+pub struct SlotTok {
+    pub name: String,
+    pub raw: String,
+    pub hints: Vec<String>,
+    pub html: String,
+}
+
+/// Compose with invisible tokens where `{{ARTICLE}}` and every known slot
+/// would land, returning the token registry in emit order. The shell stays
+/// byte-honest; the Write plane slices later. Unknown slots whisper as
+/// usual but leave no token — they render empty everywhere by rule two.
+pub fn compose_marked(parts: &[Part], ctx: &Ctx) -> (String, Vec<String>, Vec<SlotTok>) {
+    let mut out = String::new();
+    let mut notes = Vec::new();
+    let mut toks: Vec<SlotTok> = Vec::new();
+    let mut saw_article = false;
+
+    for part in parts {
+        match part {
+            Part::Text(t) => out.push_str(t),
+            Part::Slot(slot) => {
+                if slot.name == "ARTICLE" {
+                    saw_article = true;
+                    let _ = write!(
+                        out,
+                        "{MARK_OPEN}A{toks_len}{MARK_CLOSE}",
+                        toks_len = toks.len()
+                    );
+                    toks.push(SlotTok {
+                        name: slot.name.clone(),
+                        raw: slot.raw.clone(),
+                        hints: vec![],
+                        html: ctx.flow_html.clone(),
+                    });
+                    continue;
+                }
+                if !known(&slot.name) {
+                    let note = format!("unknown slot {} rendered empty", slot.raw);
+                    if !notes.contains(&note) {
+                        notes.push(note);
+                    }
+                    continue;
+                }
+                let (value, noted) = evaluate(slot, ctx);
+                for n in noted {
+                    if !notes.contains(&n) {
+                        notes.push(n);
+                    }
+                }
+                let _ = write!(
+                    out,
+                    "{MARK_OPEN}S{toks_len}{MARK_CLOSE}",
+                    toks_len = toks.len()
+                );
+                toks.push(SlotTok {
+                    name: slot.name.clone(),
+                    raw: slot.raw.clone(),
+                    hints: slot.hints.clone(),
+                    html: value,
+                });
+            }
+        }
+    }
+
+    if ctx.require_article && !saw_article {
+        let token = format!("{MARK_OPEN}A{}{MARK_CLOSE}", toks.len());
+        // Before </body>, never after: downstream slicing keeps only the
+        // written body region.
+        match out.rfind("</body>") {
+            Some(p) => out.insert_str(p, &token),
+            None => out.push_str(&token),
+        }
+        toks.push(SlotTok {
+            name: "ARTICLE".into(),
+            raw: "{{ARTICLE}}".into(),
+            hints: vec![],
+            html: ctx.flow_html.clone(),
+        });
+        notes.insert(
+            0,
+            "template has no {{ARTICLE}}; the article flow was appended \
+             at the end"
+                .into(),
+        );
+    }
+    (out, notes, toks)
+}
+
 /// Substitute every slot, returning composed HTML plus editor notes. Empty
 /// data renders zero bytes; unknowns render empty and note themselves once.
 pub fn compose(parts: &[Part], ctx: &Ctx) -> (String, Vec<String>) {

@@ -24,6 +24,7 @@ export interface DeskEntry {
   words: number;
   links: string[];
   dangling_links: string[];
+  tags?: string[] | null;
 }
 
 export interface Desk {
@@ -68,6 +69,28 @@ export interface ThemePreset {
   name: string;
   description: string;
   css: string;
+}
+
+export interface SlotInstance {
+  name: string;
+  raw: string;
+  hints: string[];
+  html: string;
+  editable: boolean;
+  mirror: boolean;
+}
+
+/** One ordered piece of the Write-mode page, from the desktop's composer. */
+export type Seg =
+  | { kind: "text"; html: string }
+  | { kind: "article_flow"; mirror: boolean }
+  | ({ kind: "slot" } & SlotInstance);
+
+export interface WriteCompose {
+  slug: string;
+  segments: Seg[];
+  notes: string[];
+  space_template: boolean;
 }
 
 export interface ProofResult {

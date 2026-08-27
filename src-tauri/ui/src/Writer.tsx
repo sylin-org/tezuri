@@ -108,7 +108,6 @@ export function Writer({ initialMarkdown, slug, mediaBase, onChange, words }: Wr
   void suppressUpdate;
 
   return (
-    <>
     <div className="writer-column">
     <EditorProvider      key={slug}
       immediatelyRender={false}
@@ -244,63 +243,6 @@ export function Writer({ initialMarkdown, slug, mediaBase, onChange, words }: Wr
       <SelectionBubble />
     </EditorProvider>
     </div>
-    <TocRail markdown={initialMarkdown} />
-    </>
-  );
-}
-
-/** The article workspace's own navigation: the headings of this document,
- *  highlighting the section under the reader's eyes. Lives in the editor
- *  plane; the artifact carries its own TOC in the emitted page. */
-function TocRail({ markdown }: { markdown: string }) {
-  const [items, setItems] = React.useState<{ id: string; text: string; level: number }[]>([]);
-  const [current, setCurrent] = React.useState<string | null>(null);
-
-  // Rebuild the list whenever the markdown changes. Headings are read from
-  // the live editor DOM so ids match what scroll-spy observes.
-  React.useEffect(() => {
-    const root = document.querySelector(".writer-column .tiptap");
-    if (!root) return;
-    const heads = Array.from(root.querySelectorAll("h2, h3"));
-    setItems(heads.map((h, i) => {
-      if (!h.id) h.id = `ed-${i}-${(h.textContent ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40)}`;
-      return { id: h.id, text: h.textContent ?? "", level: h.tagName === "H2" ? 2 : 3 };
-    }));
-  }, [markdown]);
-
-  React.useEffect(() => {
-    if (items.length === 0 || !("IntersectionObserver" in window)) return;
-    const byId = new Map(items.map((i) => [i.id, i]));
-    const obs = new IntersectionObserver((entries) => {
-      const visible = entries
-        .filter((e) => e.isIntersecting)
-        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-      if (visible.length > 0 && byId.has(visible[0].target.id)) {
-        setCurrent(visible[0].target.id);
-      }
-    }, { rootMargin: "-80px 0px -70% 0px" });
-    items.forEach((i) => {
-      const el = document.getElementById(i.id);
-      if (el) obs.observe(el);
-    });
-    return () => obs.disconnect();
-  }, [items]);
-
-  if (items.length === 0) return null;
-  return (
-    <nav className="editor-toc" aria-label="In this article">
-      <h2>In this article</h2>
-      {items.map((i) => (
-        <a key={i.id} href={`#${i.id}`} title={i.text}
-           className={`${i.level === 3 ? "l3" : ""}${current === i.id ? " current" : ""}`}
-           onClick={(e) => {
-             e.preventDefault();
-             document.getElementById(i.id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-           }}>
-          {i.text}
-        </a>
-      ))}
-    </nav>
   );
 }
 
