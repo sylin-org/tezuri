@@ -12,7 +12,7 @@
 use crate::articles::State;
 use crate::media_id::{self, Recipe};
 use crate::render;
-use crate::spine::confine;
+use crate::spine::{confine, content_hash};
 use anyhow::Result;
 use std::path::Path;
 
@@ -25,6 +25,37 @@ pub struct SettlePlan {
     pub renders: Vec<String>,
     /// (base media reference, recipe) pairs whose rendition file is missing.
     pub renditions: Vec<(String, Recipe)>,
+}
+
+/// Where the last-seen published-set fingerprint lives (a derived cache,
+/// rebuilt at will).
+fn fingerprint_path(publication_root: &Path) -> Result<std::path::PathBuf> {
+    confine(publication_root, Path::new(".tezuri/published-index"))
+}
+
+/// A cheap identity of the publishable set: everything pages project about
+/// their NEIGHBORS (order for prev/next, tags for similar, titles/dates for
+/// lists). When it matches what the emitted pages were built from, no page
+/// can be neighbor-stale, whatever its own mtimes say.
+pub fn published_fingerprint(publication_root: &Path) -> Result<String> {
+    let desk = crate::desk::Desk::rebuild(publication_root)?;
+    let mut lines: Vec<String> = desk
+        .entries
+        .iter()
+        .filter(|e| e.state != State::Draft)
+        .map(|e| {
+            format!(
+                "{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}",
+                e.slug,
+                e.state.as_str(),
+                e.date.as_deref().unwrap_or(""),
+                e.title,
+                e.tags.join("\u{1e}")
+            )
+        })
+        .collect();
+    lines.sort();
+    Ok(content_hash(lines.join("\n").as_bytes()))
 }
 
 impl SettlePlan {
@@ -47,13 +78,25 @@ pub fn scan_plan(publication_root: &Path) -> Result<SettlePlan> {
     let mut plan = SettlePlan::default();
 
     let desk = crate::desk::Desk::rebuild(publication_root)?;
-    for e in &desk.entries {
-        if e.state == State::Draft {
-            continue;
-        }
+    let publishable: Vec<_> = desk
+        .entries
+        .iter()
+        .filter(|e| e.state != State::Draft)
+        .cloned()
+        .collect();
+
+    // Neighbor staleness: the emitted pages were built from a published set.
+    // Any change in that set can move prev/next links and lists on pages
+    // whose own inputs never changed, so the whole publishable set re-plans.
+    let current_fp = published_fingerprint(publication_root)?;
+    let stored_fp =
+        std::fs::read_to_string(fingerprint_path(publication_root)?).unwrap_or_default();
+    let set_changed = stored_fp != current_fp;
+
+    for e in &publishable {
         let rel = format!("{}/{}.html", render::RENDER_DIR, e.slug);
         let page = confine(publication_root, Path::new(&rel))?;
-        if page_stale(&page, publication_root, &e.slug) {
+        if set_changed || page_stale(&page, publication_root, &e.slug) {
             plan.renders.push(e.slug.clone());
         }
     }
@@ -129,6 +172,13 @@ pub fn settle(
             pages: plan.renders.len(),
         })?;
     }
+    // Remember the set these pages were built from; the next scan compares
+    // against it. Cache maintenance, not user content: silent by design.
+    let fp = published_fingerprint(publication_root)?;
+    if let Some(p) = fingerprint_path(publication_root)?.parent() {
+        std::fs::create_dir_all(p).ok();
+    }
+    crate::spine::atomic_write(&fingerprint_path(publication_root)?, fp.as_bytes())?;
 
     for (base, recipe) in &plan.renditions {
         let _ = media_id::resolve_for_display(publication_root, base, recipe.clone());
@@ -158,6 +208,39 @@ mod tests {
         a.meta.state = State::Review;
         a.document = format!("# {slug}\n\n## A heading\n\nSome words.\n");
         a.save(root).unwrap();
+    }
+
+    #[test]
+    fn set_changes_replan_neighbors_without_input_touches() {
+        let dir = tempdir().unwrap();
+        let mut a = Article::create(dir.path(), "alpha", "Alpha").unwrap();
+        a.meta.state = State::Published;
+        a.meta.date = Some("2026-01-01".into());
+        a.save(dir.path()).unwrap();
+        let mut b = Article::create(dir.path(), "beta", "Beta").unwrap();
+        b.meta.state = State::Draft; // invisible to pages
+        b.save(dir.path()).unwrap();
+
+        settle(
+            dir.path(),
+            &scan_plan(dir.path()).unwrap(),
+            &mut |_, _, _| {},
+        )
+        .unwrap();
+        assert!(scan_plan(dir.path()).unwrap().is_empty());
+
+        // Publishing beta moves alpha's next-link — alpha's own files never
+        // changed, and the fingerprint alone must catch it.
+        b.meta.state = State::Published;
+        b.meta.date = Some("2026-02-01".into());
+        b.save(dir.path()).unwrap();
+
+        let plan = scan_plan(dir.path()).unwrap();
+        assert!(plan.renders.contains(&"alpha".to_string()), "{plan:?}");
+        assert!(plan.renders.contains(&"beta".to_string()));
+
+        settle(dir.path(), &plan, &mut |_, _, _| {}).unwrap();
+        assert!(scan_plan(dir.path()).unwrap().is_empty(), "idempotent");
     }
 
     #[test]
