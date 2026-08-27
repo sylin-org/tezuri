@@ -13,11 +13,10 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum State {
     Draft,
-    Review,
     Published,
 }
 
@@ -25,9 +24,20 @@ impl State {
     pub fn as_str(&self) -> &'static str {
         match self {
             State::Draft => "draft",
-            State::Review => "review",
             State::Published => "published",
         }
+    }
+}
+
+impl<'de> Deserialize<'de> for State {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(d)?;
+        // Legacy three-state files carried "review": those articles were
+        // already in the render set, so they surface as published.
+        Ok(match s.as_str() {
+            "published" | "review" => State::Published,
+            _ => State::Draft,
+        })
     }
 }
 
@@ -37,6 +47,9 @@ impl State {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ArticleMeta {
     pub slug: String,
+    /// Stable uuidv7, minted at creation — survives slug renames.
+    #[serde(default)]
+    pub id: Option<String>,
     #[serde(default = "default_state")]
     pub state: State,
     #[serde(default)]
@@ -46,6 +59,9 @@ pub struct ArticleMeta {
     /// Reference to a media base id used as the hero image.
     #[serde(default)]
     pub cover: Option<String>,
+    /// Author override; the space byline is the fallback.
+    #[serde(default)]
+    pub author: Option<String>,
     #[serde(default)]
     pub standfirst: Option<String>,
     /// Provenance: where this article came from (e.g. substack-import).
@@ -158,10 +174,12 @@ impl Article {
         } else {
             ArticleMeta {
                 slug: slug.to_string(),
+                id: None,
                 state: State::Draft,
                 date: None,
                 tags: vec![],
                 cover: None,
+                author: None,
                 standfirst: None,
                 extra: Default::default(),
             }
@@ -189,6 +207,11 @@ impl Article {
         // Preserve unknown extra keys: merge our knowns over the existing file.
         let meta_path = dir.join("meta.yaml");
         let mut out_meta = self.meta.clone();
+        // A stable id is part of the contract: legacy articles mint one the
+        // first time they are saved.
+        if out_meta.id.is_none() {
+            out_meta.id = Some(uuid::Uuid::now_v7().to_string());
+        }
         if meta_path.exists() {
             if let Ok(existing) =
                 serde_yaml::from_str::<serde_yaml::Value>(&fs::read_to_string(&meta_path)?)
@@ -198,7 +221,14 @@ impl Article {
                         let key = k.as_str().unwrap_or_default().to_string();
                         if !matches!(
                             key.as_str(),
-                            "slug" | "state" | "date" | "tags" | "cover" | "standfirst"
+                            "slug"
+                                | "id"
+                                | "state"
+                                | "date"
+                                | "tags"
+                                | "cover"
+                                | "author"
+                                | "standfirst"
                         ) {
                             out_meta.extra.entry(key).or_insert_with(|| v.clone());
                         }
@@ -223,10 +253,12 @@ impl Article {
         let a = Article {
             meta: ArticleMeta {
                 slug: slug.to_string(),
+                id: Some(uuid::Uuid::now_v7().to_string()),
                 state: State::Draft,
                 date: Some(today),
                 tags: vec![],
                 cover: None,
+                author: None,
                 standfirst: None,
                 extra: Default::default(),
             },
@@ -323,12 +355,57 @@ mod tests {
         .unwrap();
 
         let mut a = Article::load(dir.path(), "x").unwrap();
-        a.meta.state = State::Review;
+        a.meta.state = State::Published;
         a.save(dir.path()).unwrap();
 
         let after = fs::read_to_string(&meta_path).unwrap();
         assert!(after.contains("source-url"));
         assert!(after.contains("custom"));
-        assert!(after.contains("state: review"));
+        assert!(after.contains("state: published"));
+    }
+
+    #[test]
+    fn legacy_review_state_surfaces_as_published() {
+        let dir = tempdir().unwrap();
+        Article::create(dir.path(), "old", "Old").unwrap();
+        let meta_path = Article::meta_path(dir.path(), "old").unwrap();
+        fs::write(&meta_path, "slug: old\nstate: review\n").unwrap();
+
+        let a = Article::load(dir.path(), "old").unwrap();
+        assert_eq!(a.meta.state, State::Published);
+    }
+
+    #[test]
+    fn legacy_articles_gain_an_id_on_first_save() {
+        let dir = tempdir().unwrap();
+        Article::create(dir.path(), "heritage", "Heritage").unwrap();
+        let meta_path = Article::meta_path(dir.path(), "heritage").unwrap();
+        // A pre-uuid sidecar: no id, and the document carries the frame.
+        fs::write(
+            &meta_path,
+            "slug: heritage\nstate: published\ndate: 2024-01-01\n",
+        )
+        .unwrap();
+
+        let mut a = Article::load(dir.path(), "heritage").unwrap();
+        assert!(a.meta.id.is_none());
+        a.meta.author = Some("Guest Hand".into());
+        a.save(dir.path()).unwrap();
+
+        let b = Article::load(dir.path(), "heritage").unwrap();
+        let id = b.meta.id.as_deref().expect("id minted on save");
+        assert_eq!(id.len(), 36, "uuidv7 shape");
+        assert_eq!(b.meta.author.as_deref(), Some("Guest Hand"));
+    }
+
+    #[test]
+    fn ids_are_stable_across_saves() {
+        let dir = tempdir().unwrap();
+        Article::create(dir.path(), "stable", "Stable").unwrap();
+        let first = Article::load(dir.path(), "stable").unwrap().meta.id;
+        let mut a = Article::load(dir.path(), "stable").unwrap();
+        a.document = "# Stable\n\nChanged.\n".into();
+        a.save(dir.path()).unwrap();
+        assert_eq!(first, a.meta.id);
     }
 }

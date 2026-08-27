@@ -19,7 +19,7 @@ use std::path::Path;
 /// What a space needs to become whole.
 #[derive(Debug, Default, PartialEq)]
 pub struct SettlePlan {
-    /// Slugs whose emitted page is missing or stale. Review and published
+    /// Slugs whose emitted page is missing or stale. Published articles
     /// only: drafts are compiled on demand in the preview surface and are
     /// never written behind the author's back.
     pub renders: Vec<String>,
@@ -42,7 +42,7 @@ pub fn published_fingerprint(publication_root: &Path) -> Result<String> {
     let mut lines: Vec<String> = desk
         .entries
         .iter()
-        .filter(|e| e.state != State::Draft)
+        .filter(|e| e.state == State::Published)
         .map(|e| {
             format!(
                 "{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}",
@@ -81,7 +81,7 @@ pub fn scan_plan(publication_root: &Path) -> Result<SettlePlan> {
     let publishable: Vec<_> = desk
         .entries
         .iter()
-        .filter(|e| e.state != State::Draft)
+        .filter(|e| e.state == State::Published)
         .cloned()
         .collect();
 
@@ -203,9 +203,9 @@ mod tests {
         std::fs::read(&p).unwrap()
     }
 
-    fn review_article(root: &Path, slug: &str) {
+    fn publish_article(root: &Path, slug: &str) {
         let mut a = Article::create(root, slug, slug).unwrap();
-        a.meta.state = State::Review;
+        a.meta.state = State::Published;
         a.document = format!("# {slug}\n\n## A heading\n\nSome words.\n");
         a.save(root).unwrap();
     }
@@ -246,7 +246,7 @@ mod tests {
     #[test]
     fn missing_pages_are_planned_then_settled() {
         let dir = tempdir().unwrap();
-        review_article(dir.path(), "alpha");
+        publish_article(dir.path(), "alpha");
         let mut draft = Article::create(dir.path(), "secret-draft", "Secret").unwrap();
         draft.meta.state = State::Draft;
         draft.save(dir.path()).unwrap();
@@ -274,7 +274,7 @@ mod tests {
     #[test]
     fn stale_pages_are_replanned() {
         let dir = tempdir().unwrap();
-        review_article(dir.path(), "beta");
+        publish_article(dir.path(), "beta");
         settle(
             dir.path(),
             &scan_plan(dir.path()).unwrap(),
@@ -315,7 +315,7 @@ mod tests {
     #[test]
     fn progress_walks_the_whole_plan() {
         let dir = tempdir().unwrap();
-        review_article(dir.path(), "gamma");
+        publish_article(dir.path(), "gamma");
         crate::media::store_identified(dir.path(), &png_bytes(640, 320), "pic.png").unwrap();
 
         let plan = scan_plan(dir.path()).unwrap();

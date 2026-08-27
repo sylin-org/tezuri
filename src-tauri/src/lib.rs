@@ -639,7 +639,6 @@ fn set_article_state(
 ) -> Result<SetStateResult, CommandError> {
     let st = match state.as_str() {
         "draft" => tezuri::articles::State::Draft,
-        "review" => tezuri::articles::State::Review,
         "published" => tezuri::articles::State::Published,
         _ => return Err(err("unknown state")),
     };

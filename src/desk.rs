@@ -86,11 +86,6 @@ impl Desk {
                 .iter()
                 .filter(|e| e.state == State::Draft)
                 .count(),
-            review: self
-                .entries
-                .iter()
-                .filter(|e| e.state == State::Review)
-                .count(),
             published: self
                 .entries
                 .iter()
@@ -127,7 +122,6 @@ impl DeskEntry {
 #[derive(Debug, Serialize)]
 pub struct Momentum {
     pub drafts: usize,
-    pub review: usize,
     pub published: usize,
     pub total_words: usize,
     pub orphans: usize,

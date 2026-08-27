@@ -736,7 +736,7 @@ fn publishable_entries(publication_root: &Path) -> Result<Vec<crate::desk::DeskE
     Ok(crate::desk::Desk::rebuild(publication_root)?
         .entries
         .into_iter()
-        .filter(|e| e.state != State::Draft)
+        .filter(|e| e.state == State::Published)
         .collect())
 }
 
@@ -948,7 +948,7 @@ mod tests {
     fn emit_writes_pages_and_index_and_journals() {
         let dir = tempdir().unwrap();
         let mut alpha = Article::create(dir.path(), "alpha", "Alpha").unwrap();
-        alpha.meta.state = State::Review;
+        alpha.meta.state = State::Published;
         alpha.save(dir.path()).unwrap();
         let mut beta = Article::create(dir.path(), "beta", "Beta").unwrap();
         beta.meta.state = State::Published;

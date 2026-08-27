@@ -12,8 +12,17 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
+/// How article headers present across the space.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum HeaderStyle {
+    /// No alterations: H1 and the first line are ordinary flow content.
+    Normal,
+    /// Title + standfirst feed the template's hero and leave the flow.
+    Banner,
+}
+
 /// The modeled keys. Everything else in the file is preserved untouched.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Identity {
     /// Display name of the space ("Kintsugi").
     #[serde(default)]
@@ -24,12 +33,50 @@ pub struct Identity {
     /// Persona writing here; the firewall's subject.
     #[serde(default)]
     pub persona: String,
+    /// Space cover image — a media base reference inside this space.
+    #[serde(default)]
+    pub cover: Option<String>,
+    /// How article headers present: `normal` keeps the raw flow; `banner`
+    /// consumes title + standfirst into the template's hero.
+    #[serde(default)]
+    pub header_style: String,
+    /// Whether the tag system participates in this space at all.
+    #[serde(default = "default_true")]
+    pub tags_enabled: bool,
+    /// The curated vocabulary offered when tags are enabled.
+    #[serde(default)]
+    pub tag_vocabulary: Vec<String>,
     /// Unknown keys the author keeps; rewritten byte-identical.
     #[serde(flatten)]
     pub extra: std::collections::BTreeMap<String, serde_yaml::Value>,
 }
 
+fn default_true() -> bool {
+    true
+}
+
+impl Default for Identity {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            byline: String::new(),
+            persona: String::new(),
+            cover: None,
+            header_style: String::new(),
+            tags_enabled: true,
+            tag_vocabulary: Vec::new(),
+            extra: Default::default(),
+        }
+    }
+}
+
 impl Identity {
+    pub fn header_style(&self) -> HeaderStyle {
+        match self.header_style.as_str() {
+            "banner" => HeaderStyle::Banner,
+            _ => HeaderStyle::Normal,
+        }
+    }
     pub fn path(publication_root: &Path) -> Result<std::path::PathBuf> {
         confine(publication_root, Path::new("publication.yaml"))
     }
@@ -61,7 +108,16 @@ impl Identity {
                 if let Some(map) = existing.as_mapping() {
                     for (k, v) in map {
                         let key = k.as_str().unwrap_or_default().to_string();
-                        let modeled = matches!(key.as_str(), "name" | "byline" | "persona");
+                        let modeled = matches!(
+                            key.as_str(),
+                            "name"
+                                | "byline"
+                                | "persona"
+                                | "cover"
+                                | "header_style"
+                                | "tags_enabled"
+                                | "tag_vocabulary"
+                        );
                         if !modeled {
                             out.extra.entry(key).or_insert_with(|| v.clone());
                         }
@@ -117,5 +173,28 @@ mod tests {
         id.save(dir.path()).unwrap();
         let loaded = Identity::load(dir.path()).unwrap();
         assert_eq!(loaded, id);
+    }
+
+    #[test]
+    fn presentation_settings_roundtrip_with_defaults() {
+        let dir = tempdir().unwrap();
+        let id = Identity::load(dir.path()).unwrap();
+        assert_eq!(id.header_style(), HeaderStyle::Normal);
+        assert!(id.tags_enabled, "tags participate by default");
+        assert!(id.tag_vocabulary.is_empty());
+
+        let id = Identity {
+            name: "GPosingway".into(),
+            cover: Some("media/hero.png".into()),
+            header_style: "banner".into(),
+            tags_enabled: true,
+            tag_vocabulary: vec!["guide".into(), "gpose".into()],
+            ..Default::default()
+        };
+        id.save(dir.path()).unwrap();
+        let loaded = Identity::load(dir.path()).unwrap();
+        assert_eq!(loaded.header_style(), HeaderStyle::Banner);
+        assert_eq!(loaded.cover.as_deref(), Some("media/hero.png"));
+        assert_eq!(loaded.tag_vocabulary.len(), 2);
     }
 }

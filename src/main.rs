@@ -69,8 +69,8 @@ fn cmd_desk(root: &std::path::Path) -> Result<()> {
         }
     }
     println!(
-        "\n{} drafts, {} in review, {} published, {} words total",
-        m.drafts, m.review, m.published, m.total_words
+        "\n{} drafts, {} published, {} words total",
+        m.drafts, m.published, m.total_words
     );
     Ok(())
 }
