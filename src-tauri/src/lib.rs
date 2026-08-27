@@ -388,6 +388,28 @@ fn pick_folder() -> Result<Option<String>, CommandError> {
         .map(|f| f.to_string()))
 }
 
+/// Pick one existing image file (space covers). Returns its path, or None
+/// when cancelled.
+#[tauri::command(async)]
+fn pick_image_file() -> Result<Option<String>, CommandError> {
+    use tauri_plugin_dialog::DialogExt;
+    let handle = APP_HANDLE.get().ok_or_else(|| err("app not ready"))?;
+    Ok(handle
+        .dialog()
+        .file()
+        .add_filter("Images", &["png", "jpg", "jpeg", "webp"])
+        .blocking_pick_file()
+        .map(|f| f.to_string()))
+}
+
+/// Read a user-picked file's bytes so it can flow into the media store.
+/// The path comes from the native picker, never from free-form webview
+/// text; the media store enforces its own format and size rules.
+#[tauri::command]
+fn read_file_bytes(path: String) -> Result<Vec<u8>, CommandError> {
+    std::fs::read(&path).map_err(err)
+}
+
 // -- theme -------------------------------------------------------------------
 
 #[derive(serde::Serialize)]
@@ -840,6 +862,8 @@ pub fn run() {
             set_last_opened,
             get_last_opened,
             pick_folder,
+            pick_image_file,
+            read_file_bytes,
             open_publication,
             space_stats,
             media_base,

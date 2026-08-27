@@ -8,6 +8,7 @@ import { Landing } from "./Landing";
 import { SpaceRail, type Workspace } from "./Space";
 import { About } from "./About";
 import { Config } from "./Config";
+import { SpaceDetails } from "./SpaceDetails";
 import { invoke, onSettle, spliceSlot, insertSlotAt } from "./bridge";
 import type { Identity, PublicationInfo, CatalogEntry } from "./bridge";
 
@@ -217,45 +218,24 @@ export default function App() {
 
   const [assistantList, setAssistantList] = useState<string[]>([]);
 
-  // A picked folder awaiting its inline naming card on the landing grid.
-  const [newSpacePath, setNewSpacePath] = useState<string | null>(null);
+  // The space view has its own ribbon: Space Details vs the Article work
+  // surface. Assistant remains a toggle of the side rail.
+  const [spaceTab, setSpaceTab] = useState<"details" | "article">("article");
 
+  // Adding a space needs nothing but a folder: the folder name names the
+  // space; everything else is editable later in Space Details.
   async function addPublication() {
     try {
       const path = await invoke<string | null>("pick_folder");
       if (!path) return;
-      // No dialog: the landing names the space in place.
-      setNewSpacePath(path);
-    } catch (e: any) {
-      setLandingError(e.message ?? String(e));
-    }
-  }
-
-  async function createSpace(vals: { name: string; persona: string; byline: string }) {
-    const path = newSpacePath;
-    if (!path) return;
-    try {
       const folderName = path.split(/[\\/]/).pop() || "publication";
       const reg = await invoke<{ publications: any[] }>("registry_add", {
-        pubData: { name: vals.name.trim() || folderName, persona: vals.persona.trim(), path },
+        pubData: { name: folderName, persona: "", path },
       });
       setPubList(reg.publications);
-      setNewSpacePath(null);
       await openSpace(path);
-      // Persist what the author typed; the file carries the truth.
-      const id = await invoke<Identity>("read_identity", { path }).catch(() => EMPTY_ID);
-      await invoke("save_identity", {
-        path,
-        identity: {
-          ...id,
-          name: vals.name.trim() || id.name,
-          persona: vals.persona.trim(),
-          byline: vals.byline.trim(),
-        },
-      }).catch(() => {});
     } catch (e: any) {
       setLandingError(e.message ?? String(e));
-      setNewSpacePath(null);
     }
   }
 
@@ -273,6 +253,7 @@ export default function App() {
   async function loadArticle(slug: string) {
     try {
       slugRef.current = slug;
+      setSpaceTab("article");
       const a = await invoke<any>("read_article", { slug });
       setDoc({
         slug: a.article.meta.slug,
@@ -464,24 +445,13 @@ export default function App() {
         <Landing
           pubs={pubList} lastOpened={lastOpened} error={landingError}
           onOpen={openSpace} onAdd={addPublication}
-          newSpacePath={newSpacePath} onCreateSpace={createSpace}
-          onCancelNewSpace={() => setNewSpacePath(null)}
         />
       )}
 
       {surface === "about" && <About />}
 
       {surface === "config" && (
-        <Config
-          spaceOpen={!!open}
-          spacePath={open?.path ?? null}
-          identity={identity}
-          spaces={pubList}
-          onSaveIdentity={saveIdentity}
-          saveBusy={detailBusy}
-          saveError={detailError}
-          onRemoveSpace={removePublication}
-        />
+        <Config spaces={pubList} onRemoveSpace={removePublication} />
       )}
 
       {surface === "space" && open && (
@@ -492,7 +462,25 @@ export default function App() {
           />
 
           <section id="editor">
-            {workspace?.kind === "article" && doc && (
+            <div className="space-ribbon">
+              <button className={spaceTab === "article" ? "active" : ""}
+                      onClick={() => setSpaceTab("article")}>Article</button>
+              <button className={spaceTab === "details" ? "active" : ""}
+                      onClick={() => { setSpaceTab("details"); setWorkspace(null); setDoc(null); setActiveSlug(null); setAssistOpen(false); }}>
+                Space Details
+              </button>
+              <button onClick={() => setAssistOpen(!assistOpen)}>Assistant</button>
+            </div>
+            {spaceTab === "details" && open && (
+              <SpaceDetails root={open.path} onSaved={async () => {
+                try {
+                  const id = await invoke<Identity>("read_identity", { path: open.path });
+                  setIdentity(id);
+                  await refreshDesk();
+                } catch { /* the form already showed the error */ }
+              }} />
+            )}
+            {spaceTab === "article" && workspace?.kind === "article" && doc && (
               <>
                 <div className="pinbar">
                   <button title="Back to the rail" className="tool-btn"
@@ -505,7 +493,6 @@ export default function App() {
                     aria-label="Publication state" className="state-select"
                   >
                     <option value="draft">draft</option>
-                    <option value="review">review</option>
                     <option value="published">published</option>
                   </select>
                   <SaveDot status={saveStatus} />
@@ -614,7 +601,7 @@ export default function App() {
                 )}
               </>
             )}
-            {!workspace && (
+            {spaceTab === "article" && !workspace && (
               <div className="detail-plane">
                 <p className="crumb">WORKSPACE</p>
                 <h1 className="detail-title">{identity?.name || "This space"}</h1>

@@ -866,3 +866,23 @@ body.tezuri-dirty .state-word { color: var(--amber); }
   border-radius: 6px; color: var(--ink-2); cursor: pointer;
   font: 400 11px var(--mono); padding: 2px 7px; }
 .slot-palette button:hover { border-color: var(--al); color: var(--al); }
+
+/* ---- space details: the one form per space ---- */
+.space-ribbon { display: flex; gap: 4px; padding: 8px 10px 0; }
+.space-ribbon button { background: transparent; border: 1px solid transparent;
+  border-bottom: none; border-radius: 8px 8px 0 0; color: var(--dim);
+  padding: 5px 12px; font-size: 12px; }
+.space-ribbon button.active { background: var(--panel); border-color: var(--line);
+  color: var(--ink-1); }
+.space-details { max-width: 640px; }
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px;
+  font-size: 12px; color: var(--dim); }
+.field input[type="text"], .field input:not([type]) { background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px; color: var(--ink-1);
+  padding: 6px 8px; font-size: 13px; }
+.picker-list { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 4px; }
+.picker-row { display: flex; justify-content: space-between; align-items: center;
+  gap: 10px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.picker-arrows { display: inline-flex; gap: 4px; margin-right: 8px; }
+.picker-arrows button { min-width: 26px; }
+.tag-vocab { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0; }
