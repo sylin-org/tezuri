@@ -86,6 +86,18 @@ pub fn write_page_html(
     template: &str,
 ) -> Result<(String, Vec<String>)> {
     let mut ctx = gather_article_ctx(publication_root, slug)?;
+    // The Write plane shows the editing copy: unsaved edits are the thing
+    // being composed. The desk, proof, and render/ stay canonical.
+    if let Some(dirty) = crate::articles::Article::read_dirty(publication_root, slug)? {
+        ctx.title = crate::articles::title_of(&dirty, slug);
+        ctx.standfirst = crate::articles::parse_flow(&dirty).1;
+        let (flow, headings) = compile_flow(&dirty);
+        ctx.flow_html = flow;
+        ctx.headings = headings;
+        ctx.body_md = strip_frame(&dirty).to_string();
+        ctx.publishable = publishable_entries(publication_root)?;
+        ctx.neighbors = crate::slots::Ctx::neighbors_for(&ctx.publishable, slug);
+    }
     // Write always edits the document as written; banner consumption is a
     // reader-facing projection, never an editor state.
     ctx.banner = false;

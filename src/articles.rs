@@ -262,6 +262,98 @@ impl Article {
         Ok(hash)
     }
 
+    // -- the dirty copy ------------------------------------------------------
+    //
+    // Editing lands in `.tezuri/drafts/<slug>.md` — inside the publication,
+    // outside the article folder, so the manuscript stays pristine until an
+    // explicit Save. The dirty copy is user work, not a cache: it survives
+    // restarts and is only cleared by a canonical save or an explicit
+    // discard.
+
+    pub fn dirty_path(publication_root: &Path, slug: &str) -> Result<std::path::PathBuf> {
+        confine(
+            publication_root,
+            Path::new(".tezuri")
+                .join("drafts")
+                .join(format!("{slug}.md"))
+                .as_path(),
+        )
+    }
+
+    /// Persist the editing copy. Atomic, journaled as DraftSaved — the
+    /// canonical article.md is never touched here.
+    pub fn write_dirty(publication_root: &Path, slug: &str, document: &str) -> Result<()> {
+        let p = Self::dirty_path(publication_root, slug)?;
+        if let Some(parent) = p.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        atomic_write(&p, document.as_bytes())?;
+        Journal::open(publication_root)?.record(Event::DraftSaved { slug: slug.into() })?;
+        Ok(())
+    }
+
+    /// The editing copy, when unsaved edits exist.
+    pub fn read_dirty(publication_root: &Path, slug: &str) -> Result<Option<String>> {
+        let p = Self::dirty_path(publication_root, slug)?;
+        if !p.exists() {
+            return Ok(None);
+        }
+        Ok(Some(fs::read_to_string(&p)?))
+    }
+
+    /// The dirty copy is gone: either a canonical Save absorbed it or the
+    /// author discarded it.
+    pub fn clear_dirty(publication_root: &Path, slug: &str) -> Result<()> {
+        let p = Self::dirty_path(publication_root, slug)?;
+        if p.exists() {
+            fs::remove_file(&p)?;
+        }
+        Ok(())
+    }
+
+    /// Persist only the fact fields (meta.yaml). The document flow is
+    /// never touched: facts are explicit form edits, content is Write.
+    pub fn save_meta_only(&self, publication_root: &Path) -> Result<()> {
+        let dir = Self::dir(publication_root, &self.meta.slug)?;
+        fs::create_dir_all(&dir)?;
+        let meta_path = Self::meta_path(publication_root, &self.meta.slug)?;
+        let mut out_meta = self.meta.clone();
+        if meta_path.exists() {
+            if let Ok(existing) =
+                serde_yaml::from_str::<serde_yaml::Value>(&fs::read_to_string(&meta_path)?)
+            {
+                if let Some(map) = existing.as_mapping() {
+                    for (k, v) in map {
+                        let key = k.as_str().unwrap_or_default().to_string();
+                        if !matches!(
+                            key.as_str(),
+                            "slug"
+                                | "id"
+                                | "state"
+                                | "date"
+                                | "tags"
+                                | "cover"
+                                | "author"
+                                | "standfirst"
+                        ) {
+                            out_meta.extra.entry(key).or_insert_with(|| v.clone());
+                        }
+                    }
+                }
+            }
+        }
+        if out_meta.id.is_none() {
+            out_meta.id = Some(uuid::Uuid::now_v7().to_string());
+        }
+        let yaml = serde_yaml::to_string(&out_meta)?;
+        atomic_write(&meta_path, yaml.as_bytes())?;
+        Journal::open(publication_root)?.record(Event::ArticleWritten {
+            slug: self.meta.slug.clone(),
+            content_hash: String::new(),
+        })?;
+        Ok(())
+    }
+
     /// Create a fresh article with conventional defaults.
     pub fn create(publication_root: &Path, slug: &str, title: &str) -> Result<Article> {
         let today = chrono::Utc::now().format("%Y-%m-%d").to_string();

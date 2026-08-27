@@ -89,29 +89,50 @@ fn hex(bytes: &[u8]) -> String {
 pub enum Event {
     /// An article was created or its canonical file changed through Tezuri.
     #[serde(rename_all = "camelCase")]
-    ArticleWritten { slug: String, content_hash: String },
+    ArticleWritten {
+        slug: String,
+        content_hash: String,
+    },
+    DraftSaved {
+        slug: String,
+    },
     /// The publication's own identity file was written.
     IdentityWritten,
     /// The space's theme.css was written or cleared.
     ThemeWritten,
     /// The space's own presentation template (templates/article.html) was
     /// written or removed.
-    TemplateWritten { name: String },
+    TemplateWritten {
+        name: String,
+    },
     /// Pages were compiled into render/.
     #[serde(rename_all = "camelCase")]
-    Rendered { pages: usize },
+    Rendered {
+        pages: usize,
+    },
     /// Media was stored under its content address.
     #[serde(rename_all = "camelCase")]
-    MediaStored { hash: String, filename: String },
+    MediaStored {
+        hash: String,
+        filename: String,
+    },
     /// A consult job produced advisory output (never auto-applied).
     #[serde(rename_all = "camelCase")]
-    ConsultAdvised { slug: String, recipe: String },
+    ConsultAdvised {
+        slug: String,
+        recipe: String,
+    },
     /// A proof build ran to a verdict.
     #[serde(rename_all = "camelCase")]
-    ProofRan { verdict: String },
+    ProofRan {
+        verdict: String,
+    },
     /// Selected paths were committed.
     #[serde(rename_all = "camelCase")]
-    PublishedCommitted { slugs: Vec<String>, message: String },
+    PublishedCommitted {
+        slugs: Vec<String>,
+        message: String,
+    },
     /// The remote was pushed after lease verification.
     #[serde(rename_all = "camelCase")]
     PublishedPushed,
@@ -121,6 +142,7 @@ impl Event {
     pub fn kind(&self) -> &'static str {
         match self {
             Event::ArticleWritten { .. } => "article-written",
+            Event::DraftSaved { .. } => "draft-saved",
             Event::IdentityWritten => "identity-written",
             Event::ThemeWritten => "theme-written",
             Event::TemplateWritten { .. } => "template-written",

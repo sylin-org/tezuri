@@ -608,7 +608,10 @@ fn desk(session: State<Session>) -> Result<Desk, CommandError> {
 #[derive(serde::Serialize)]
 pub struct ArticleFull {
     pub article: Article,
+    /// The editing text: unsaved dirty copy when one exists, else canonical.
     pub raw: String,
+    /// True while unsaved edits sit in the dirty copy.
+    pub dirty: bool,
 }
 
 #[tauri::command]
@@ -616,8 +619,16 @@ fn read_article(slug: String, session: State<Session>) -> Result<ArticleFull, Co
     let root_path = root(&session)?;
     let a = Article::load(&root_path, &slug).map_err(err)?;
     let doc_path = tezuri::articles::Article::doc_path(&root_path, &slug).map_err(err)?;
-    let raw = std::fs::read_to_string(doc_path).map_err(err)?;
-    Ok(ArticleFull { article: a, raw })
+    let dirty = tezuri::articles::Article::read_dirty(&root_path, &slug).map_err(err)?;
+    let raw = match &dirty {
+        Some(d) => d.clone(),
+        None => std::fs::read_to_string(doc_path).map_err(err)?,
+    };
+    Ok(ArticleFull {
+        article: a,
+        raw,
+        dirty: dirty.is_some(),
+    })
 }
 
 #[derive(serde::Deserialize)]
@@ -646,6 +657,47 @@ fn save_article_raw(
     let mut a = Article::load(&root_path, &slug).map_err(err)?;
     a.document = document;
     a.save(&root_path).map_err(err)
+}
+
+/// Autosave: the editing copy lands in the space's dirty drafts. The
+/// canonical article.md is untouched until an explicit Save.
+#[tauri::command]
+fn save_dirty(slug: String, document: String, session: State<Session>) -> Result<(), CommandError> {
+    let root_path = root(&session)?;
+    tezuri::articles::Article::write_dirty(&root_path, &slug, &document).map_err(err)
+}
+
+/// Explicit Save: the editing text becomes the canonical article.md. The
+/// dirty copy is absorbed — it held nothing the canonical file now lacks.
+#[tauri::command]
+fn save_document(
+    slug: String,
+    document: String,
+    session: State<Session>,
+) -> Result<String, CommandError> {
+    let root_path = root(&session)?;
+    let mut a = Article::load(&root_path, &slug).map_err(err)?;
+    a.document = document;
+    let hash = a.save(&root_path).map_err(err)?;
+    tezuri::articles::Article::clear_dirty(&root_path, &slug).map_err(err)?;
+    Ok(hash)
+}
+
+/// Drop unsaved edits: the dirty copy is deleted, the canonical file speaks.
+#[tauri::command]
+fn discard_dirty(slug: String, session: State<Session>) -> Result<(), CommandError> {
+    let root_path = root(&session)?;
+    tezuri::articles::Article::clear_dirty(&root_path, &slug).map_err(err)
+}
+
+/// Save the fact fields (meta) without touching the document flow.
+#[tauri::command]
+fn save_meta(meta: ArticleMeta, slug: String, session: State<Session>) -> Result<(), CommandError> {
+    let root_path = root(&session)?;
+    let mut a = Article::load(&root_path, &slug).map_err(err)?;
+    a.meta = meta;
+    a.meta.slug = slug;
+    a.save_meta_only(&root_path).map_err(err)
 }
 
 #[tauri::command]
@@ -918,6 +970,10 @@ pub fn run() {
             desk,
             read_article,
             save_article,
+            save_dirty,
+            save_document,
+            save_meta,
+            discard_dirty,
             save_article_raw,
             create_article,
             set_article_state,

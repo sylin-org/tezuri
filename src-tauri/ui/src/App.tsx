@@ -59,6 +59,9 @@ export default function App() {
   const [templateDraft, setTemplateDraft] = useState<string | null>(null);
   const [templateFile, setTemplateFile] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
+  // saved: canonical file is current. dirty: unsaved edits — autosaved
+  // into the space's dirty copy, but the article.md is untouched until an
+  // explicit Save. saving: a write is in flight.
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "dirty">("saved");
   // A banner mode claimed the article frame: the H1 (and standfirst) live in
   // the frame's projection, so the editor mounts the body only. `framed` is
@@ -104,33 +107,41 @@ export default function App() {
     }
   }, []);
 
+  // Autosave: the editing copy lands in the space's dirty drafts. The
+  // canonical article.md is never touched here — only Save writes it.
   const flush = useCallback(async () => {
     const d = docRef.current;
     if (!d) return;
+    setSaveStatus("dirty");
+    try {
+      await invoke("save_dirty", { slug: d.slug, document: textRef.current });
+    } catch (e: any) {
+      setSaveStatus("dirty");
+      setNote(e.message ?? String(e));
+    }
+  }, []);
+
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+
+  // Explicit Save: the editing text becomes the canonical article.md.
+  const saveCanonical = useCallback(async () => {
+    const d = docRef.current;
+    if (!d) return;
+    if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current);
     setSaveStatus("saving");
     try {
-      await invoke("save_article", {
-        article: {
-          meta: {
-            slug: d.slug, state: d.state, date: d.date ?? null,
-            tags: d.tags ?? [], cover: d.cover ?? null, standfirst: null,
-          },
-          document: textRef.current,
-        },
-      });
+      await invoke("save_document", { slug: d.slug, document: textRef.current });
       dirtyRef.current = false;
       setSaveStatus("saved");
       await refreshDesk();
-      // Projections follow the file: the composer re-reads what just saved.
-      void refreshCompose(d.slug, templateDraft);
     } catch (e: any) {
       setSaveStatus("dirty");
       setNote(e.message ?? String(e));
     }
   }, [refreshDesk]);
-
-  const flushRef = useRef(flush);
-  flushRef.current = flush;
+  const saveCanonicalRef = useRef(saveCanonical);
+  saveCanonicalRef.current = saveCanonical;
 
   // Conduct: splice the slot's bytes in the working copy, then re-project.
   const conduct = useCallback((raw: string, occurrence: number, hints: string[]) => {
@@ -160,15 +171,14 @@ export default function App() {
     dirtyRef.current = true;
     setSaveStatus("dirty");
     if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current);
-    autosaveTimer.current = window.setTimeout(() => void flushRef.current(), 2000);
+    autosaveTimer.current = window.setTimeout(() => void flushRef.current(), 800);
   }, []);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current);
-        void flushRef.current();
+        void saveCanonicalRef.current();
       }
     };
     window.addEventListener("keydown", h);
@@ -299,7 +309,11 @@ export default function App() {
         invoke<CatalogEntry[]>("slot_catalog").then(setCatalog).catch(() => {});
       }
       await refreshCompose(slug, source);
-      setSaveStatus("saved");
+      // Unsaved edits on disk (the dirty copy) reopen as the editing text.
+      try {
+        const r = await invoke<any>("read_article", { slug });
+        setSaveStatus(r.dirty ? "dirty" : "saved");
+      } catch { setSaveStatus("saved"); }
       dirtyRef.current = false;
       setActiveSlug(slug);
       setWorkspace({ kind: "article", slug });
@@ -527,9 +541,9 @@ export default function App() {
                           title="Advisory help: polish, voice, facts">Assistant</button>
                   <button
                     className={saveStatus === "dirty" ? "primary" : ""}
-                    onClick={() => { if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current); void flush(); }}
+                    onClick={() => void saveCanonicalRef.current()}
                     disabled={saveStatus === "saving"}
-                  >{saveStatus === "saving" ? "Saving…" : "Save"}</button>
+                  >{saveStatus === "dirty" ? "Save" : saveStatus === "saving" ? "Saving…" : "Saved"}</button>
                 </div>
                 {mode === "details" && (
                   <ArticleDetails
@@ -682,8 +696,14 @@ function CoverStrip({ cover, mediaBase, onPick, onClear }: {
 
 function SaveDot({ status }: { status: "saved" | "saving" | "dirty" }) {
   const label = status === "saved" ? "Saved" : status === "saving" ? "Saving…" : "Unsaved";
+  const hint =
+    status === "saved"
+      ? "The article file is current."
+      : status === "saving"
+        ? "Writing…"
+        : "Unsaved edits are protected in a draft copy — Save writes the article file.";
   return (
-    <span className="save-dot-wrap" title={`Autosaves 2s after you stop typing — ${label}`}>
+    <span className="save-dot-wrap" title={hint}>
       <span className={`saved-dot ${status}`} />
       <span className="save-label">{label}</span>
     </span>
