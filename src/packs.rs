@@ -20,14 +20,23 @@ pub struct Pack {
 }
 
 pub fn catalog() -> Vec<Pack> {
-    vec![Pack {
-        id: "gposingway",
-        name: "GPosingway",
-        description: "Dark showcase frame for screenshot guides: full-bleed title banner, \
-                      sticky table of contents, tag rail.",
-        article_template: include_str!("packs/gposingway/article.html"),
-        theme_css: include_str!("packs/gposingway/theme.css"),
-    }]
+    vec![
+        Pack {
+            id: "vanilla",
+            name: "Vanilla",
+            description: "The calm default, as a pickable: {{ARTICLE}} over the built-in baseline.",
+            article_template: include_str!("templates/article.html"),
+            theme_css: "",
+        },
+        Pack {
+            id: "gposingway",
+            name: "GPosingway",
+            description: "Dark showcase frame for screenshot guides: full-bleed title banner, \
+                          sticky table of contents, tag rail.",
+            article_template: include_str!("packs/gposingway/article.html"),
+            theme_css: include_str!("packs/gposingway/theme.css"),
+        },
+    ]
 }
 
 #[derive(Serialize)]
@@ -70,7 +79,17 @@ mod tests {
     #[test]
     fn catalog_carries_the_named_pair() {
         let v = view();
+        assert!(v.iter().any(|p| p.id == "vanilla"));
         assert!(v.iter().any(|p| p.id == "gposingway"));
+    }
+
+    #[test]
+    fn vanilla_applies_the_embedded_default_and_no_theme() {
+        let dir = tempdir().unwrap();
+        apply(dir.path(), "vanilla").unwrap();
+        assert!(templates::read(dir.path()).unwrap().is_some());
+        // Empty css removed nothing that existed; theme stays absent.
+        assert_eq!(crate::theme::read(dir.path()).unwrap(), "");
     }
 
     #[test]

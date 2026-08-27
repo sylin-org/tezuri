@@ -46,6 +46,8 @@ export function Config({
           <IdentitySection
             identity={identity} spacePath={spacePath}
             onSave={onSaveIdentity} busy={saveBusy} error={saveError} />
+          <PresentationSection />
+          <LayoutSection />
           <AssistantsSection />
           <AppearanceSection />
         </>
@@ -261,6 +263,178 @@ const SPECIMEN =
   "The press never touches what you didn't approve. It reads your folder, " +
   "holds your drafts, and proves the site's own build before anything ships. " +
   "Every word stays a plain file you could edit with nothing but a text editor.";
+
+/** Starter packs: presentations copied into the space on pick, then owned
+ *  as plain files. Applying overwrites template + theme deliberately, so
+ *  the ask is a two-step inline confirmation in the card. */
+function PresentationSection() {
+  const [packs, setPacks] = useState<{ id: string; name: string; description: string }[] | null>(null);
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [receipt, setReceipt] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    invoke<any[]>("packs_list").then(setPacks).catch((e) => setError(e.message ?? String(e)));
+  }, []);
+
+  if (!packs) return null;
+  return (
+    <div className="config-section">
+      <h2>Presentation</h2>
+      <p className="config-hint">
+        A starter pack copies its layout and dress into this space — after that the
+        files are yours. Picking replaces the current template and theme.
+      </p>
+      {packs.map((p) => (
+        <div className="pack-row" key={p.id}>
+          <div>
+            <b>{p.name}</b>
+            <span className="config-hint"> — {p.description}</span>
+          </div>
+          {!confirming || confirming !== p.id ? (
+            <button onClick={() => { setConfirming(p.id); setReceipt(""); setError(""); }}>
+              Pick
+            </button>
+          ) : (
+            <span className="row" style={{ gap: 6 }}>
+              <button className="primary"
+                      onClick={async () => {
+                        try {
+                          await invoke("pack_apply", { id: p.id });
+                          setReceipt(`${p.name} applied — your space now owns its files.`);
+                        } catch (e: any) {
+                          setError(e.message ?? String(e));
+                        }
+                        setConfirming(null);
+                      }}>
+                Replace layout &amp; theme
+              </button>
+              <button onClick={() => setConfirming(null)}>Keep mine</button>
+            </span>
+          )}
+        </div>
+      ))}
+      {receipt && <p className="receipt">{receipt}</p>}
+      {error && <p className="config-error">{error}</p>}
+    </div>
+  );
+}
+
+const GHOST_TEMPLATE = [
+  "<!-- Your page. {{ARTICLE}} is the writing; other slots fill themselves.",
+  "     Conduct any slot from Write mode; Preview is the exact lens. -->",
+  "<body class=\"{{body_class}}\">",
+  "  {{ARTICLE | title-banner}}",
+  "",
+  "  <nav>{{home_link}} · {{prev_link}} · {{next_link}}</nav>",
+  "",
+  "  <aside>{{toc}}</aside>",
+  "  {{footer}}",
+  "</body>",
+].join("\n");
+
+/** The layout editor: draft on the left, live specimen through the real
+ *  pipeline on the right. Saving follows propose→apply and is journaled;
+ *  removing returns to the embedded default. */
+function LayoutSection() {
+  const [fileText, setFileText] = useState<string | null>(null); // disk truth
+  const [draft, setDraft] = useState<string | null>(null);
+  const [slugs, setSlugs] = useState<string[]>([]);
+  const [specimenSlug, setSpecimenSlug] = useState("");
+  const [specimen, setSpecimen] = useState("");
+  const [notes, setNotes] = useState<string[]>([]);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const t = await invoke<string | null>("read_template");
+        setFileText(t);
+        setDraft(t ?? GHOST_TEMPLATE);
+        const d = await invoke<{ entries: { slug: string }[] }>("desk");
+        setSlugs(d.entries.map((e) => e.slug));
+        setSpecimenSlug(d.entries[0]?.slug ?? "");
+      } catch (e: any) {
+        setError(e.message ?? String(e));
+      }
+    })();
+  }, []);
+
+  // Live specimen: debounced render through the one pipeline.
+  useEffect(() => {
+    if (draft === null || !specimenSlug) return;
+    const t = setTimeout(async () => {
+      try {
+        const media = await invoke<string>("media_base");
+        const [html, n] = await invoke<[string, string[]]>("render_specimen", {
+          slug: specimenSlug,
+          template: draft,
+        });
+        setSpecimen(html.replaceAll("../media/", media));
+        setNotes(n ?? []);
+      } catch (e: any) {
+        setError(e.message ?? String(e));
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [draft, specimenSlug]);
+
+  const dirty = draft !== fileText && !(fileText === null && draft === GHOST_TEMPLATE);
+
+  return (
+    <div className="config-section">
+      <h2>Layout</h2>
+      <p className="config-hint">
+        The page template — plain HTML with slot vocabulary. The specimen renders a real
+        article through the real pipeline.
+      </p>
+      <div className="row" style={{ gap: 8, alignItems: "center" }}>
+        <select value={specimenSlug} onChange={(e) => setSpecimenSlug(e.target.value)}
+                aria-label="Specimen article">
+          {slugs.length === 0 && <option value="">(no articles)</option>}
+          {slugs.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        {dirty && (
+          <>
+            <button className="primary" onClick={async () => {
+              try {
+                await invoke("write_template", { text: draft ?? "" });
+                setFileText(draft);
+              } catch (e: any) { setError(e.message ?? String(e)); }
+            }}>Save layout</button>
+            <button onClick={() => setDraft(fileText)}>Revert</button>
+          </>
+        )}
+        {fileText !== null && (
+          <button title="Remove templates/article.html — the embedded default speaks again"
+                  onClick={async () => {
+                    try {
+                      await invoke("write_template", { text: "" });
+                      setFileText(null);
+                      setDraft(GHOST_TEMPLATE);
+                    } catch (e: any) { setError(e.message ?? String(e)); }
+                  }}>Remove template</button>
+        )}
+        {dirty && fileText === null && <span className="mono-fact">unsaved</span>}
+      </div>
+      <textarea
+        className="layout-editor"
+        spellCheck={false}
+        value={draft ?? ""}
+        onChange={(e) => setDraft(e.target.value)}
+        rows={18}
+        aria-label="Template draft"
+      />
+      {notes.length > 0 && (
+        <p className="wc-whispers" style={{ margin: "4px 0" }}>{notes.join(" · ")}</p>
+      )}
+      {error && <p className="config-error">{error}</p>}
+      <p className="config-hint">Specimen — exactly what would emit:</p>
+      <iframe className="preview-frame" title="Template specimen"
+              srcDoc={specimen} sandbox="allow-scripts" />
+    </div>
+  );
+}
 
 function AppearanceSection() {
   const [presets, setPresets] = useState<ThemePreset[]>([]);
