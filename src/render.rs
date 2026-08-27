@@ -9,7 +9,7 @@
 //! with a small `{{placeholder}}` contract; embedded defaults ship in the
 //! binary and nothing is ever fetched.
 
-use crate::articles::Article;
+use crate::articles::{Article, State};
 use crate::spine::{atomic_write, confine, Event, Journal};
 use crate::theme;
 use anyhow::Result;
@@ -307,30 +307,30 @@ pub fn render_article(publication_root: &Path, slug: &str) -> Result<String> {
     ))
 }
 
-/// Compile every article and write `render/<slug>.html` + `render/index.html`.
-/// Idempotent: current pages are written; v1 never deletes files it does not
-/// recognize. Returns the written paths (publication-relative).
-pub fn emit_render(publication_root: &Path) -> Result<Vec<String>> {
-    let desk = crate::desk::Desk::rebuild(publication_root)?;
-    let mut written = Vec::new();
+/// Compile one article and write its page. Returns the written path
+/// (publication-relative).
+pub fn write_page(publication_root: &Path, slug: &str) -> Result<String> {
+    let page = render_article(publication_root, slug)?;
+    let rel = format!("{RENDER_DIR}/{slug}.html");
+    atomic_write(
+        &confine(publication_root, Path::new(&rel))?,
+        page.as_bytes(),
+    )?;
+    Ok(rel)
+}
 
-    let mut index_rows = String::new();
-    for e in &desk.entries {
-        let page = render_article(publication_root, &e.slug)?;
-        let rel = format!("{RENDER_DIR}/{}.html", e.slug);
-        let target = confine(publication_root, Path::new(&rel))?;
-        atomic_write(&target, page.as_bytes())?;
-        written.push(rel.clone());
-        index_rows.push_str(&format!(
-            "<div class=\"entry\"><a href=\"{slug}.html\">{title}</a><br>\
-             <span class=\"meta\">{date} · {words} words</span></div>\n",
-            slug = e.slug,
-            title = esc(&e.title),
-            date = e.date.as_deref().unwrap_or("undated"),
-            words = e.words,
-        ));
-    }
+/// The index page lists the publishable set — review and published. Drafts
+/// preview on demand and are never offered to the destination.
+fn publishable(root: &Path) -> Result<Vec<crate::desk::DeskEntry>> {
+    Ok(crate::desk::Desk::rebuild(root)?
+        .entries
+        .into_iter()
+        .filter(|e| e.state != State::Draft)
+        .collect())
+}
 
+/// (Re)write the index page from the current publishable set.
+pub fn write_index(publication_root: &Path) -> Result<String> {
     let identity = crate::identity::Identity::load(publication_root)?;
     let site_name = if identity.name.is_empty() {
         publication_root
@@ -341,6 +341,19 @@ pub fn emit_render(publication_root: &Path) -> Result<Vec<String>> {
     } else {
         identity.name.clone()
     };
+
+    let mut index_rows = String::new();
+    for e in &publishable(publication_root)? {
+        index_rows.push_str(&format!(
+            "<div class=\"entry\"><a href=\"{slug}.html\">{title}</a><br>\
+             <span class=\"meta\">{date} · {words} words</span></div>\n",
+            slug = e.slug,
+            title = esc(&e.title),
+            date = e.date.as_deref().unwrap_or("undated"),
+            words = e.words,
+        ));
+    }
+
     let index = subst(
         &load_template(publication_root, "index.html", INDEX_TEMPLATE)?,
         &[("site_name", esc(&site_name)), ("entries", index_rows)],
@@ -350,10 +363,20 @@ pub fn emit_render(publication_root: &Path) -> Result<Vec<String>> {
         &confine(publication_root, Path::new(&index_rel))?,
         index.as_bytes(),
     )?;
-    written.push(index_rel);
+    Ok(index_rel)
+}
 
+/// Compile the publishable set and write `render/<slug>.html` +
+/// `render/index.html`. Idempotent; v1 never deletes files it does not
+/// recognize. Returns the written paths (publication-relative).
+pub fn emit_render(publication_root: &Path) -> Result<Vec<String>> {
+    let mut written = Vec::new();
+    for e in &publishable(publication_root)? {
+        written.push(write_page(publication_root, &e.slug)?);
+    }
+    written.push(write_index(publication_root)?);
     Journal::open(publication_root)?.record(Event::Rendered {
-        pages: written.len(),
+        pages: written.len().saturating_sub(1),
     })?;
     Ok(written)
 }
@@ -422,16 +445,23 @@ mod tests {
     #[test]
     fn emit_writes_pages_and_index_and_journals() {
         let dir = tempdir().unwrap();
-        Article::create(dir.path(), "alpha", "Alpha").unwrap();
-        Article::create(dir.path(), "beta", "Beta").unwrap();
+        let mut alpha = Article::create(dir.path(), "alpha", "Alpha").unwrap();
+        alpha.meta.state = State::Review;
+        alpha.save(dir.path()).unwrap();
+        let mut beta = Article::create(dir.path(), "beta", "Beta").unwrap();
+        beta.meta.state = State::Published;
+        beta.save(dir.path()).unwrap();
+        Article::create(dir.path(), "secret-draft", "Secret").unwrap();
 
         let written = emit_render(dir.path()).unwrap();
-        assert_eq!(written.len(), 3);
+        assert_eq!(written.len(), 3, "two pages + index; drafts never emit");
         assert!(dir.path().join("render/alpha.html").exists());
         assert!(dir.path().join("render/beta.html").exists());
+        assert!(!dir.path().join("render/secret-draft.html").exists());
         let index = std::fs::read_to_string(dir.path().join("render/index.html")).unwrap();
         assert!(index.contains("href=\"alpha.html\""));
         assert!(index.contains("href=\"beta.html\""));
+        assert!(!index.contains("secret-draft"));
 
         let events = crate::spine::Journal::open(dir.path())
             .unwrap()

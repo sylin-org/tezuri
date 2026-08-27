@@ -38,6 +38,7 @@
                 color: #71717a; text-decoration: none;
                 border-left: 2px solid transparent; }
   .toc-rail a:hover { color: #c9c9d1; }
+  .toc-rail a.current { color: #e4e4e7; border-left-color: #a1a1aa; }
   .toc-rail a.l3 { padding-left: 24px; font-size: 12px; }
   .toc-rail .tags { margin-top: 26px; }
   .gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -95,6 +96,25 @@
   document.getElementById('lb').addEventListener('click', function () {
     this.classList.remove('on');
   });
+  // Scroll-spy: the rail's current section follows the reader.
+  (function () {
+    var links = [].slice.call(document.querySelectorAll('.toc-rail a[href^="#"]'));
+    if (!links.length || !('IntersectionObserver' in window)) return;
+    var byId = {};
+    links.forEach(function (l) { byId[l.getAttribute('href').slice(1)] = l; });
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        links.forEach(function (l) { l.classList.remove('current'); });
+        var link = byId[en.target.id];
+        if (link) link.classList.add('current');
+      });
+    }, { rootMargin: '-80px 0px -70% 0px', threshold: 0 });
+    Object.keys(byId).forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) obs.observe(el);
+    });
+  })();
 </script>
 </body>
 </html>

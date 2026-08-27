@@ -1,0 +1,249 @@
+//! Settling: a loaded space is gently made whole.
+//!
+//! Everything derived — emitted pages, image renditions, the desk — is a
+//! cache. A space loaded from a current-state repository may be missing any
+//! of them, and that is normal, not an error. `scan_plan` notices what is
+//! absent or stale with cheap stat checks (never hashing), `settle` derives
+//! exactly that, and both are idempotent: running them twice changes nothing.
+//! The desktop shell runs the plan on a background thread after open; previews
+//! never wait for it (they compile on demand), and nothing here touches the
+//! network.
+
+use crate::articles::State;
+use crate::media_id::{self, Recipe};
+use crate::render;
+use crate::spine::confine;
+use anyhow::Result;
+use std::path::Path;
+
+/// What a space needs to become whole.
+#[derive(Debug, Default, PartialEq)]
+pub struct SettlePlan {
+    /// Slugs whose emitted page is missing or stale. Review and published
+    /// only: drafts are compiled on demand in the preview surface and are
+    /// never written behind the author's back.
+    pub renders: Vec<String>,
+    /// (base media reference, recipe) pairs whose rendition file is missing.
+    pub renditions: Vec<(String, Recipe)>,
+}
+
+impl SettlePlan {
+    pub fn is_empty(&self) -> bool {
+        self.renders.is_empty() && self.renditions.is_empty()
+    }
+
+    pub fn total(&self) -> usize {
+        self.renders.len() + self.renditions.len()
+    }
+}
+
+/// Renditions the settler pre-warms. The rest derive on demand at display
+/// time, exactly as before.
+const PREWARM: [Recipe; 2] = [Recipe::Thumb, Recipe::Width(1024)];
+
+/// Notice what is missing or stale. Stat-only: cheap enough to run on every
+/// open, and on every theme or identity save.
+pub fn scan_plan(publication_root: &Path) -> Result<SettlePlan> {
+    let mut plan = SettlePlan::default();
+
+    let desk = crate::desk::Desk::rebuild(publication_root)?;
+    for e in &desk.entries {
+        if e.state == State::Draft {
+            continue;
+        }
+        let rel = format!("{}/{}.html", render::RENDER_DIR, e.slug);
+        let page = confine(publication_root, Path::new(&rel))?;
+        if page_stale(&page, publication_root, &e.slug) {
+            plan.renders.push(e.slug.clone());
+        }
+    }
+
+    let media_dir = confine(publication_root, Path::new("media"))?;
+    if media_dir.is_dir() {
+        for entry in std::fs::read_dir(&media_dir)? {
+            let p = entry?.path();
+            let name = match p.file_name().and_then(|s| s.to_str()) {
+                Some(n) => n.to_string(),
+                None => continue,
+            };
+            if name.contains('_') {
+                continue; // already a rendition, never a source
+            }
+            for recipe in PREWARM {
+                if let Some(target) = media_id::rendition_target(&p, &recipe) {
+                    if !target.exists() {
+                        plan.renditions
+                            .push((format!("media/{name}"), recipe.clone()));
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(plan)
+}
+
+/// A page is stale when missing, or when any of its inputs was modified
+/// after it was written.
+fn page_stale(page: &Path, root: &Path, slug: &str) -> bool {
+    let page_mtime = match modified(page) {
+        Some(t) => t,
+        None => return true,
+    };
+    let inputs = [
+        root.join("articles").join(slug).join("article.md"),
+        root.join("articles").join(slug).join("meta.yaml"),
+        root.join("theme.css"),
+        root.join("templates").join("article.html"),
+        root.join("publication.yaml"),
+    ];
+    inputs
+        .iter()
+        .any(|i| modified(i).is_some_and(|t| t > page_mtime))
+}
+
+fn modified(p: &Path) -> Option<std::time::SystemTime> {
+    std::fs::metadata(p).and_then(|m| m.modified()).ok()
+}
+
+/// Execute a plan. Progress reports `(kind, done, total)` with kinds
+/// `"render"` and `"rendition"`. Failures fall back gracefully: a rendition
+/// that cannot derive simply re-derives on demand later; a page error stops
+/// that plan (the next scan will retry it).
+pub fn settle(
+    publication_root: &Path,
+    plan: &SettlePlan,
+    progress: &mut dyn FnMut(&str, usize, usize),
+) -> Result<usize> {
+    let total = plan.total();
+    let mut done = 0usize;
+
+    for slug in &plan.renders {
+        render::write_page(publication_root, slug)?;
+        done += 1;
+        progress("render", done, total);
+    }
+    if !plan.renders.is_empty() {
+        render::write_index(publication_root)?;
+        crate::spine::Journal::open(publication_root)?.record(crate::spine::Event::Rendered {
+            pages: plan.renders.len(),
+        })?;
+    }
+
+    for (base, recipe) in &plan.renditions {
+        let _ = media_id::resolve_for_display(publication_root, base, recipe.clone());
+        done += 1;
+        progress("rendition", done, total);
+    }
+
+    Ok(total)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::articles::Article;
+    use tempfile::tempdir;
+
+    fn png_bytes(width: u32, height: u32) -> Vec<u8> {
+        let img = image::RgbaImage::from_pixel(width, height, image::Rgba([10, 20, 30, 255]));
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("t.png");
+        img.save(&p).unwrap();
+        std::fs::read(&p).unwrap()
+    }
+
+    fn review_article(root: &Path, slug: &str) {
+        let mut a = Article::create(root, slug, slug).unwrap();
+        a.meta.state = State::Review;
+        a.document = format!("# {slug}\n\n## A heading\n\nSome words.\n");
+        a.save(root).unwrap();
+    }
+
+    #[test]
+    fn missing_pages_are_planned_then_settled() {
+        let dir = tempdir().unwrap();
+        review_article(dir.path(), "alpha");
+        let mut draft = Article::create(dir.path(), "secret-draft", "Secret").unwrap();
+        draft.meta.state = State::Draft;
+        draft.save(dir.path()).unwrap();
+
+        let plan = scan_plan(dir.path()).unwrap();
+        assert_eq!(
+            plan.renders,
+            vec!["alpha".to_string()],
+            "drafts are never planned"
+        );
+
+        let n = settle(dir.path(), &plan, &mut |_, _, _| {}).unwrap();
+        assert_eq!(n, 1);
+        assert!(dir.path().join("render/alpha.html").exists());
+
+        // The index lists the publishable set only.
+        let index = std::fs::read_to_string(dir.path().join("render/index.html")).unwrap();
+        assert!(index.contains("alpha.html"));
+        assert!(!index.contains("secret-draft"));
+
+        // Settled is settled: the scan comes back empty.
+        assert!(scan_plan(dir.path()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn stale_pages_are_replanned() {
+        let dir = tempdir().unwrap();
+        review_article(dir.path(), "beta");
+        settle(
+            dir.path(),
+            &scan_plan(dir.path()).unwrap(),
+            &mut |_, _, _| {},
+        )
+        .unwrap();
+
+        // The article moves forward in time; the page does not.
+        let older = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+        let page = dir.path().join("render/beta.html");
+        let f = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&page)
+            .unwrap();
+        f.set_times(std::fs::FileTimes::new().set_modified(older))
+            .unwrap();
+
+        let plan = scan_plan(dir.path()).unwrap();
+        assert_eq!(plan.renders, vec!["beta".to_string()]);
+    }
+
+    #[test]
+    fn missing_renditions_are_planned_and_derived() {
+        let dir = tempdir().unwrap();
+        crate::media::store_identified(dir.path(), &png_bytes(800, 400), "shot.png").unwrap();
+
+        let plan = scan_plan(dir.path()).unwrap();
+        assert_eq!(plan.renditions.len(), 2, "thumb + 1024 planned");
+        assert!(plan.renders.is_empty());
+
+        settle(dir.path(), &plan, &mut |_, _, _| {}).unwrap();
+        let media = dir.path().join("media");
+        let count = std::fs::read_dir(&media).unwrap().count();
+        assert_eq!(count, 3, "original + two renditions");
+        assert!(scan_plan(dir.path()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn progress_walks_the_whole_plan() {
+        let dir = tempdir().unwrap();
+        review_article(dir.path(), "gamma");
+        crate::media::store_identified(dir.path(), &png_bytes(640, 320), "pic.png").unwrap();
+
+        let plan = scan_plan(dir.path()).unwrap();
+        let mut seen = Vec::new();
+        settle(dir.path(), &plan, &mut |kind, done, total| {
+            seen.push((kind.to_string(), done, total));
+        })
+        .unwrap();
+        assert_eq!(
+            seen.last().map(|(_, d, t)| (*d, *t)),
+            Some((plan.total(), plan.total()))
+        );
+    }
+}

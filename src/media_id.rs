@@ -176,6 +176,23 @@ pub fn derive_rendition(original: &Path, rendition: &Path, recipe: &Recipe) -> R
     Ok(())
 }
 
+/// The rendition path a recipe resolves to for this original — `None` when
+/// the original is never resized (animated GIFs stay as they are).
+pub fn rendition_target(base_path: &Path, recipe: &Recipe) -> Option<PathBuf> {
+    let filename = base_path.file_name().and_then(|s| s.to_str())?;
+    let (id, _) = split_recipe(filename)?;
+    if id.ext == "gif" {
+        return None;
+    }
+    let mut disp = id;
+    // Renditions keep the original's container extension for now (jpg/png);
+    // webp sources fall back to png renditions.
+    if disp.ext == "webp" {
+        disp.ext = "png".into();
+    }
+    Some(base_path.with_file_name(disp.filename_for(recipe)))
+}
+
 /// Resolve a document reference (`media/<base>`) to the path that should be
 /// displayed at a given recipe, deriving it if missing. Falls back to the
 /// original when derivation fails or no shrink is needed.
@@ -188,22 +205,9 @@ pub fn resolve_for_display(
     if matches!(recipe, Recipe::Original) || !base_path.exists() {
         return Ok(base_path);
     }
-    let filename = base_path
-        .file_name()
-        .and_then(|s| s.to_str())
-        .context("bad media ref")?;
-    let (id, _) = split_recipe(filename).context("media ref is not a base id")?;
-
-    // Renditions keep the original's container extension for now (jpg/png);
-    // webp sources fall back to png renditions.
-    let mut disp = id.clone();
-    if disp.ext == "webp" {
-        disp.ext = "png".into();
-    } else if disp.ext == "gif" {
-        return Ok(base_path); // animated: never resize
-    }
-    let rendition_rel = Path::new("media").join(disp.filename_for(&recipe));
-    let rendition_path = crate::spine::confine(publication_root, &rendition_rel)?;
+    let Some(rendition_path) = rendition_target(&base_path, &recipe) else {
+        return Ok(base_path);
+    };
     derive_rendition(&base_path, &rendition_path, &recipe)?;
     Ok(rendition_path)
 }

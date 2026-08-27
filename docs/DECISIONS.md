@@ -10,6 +10,25 @@ replacements.
 
 ---
 
+## 2026-08-26 — Settle lazily: derived artifacts heal in the background
+
+Loading a current-state repository is a normal state, not an error state: pages not yet emitted,
+renditions not yet derived, stale outputs older than their inputs — all noticed by a cheap
+stat-only scan (`derive::scan_plan`) and repaired by a single sequential background worker
+(`derive::settle`) that starts when a publication opens, and again after an identity or theme
+save. The band reports quiet progress ("settling 3/8") and returns to silence. Previews never
+wait for the settler — they compile on demand regardless — and everything stays idempotent:
+running the scan-and-settle twice changes nothing, so no locking protocol is needed alongside the
+existing atomic writes.
+
+With this, `render/` is defined as the publishable set: review and published articles only.
+Drafts preview on demand and are never written behind the author's back; the index page lists
+the same set. Rendition pre-warming covers thumb and 1024-width; other recipes derive at display
+time exactly as before.
+
+This extends "files are truth; the desk is a lens" into an operating rule: every derived artifact
+is lazily fixable, by design, without ceremony.
+
 ## 2026-08-26 — Add the render stage; renderer authority is conditional
 
 Tezuri compiles articles into complete styled HTML: the Markdown flow, `meta.yaml`, the space's

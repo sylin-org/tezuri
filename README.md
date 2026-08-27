@@ -95,10 +95,14 @@ pushes only while the reviewed remote state still holds.
 ## Implementation direction
 
 Tezuri is a domain-driven monolith: one `tezuri` library crate whose modules follow the product's
-domains — spine, publications, articles, media, desk, consult, ship — plus two thin drivers over it,
-a `tezuri` CLI binary and the `tezuri-desktop` Tauri shell. The webview reaches native power only
-through named product commands; there is no generic frontend filesystem, shell, process, or network
-authority. The React bundle lives at `src-tauri/ui`.
+domains — spine, publications, identity, articles, media, desk, consult, ship, theme, render, and
+derive — plus two thin drivers over it, a `tezuri` CLI binary and the `tezuri-desktop` Tauri shell.
+The webview reaches native power only through named product commands; there is no generic frontend
+filesystem, shell, process, or network authority. The React bundle lives at `src-tauri/ui`.
+
+Derived artifacts are lazily fixable: opening a space settles it in the background — missing or
+stale rendered pages and image renditions derive quietly while you work; previews compile on
+demand and never wait.
 
 Consequential choices belong in [`docs/DECISIONS.md`](docs/DECISIONS.md). The visual and interaction
 contract lives in [`docs/design/SYLIN-VISUAL-CONTRACT.md`](docs/design/SYLIN-VISUAL-CONTRACT.md).
