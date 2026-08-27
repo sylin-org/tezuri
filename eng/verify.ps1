@@ -21,6 +21,9 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'frontend typecheck failed' }
         npm run build
         if ($LASTEXITCODE -ne 0) { throw 'frontend build failed' }
+        if (-not (Test-Path 'dist/index.html')) {
+            throw 'frontend build reported success but dist/index.html is missing'
+        }
     }
     finally {
         Pop-Location

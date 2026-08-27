@@ -1,7 +1,9 @@
 @echo off
 rem Tezuri launcher: prepare what is missing, then open the desktop app.
-rem Installs locked frontend dependencies and builds the bundle the first
-rem time only; every later run starts straight away.
+rem Installs locked frontend dependencies on first use; the interface bundle
+rem rebuilds every launch (~7s) so the app never serves a stale or
+rem half-deleted dist — a failed build retries on the next run instead of
+rem being remembered forever.
 setlocal
 cd /d "%~dp0"
 
@@ -18,12 +20,10 @@ if not exist "src-tauri\ui\node_modules" (
     popd
 )
 
-if not exist "src-tauri\ui\dist\index.html" (
-    echo Building the interface bundle ^(first run^)...
-    pushd src-tauri\ui
-    call npm run build || goto :prepare-failed
-    popd
-)
+echo Building the interface bundle...
+pushd src-tauri\ui
+call npm run build || goto :prepare-failed
+popd
 
 echo Starting Tezuri...
 cargo run --release -p tezuri-desktop
