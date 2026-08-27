@@ -14,6 +14,11 @@ not task notes.
 Working notes that must not be committed — environment paths, credential *locations*, session
 handoffs — live in the gitignored `local/NOTES.md`; see [`local/README.md`](local/README.md).
 
+Content lives inside this repository or inside the publication being worked on — never in system
+temp directories or other stray locations. Working corpora, scratch fixtures, and one-shot tools
+that must not be committed live under the gitignored `local/` (e.g. `local/corpora/`,
+`local/tools/`).
+
 ## Reset boundary
 
 Tezuri is being implemented afresh in Rust and Tauri. This is a stack reset, not a product reset.
