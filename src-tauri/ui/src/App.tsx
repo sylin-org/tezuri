@@ -126,6 +126,24 @@ export default function App() {
   const flushRef = useRef(flush);
   flushRef.current = flush;
 
+  // Discard: drop the dirty copy, the canonical file speaks again.
+  const [discardAsk, setDiscardAsk] = useState(false);
+  const discardChanges = useCallback(async () => {
+    const d = docRef.current;
+    if (!d) return;
+    try {
+      await invoke("discard_dirty", { slug: d.slug });
+      setText(canonicalText);
+      setSaveStatus("saved");
+      dirtyRef.current = false;
+      setDiscardAsk(false);
+      setResetToken((t) => t + 1);
+      await refreshDesk();
+    } catch (e: any) {
+      setNote(e.message ?? String(e));
+    }
+  }, [canonicalText, refreshDesk]);
+
   // Explicit Save: the editing text becomes the canonical article.md.
   const saveCanonical = useCallback(async () => {
     const d = docRef.current;
@@ -145,6 +163,7 @@ export default function App() {
   }, [refreshDesk]);
   const saveCanonicalRef = useRef(saveCanonical);
   saveCanonicalRef.current = saveCanonical;
+  const [resetToken, setResetToken] = useState(0);
 
   // Conduct: splice the slot's bytes in the working copy, then re-project.
   const conduct = useCallback((raw: string, occurrence: number, hints: string[]) => {
@@ -543,6 +562,18 @@ export default function App() {
                   </div>
                   <button onClick={() => setAssistOpen(!assistOpen)}
                           title="Advisory help: polish, voice, facts">Assistant</button>
+                  {saveStatus === "dirty" && !discardAsk && (
+                    <button onClick={() => { setDiscardAsk(true); }}
+                            title="Drop unsaved edits — the saved file speaks again">Discard</button>
+                  )}
+                  {discardAsk && (
+                    <span className="conduct-bar" role="group" aria-label="Discard changes">
+                      <span className="mono-fact">drop unsaved edits?</span>
+                      <button className="small-danger"
+                              onClick={() => void discardChanges()}>Discard</button>
+                      <button onClick={() => setDiscardAsk(false)}>Keep editing</button>
+                    </span>
+                  )}
                   <button
                     className={saveStatus === "dirty" ? "primary" : ""}
                     onClick={() => void saveCanonicalRef.current()}
@@ -584,6 +615,7 @@ export default function App() {
                     markdown={text}
                     canonical={canonicalText}
                     mediaBase={mediaBase}
+                    resetToken={resetToken}
                     onMarkdown={(md) => { setText(md); touch(); }}
                   />
                 )}

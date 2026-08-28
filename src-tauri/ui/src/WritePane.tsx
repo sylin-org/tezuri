@@ -6,7 +6,7 @@
 import React from "react";
 import { invoke } from "./bridge";
 
-export function WritePane({ slug, template, markdown, canonical, mediaBase, onMarkdown }: {
+export function WritePane({ slug, template, markdown, canonical, mediaBase, resetToken, onMarkdown }: {
   slug: string;
   /** The working template (space file or conduct draft). */
   template: string | null;
@@ -14,6 +14,8 @@ export function WritePane({ slug, template, markdown, canonical, mediaBase, onMa
   /** The canonical article.md — the baseline the unsaved wash diffs against. */
   canonical: string;
   mediaBase: string;
+  /** Bumped when the host discards: refetch the page from canonical. */
+  resetToken: number;
   /** Content changed inside the frame; the host autosaves. */
   onMarkdown: (md: string) => void;
 }) {
@@ -38,6 +40,15 @@ export function WritePane({ slug, template, markdown, canonical, mediaBase, onMa
     bootedRef.current = false;
     void reload();
   }, [reload]);
+
+  // A discard re-fetches the page: the dirty copy is gone, the canonical
+  // file speaks again, and the editor boots fresh from it.
+  const first = React.useRef(true);
+  React.useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    bootedRef.current = false;
+    void reload();
+  }, [resetToken]);
 
   React.useEffect(() => {
     const sendInit = () => {
