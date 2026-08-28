@@ -6,7 +6,7 @@
 import React from "react";
 import { invoke } from "./bridge";
 
-export function WritePane({ slug, template, markdown, canonical, mediaBase, resetToken, onMarkdown }: {
+export function WritePane({ slug, template, markdown, canonical, mediaBase, resetToken, catalog, onConduct, onMarkdown }: {
   slug: string;
   /** The working template (space file or conduct draft). */
   template: string | null;
@@ -16,6 +16,10 @@ export function WritePane({ slug, template, markdown, canonical, mediaBase, rese
   mediaBase: string;
   /** Bumped when the host discards: refetch the page from canonical. */
   resetToken: number;
+  /** The characterized slot catalog, for the in-frame conduct menus. */
+  catalog: any[];
+  /** The frame picked an option for one slot occurrence. */
+  onConduct: (raw: string, occurrence: number, current: string[], optKey: string, value: string) => void;
   /** Content changed inside the frame; the host autosaves. */
   onMarkdown: (md: string) => void;
 }) {
@@ -25,6 +29,8 @@ export function WritePane({ slug, template, markdown, canonical, mediaBase, rese
   // Latest values for the message handler without re-binding it mid-typing.
   const latest = React.useRef({ markdown, canonical, mediaBase, slug, template });
   latest.current = { markdown, canonical, mediaBase, slug, template };
+  const conductRef = React.useRef(onConduct);
+  conductRef.current = onConduct;
 
   const reload = React.useCallback(async () => {
     try {
@@ -75,6 +81,14 @@ export function WritePane({ slug, template, markdown, canonical, mediaBase, rese
         const md = String(msg.markdown ?? "");
         if (md === latest.current.markdown) return;
         onMarkdown(md);
+      } else if (msg.type === "tz-conduct") {
+        conductRef.current(
+          String(msg.raw ?? ""),
+          Number(msg.occurrence ?? 0),
+          String(msg.current ?? "").split(",").map((x: string) => x.trim()).filter(Boolean),
+          String(msg.optKey ?? ""),
+          String(msg.value ?? ""),
+        );
       } else if (msg.type === "tz-image") {
         (async () => {
           try {

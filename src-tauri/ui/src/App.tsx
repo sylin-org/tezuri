@@ -9,7 +9,7 @@ import { Config } from "./Config";
 import { SpaceDetails } from "./SpaceDetails";
 import { WritePane } from "./WritePane";
 import { ArticleDetails } from "./ArticleDetails";
-import { invoke, onSettle, spliceSlot, insertSlotAt } from "./bridge";
+import { invoke, onSettle, spliceSlot, insertSlotAt, nextHintsFor } from "./bridge";
 import type { Identity, PublicationInfo, CatalogEntry } from "./bridge";
 
 type Surface = "landing" | "space" | "config" | "about";
@@ -54,7 +54,6 @@ export default function App() {
   // The canonical article.md — the diff baseline for the unsaved wash.
   const [canonicalText, setCanonicalText] = useState("");
   // The space's template, projected live for Write mode.
-  const [compose, setCompose] = useState<any | null>(null);
   // Conduct: the working copy of templates/article.html (seeded from the
   // file when one exists, else from the embedded default), the bytes on
   // disk it sprang from, and the catalog menus read from.
@@ -66,15 +65,6 @@ export default function App() {
   // explicit Save. saving: a write is in flight.
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "dirty">("saved");
   // A banner mode claimed the article frame: the H1 (and standfirst) live in
-  // the frame's projection, so the editor mounts the body only. `framed` is
-  // only true while the file's actual bytes still start with the prefix the
-  // composer stripped — the save path re-attaches it, byte-exact.
-  const framed = !!(
-    compose?.frame_claimed &&
-    compose?.title_prefix &&
-    text.startsWith(compose.title_prefix)
-  );
-
   // ---- shared chrome state ----------------------------------------------------
   const [assistOpen, setAssistOpen] = useState(false);
   const [consultOut, setConsultOut] = useState("advisory only — nothing enters the document until you accept it");
@@ -98,17 +88,6 @@ export default function App() {
 
   /** Compose projections from the working template copy when conducting,
    *  else straight from the space's file. */
-  const refreshCompose = useCallback(async (slug: string, draft: string | null) => {
-    try {
-      const c = draft !== null
-        ? await invoke<any>("write_compose_draft", { slug, template: draft })
-        : await invoke<any>("write_compose", { slug });
-      setCompose(c);
-    } catch {
-      setCompose(null);
-    }
-  }, []);
-
   // Autosave: the editing copy lands in the space's dirty drafts. The
   // canonical article.md is never touched here — only Save writes it.
   const flush = useCallback(async () => {
@@ -165,27 +144,37 @@ export default function App() {
   saveCanonicalRef.current = saveCanonical;
   const [resetToken, setResetToken] = useState(0);
 
-  // Conduct: splice the slot's bytes in the working copy, then re-project.
-  const conduct = useCallback((raw: string, occurrence: number, hints: string[]) => {
+  // Conduct: the frame picked an option value for one slot occurrence;
+  // compute the resulting hints and splice the working template copy.
+  const conduct = useCallback(
+    (raw: string, occurrence: number, current: string[], optKey: string, value: string) => {
+      setTemplateDraft((prev) => {
+        if (prev === null) return prev;
+        const hints = nextHintsFor(current, optKey, value || null);
+        return spliceSlot(prev, raw, occurrence, hints);
+      });
+    },
+    [],
+  );
+
+  // v1 insertion anchors beside the article flow; finer anchors come with
+  // in-frame insertion affordances.
+  const insertAfterArticle = useCallback((name: string) => {
     setTemplateDraft((prev) => {
       if (prev === null) return prev;
-      const next = spliceSlot(prev, raw, occurrence, hints);
-      void refreshCompose(slugRef.current ?? "", next);
-      return next;
+      return insertSlotAt(prev, "{{ARTICLE}}", 0, "after", name);
     });
-  }, [refreshCompose]);
+  }, []);
 
-  // Insertion: same contract — draft bytes move, projections follow.
+  // Insertion: same contract — draft bytes move, the frame recomposes.
   const insertSlot = useCallback(
     (anchorRaw: string, anchorOcc: number, where: "before" | "after", name: string) => {
       setTemplateDraft((prev) => {
         if (prev === null) return prev;
-        const next = insertSlotAt(prev, anchorRaw, anchorOcc, where, name);
-        void refreshCompose(slugRef.current ?? "", next);
-        return next;
+        return insertSlotAt(prev, anchorRaw, anchorOcc, where, name);
       });
     },
-    [refreshCompose]
+    []
   );
 
   const touch = useCallback(() => {
@@ -331,7 +320,6 @@ export default function App() {
       if (catalog.length === 0) {
         invoke<CatalogEntry[]>("slot_catalog").then(setCatalog).catch(() => {});
       }
-      await refreshCompose(slug, source);
       // Unsaved edits on disk (the dirty copy) reopen as the editing text.
       try {
         const r = await invoke<any>("read_article", { slug });
@@ -562,6 +550,39 @@ export default function App() {
                   </div>
                   <button onClick={() => setAssistOpen(!assistOpen)}
                           title="Advisory help: polish, voice, facts">Assistant</button>
+                  <select
+                    aria-label="Insert an element"
+                    value=""
+                    onChange={(e2) => {
+                      const name = e2.target.value;
+                      if (!name) return;
+                      insertSlot("{{ARTICLE}}", 0, "after", name);
+                      e2.target.value = "";
+                    }}
+                  >
+                    <option value="">Insert element…</option>
+                    {catalog.filter((c) => c.name !== "ARTICLE").map((c) => (
+                      <option key={c.name} value={c.name}>{c.name}</option>
+                    ))}
+                  </select>
+                  {templateDraft !== templateFile && templateDraft !== null && (
+                    <span className="conduct-bar" role="group" aria-label="Layout changes">
+                      <span className="mono-fact">layout changed</span>
+                      <button
+                        className="primary"
+                        onClick={async () => {
+                          try {
+                            await invoke("write_template", { text: templateDraft });
+                            setTemplateFile(templateDraft);
+                            setNote("layout saved to templates/article.html");
+                          } catch (e: any) { setNote(e.message ?? String(e)); }
+                        }}
+                      >Save layout</button>
+                      <button
+                        onClick={() => { setTemplateDraft(templateFile ?? ""); }}
+                      >Discard layout</button>
+                    </span>
+                  )}
                   {saveStatus === "dirty" && !discardAsk && (
                     <button onClick={() => { setDiscardAsk(true); }}
                             title="Drop unsaved edits — the saved file speaks again">Discard</button>
@@ -616,6 +637,11 @@ export default function App() {
                     canonical={canonicalText}
                     mediaBase={mediaBase}
                     resetToken={resetToken}
+                    catalog={catalog}
+                    onConduct={(raw, occurrence, current, optKey, value) => {
+                      const hints = nextHintsFor(current, optKey, value || null);
+                      conduct(raw, occurrence, current, optKey, value);
+                    }}
                     onMarkdown={(md) => { setText(md); touch(); }}
                   />
                 )}

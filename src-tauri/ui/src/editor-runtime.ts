@@ -58,6 +58,7 @@ let mediaBase = "";
 // a boot must never autosave a round-trip normalization.
 let booted = false;
 let lastKnown = "";
+let catalog: any[] = [];
 // The diff baseline: whatever canonical text the host last confirmed
 // (the saved article now; the published artifact later). Blocks that
 // differ from it wear a gentle wash — the unsaved areas, made visible.
@@ -150,6 +151,18 @@ function injectCaretStyle() {
 }
 .ProseMirror img { cursor: pointer; }
 .tz-unsaved { background: rgba(255, 196, 90, 0.09); transition: background 0.4s ease; }
+.tz-conduct-chip { position: absolute; top: 4px; right: 4px; z-index: 30;
+  border: 1px solid rgba(255,255,255,.25); background: rgba(0,0,0,.55); color: #eee;
+  border-radius: 999px; font-size: 10px; line-height: 1; padding: 2px 6px;
+  opacity: 0; transition: opacity .2s; cursor: pointer; }
+[data-tz-slot]:hover > .tz-conduct-chip { opacity: 1; }
+.tz-menu { position: absolute; top: 22px; right: 4px; z-index: 40; min-width: 180px;
+  background: rgba(12,12,12,.96); border: 1px solid rgba(255,255,255,.2);
+  border-radius: 8px; padding: 6px; display: flex; flex-direction: column; gap: 4px; }
+.tz-menu-title { font: 600 11px/1.4 sans-serif; color: #bbb; padding: 2px 4px; }
+.tz-menu-opt { text-align: left; background: none; border: none; color: #eee;
+  font: 12px/1.6 sans-serif; padding: 3px 6px; border-radius: 5px; cursor: pointer; }
+.tz-menu-opt:hover { background: rgba(255,255,255,.12); }
 `;
   document.head.appendChild(style);
 }
@@ -244,23 +257,73 @@ async function boot(markdown: string) {
   dom.addEventListener("dragover", (e) => e.preventDefault());
 }
 
+// Conduct affordances: every wrapped slot gains a chip that opens a
+// small menu of the catalog's options for that slot. A choice posts
+// tz-conduct; the host splices the template draft and recomposes.
+function attachConductAffordances() {
+  const wrappers = document.querySelectorAll<HTMLElement>("[data-tz-slot]");
+  const seen = new Map<string, number>();
+  wrappers.forEach((wrap) => {
+    const raw = wrap.getAttribute("data-tz-slot") ?? "";
+    const current = (wrap.getAttribute("data-tz-hints") ?? "")
+      .split(",").map((h) => h.trim()).filter(Boolean);
+    const occ = seen.get(raw) ?? 0;
+    seen.set(raw, occ + 1);
+    const name = (/^\{\{\s*([A-Za-z_][A-Za-z0-9_]*)/.exec(raw) ?? [])[1] ?? "";
+    const entry = catalog.find((e) => e.name === name);
+
+    const chip = document.createElement("button");
+    chip.className = "tz-conduct-chip";
+    chip.textContent = "⋯";
+    chip.title = entry ? entry.doc : name;
+    chip.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const existing = wrap.querySelector(".tz-menu");
+      if (existing) { existing.remove(); return; }
+      document.querySelectorAll(".tz-menu").forEach((m) => m.remove());
+      const menu = document.createElement("div");
+      menu.className = "tz-menu";
+      const title = document.createElement("div");
+      title.className = "tz-menu-title";
+      title.textContent = name;
+      menu.appendChild(title);
+      for (const opt of entry?.options ?? []) {
+        for (const value of opt.values) {
+          const b = document.createElement("button");
+          b.className = "tz-menu-opt";
+          b.textContent = opt.key ? `${opt.key}:${value}` : value;
+          b.addEventListener("click", () => {
+            menu.remove();
+            post({ type: "tz-conduct", raw, occurrence: occ, current, optKey: opt.key, value });
+          });
+          menu.appendChild(b);
+        }
+      }
+      wrap.appendChild(menu);
+    });
+    wrap.appendChild(chip);
+  });
+}
+
 window.addEventListener("message", (event) => {
   const msg = event.data ?? {};
   if (msg.type === "tz-init") {
     if (booted) return; // idempotent: a booted editor never re-boots
     mediaBase = msg.mediaBase ?? "";
     canonical = msg.canonical ?? "";
-    const markdown = msg.markdown ?? "";
-    void boot(markdown).then(() => {
+    catalog = msg.catalog ?? [];
+    void boot(msg.markdown ?? "").then(() => {
       booted = true;
-      lastKnown = markdown;
+      lastKnown = msg.markdown ?? "";
+      attachConductAffordances();
       post({ type: "tz-booted" });
     });
-  } else if (msg.type === "tz-canonical") {
-    // The host saved (or loaded): the baseline moved, so the wash moves.
-    canonical = msg.canonical ?? "";
+    return;
+  }
+  if (msg.type === "tz-canonical") {
+    canonical = msg.canonical ?? '';
     refreshUnsavedMarks();
-  } else if (msg.type === "tz-media") {
+  } else if (msg.type === 'tz-media') {
     const resolve = pending.get(msg.token);
     if (resolve) {
       pending.delete(msg.token);
@@ -271,9 +334,4 @@ window.addEventListener("message", (event) => {
 
 // Announce readiness the moment the listener exists. The host retries
 // tz-init until the boot ack arrives, so a lost message is harmless.
-post({ type: "tz-ready" });
-
-
-// The runtime announces itself the moment it can listen: the host answers
-// with tz-init (markdown + media base), and boot mounts the editor.
-post({ type: "tz-ready" });
+post({ type: 'tz-ready' });

@@ -39,6 +39,7 @@ export function SpaceDetails({ root, onSaved }: {
   const [error, setError] = React.useState("");
   const [newTag, setNewTag] = React.useState("");
   const [confirmPick, setConfirmPick] = React.useState<string | null>(null);
+  const [downloadUrl, setDownloadUrl] = React.useState("");
 
   const load = React.useCallback(async () => {
     try {
@@ -106,6 +107,20 @@ export function SpaceDetails({ root, onSaved }: {
     try {
       await invoke("picker_history_step", { kind, delta });
       setStatus("Reverted one step in the presentation history.");
+    } catch (e: any) {
+      setError(e.message ?? String(e));
+    }
+  };
+
+  const fetchAsset = async () => {
+    if (!downloadUrl.trim()) return;
+    try {
+      await invoke("download_asset", { url: downloadUrl.trim() });
+      setDownloadUrl("");
+      const list = await invoke<any>("picker_list");
+      setThemes(list.themes ?? []);
+      setTemplates(list.templates ?? []);
+      setStatus("Asset downloaded — it is now in the picker.");
     } catch (e: any) {
       setError(e.message ?? String(e));
     }
@@ -231,6 +246,17 @@ export function SpaceDetails({ root, onSaved }: {
           {d.cover && <span className="mono-fact">{d.cover}</span>}
           <button onClick={pickCover}>{d.cover ? "Replace cover" : "Choose cover…"}</button>
           {d.cover && <button onClick={() => patch({ cover: null })}>Clear</button>}
+        </span>
+      </div>
+
+      <div className="field">Add an asset from the web
+        <span className="row">
+          <input placeholder="https://… .css or .html file" value={downloadUrl}
+                 onChange={(e) => setDownloadUrl(e.target.value)} />
+          <button onClick={fetchAsset} disabled={!downloadUrl.trim()}>Fetch</button>
+        </span>
+        <span className="config-hint">
+          One .css or .html file per URL — it lands in the picker's downloads.
         </span>
       </div>
 
