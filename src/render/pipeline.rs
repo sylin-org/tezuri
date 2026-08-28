@@ -115,6 +115,11 @@ pub fn write_page_html(
     let insert_at = style_injection_point(&body);
     let page = format!("{}{}{}", &body[..insert_at], styles, &body[insert_at..]);
 
+    // The srcdoc iframe's base URL is the app root, not render/: artifact
+    // references like ../media/<hash>.png would 404. They ride the media
+    // protocol instead, like every other image the desk shows.
+    let page = page.replace("../media/", media_base);
+
     let with_script = page.replace(
         "</body>",
         "<script src=\"/tezuri-editor.js\" defer></script>
