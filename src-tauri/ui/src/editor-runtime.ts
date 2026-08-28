@@ -34,7 +34,8 @@ const DisplayImage = Image.extend({
   renderHTML({ node, HTMLAttributes }) {
     let src = HTMLAttributes.src ?? "";
     if (mediaBase && !/^(https?:|data:|blob:|media:)/i.test(src)) {
-      src = mediaBase + src.replace(/^(\.\/)?(\.\.\/)?(media\/)?/, "");
+      const rel = src.replace(/^(\.\.\/)?/, "").replace(/^(media\/)?/, "media/");
+      src = mediaBase + rel;
     }
     return ["img", { ...HTMLAttributes, src }];
   },
