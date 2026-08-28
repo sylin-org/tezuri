@@ -84,6 +84,7 @@ pub fn write_page_html(
     publication_root: &Path,
     slug: &str,
     template: &str,
+    media_base: &str,
 ) -> Result<(String, Vec<String>)> {
     let mut ctx = gather_article_ctx(publication_root, slug)?;
     // The Write plane shows the editing copy: unsaved edits are the thing
