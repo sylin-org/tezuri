@@ -23,7 +23,14 @@ import { Markdown } from "tiptap-markdown";
 
 /// Display-only src mapping: the file stores relative `media/...` refs;
 /// the rendered img rides the media protocol. Storage is never rewritten.
-const DisplayImage = Image.configure({ inline: true }).extend({
+const DisplayImage = Image.extend({
+  // Inline is the load-bearing option: block-level images are what made
+  // tiptap-markdown glue the following heading onto the image paragraph.
+  // The default would silently revert through extend unless re-asserted.
+  addOptions() {
+    const parent = this.parent?.() ?? { HTMLAttributes: {}, resize: { enabled: false } as any };
+    return { ...parent, inline: true as const, allowBase64: false as const };
+  },
   renderHTML({ node, HTMLAttributes }) {
     let src = HTMLAttributes.src ?? "";
     if (mediaBase && !/^(https?:|data:|blob:|media:)/i.test(src)) {
@@ -31,7 +38,7 @@ const DisplayImage = Image.configure({ inline: true }).extend({
     }
     return ["img", { ...HTMLAttributes, src }];
   },
-});
+}).configure({ allowBase64: false });
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 
@@ -191,7 +198,7 @@ async function boot(markdown: string) {
         codeBlock: false,
       }),
       Link.configure({ openOnClick: false }),
-      DisplayImage.configure({ allowBase64: false, inline: false }),
+      DisplayImage.configure({ allowBase64: false }),
       Underline,
       TaskList,
       TaskItem.configure({ nested: true }),
