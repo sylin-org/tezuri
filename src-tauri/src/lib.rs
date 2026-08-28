@@ -466,8 +466,8 @@ fn write_page(slug: String, session: State<Session>) -> Result<String, CommandEr
     let tpl = tezuri::render::read_template(&root)
         .map_err(err)?
         .unwrap_or_else(|| tezuri::render::embedded_article_template().to_string());
-    let (page, _) = tezuri::render::write_page_html(&root, &slug, &tpl, &media_base())
-        .map_err(err)?;
+    let (page, _) =
+        tezuri::render::write_page_html(&root, &slug, &tpl, &media_base()).map_err(err)?;
     Ok(page)
 }
 
@@ -479,8 +479,8 @@ fn write_page_draft(
     session: State<Session>,
 ) -> Result<String, CommandError> {
     let root = root(&session)?;
-    let (page, _) = tezuri::render::write_page_html(&root, &slug, &template, &media_base())
-        .map_err(err)?;
+    let (page, _) =
+        tezuri::render::write_page_html(&root, &slug, &template, &media_base()).map_err(err)?;
     Ok(page)
 }
 

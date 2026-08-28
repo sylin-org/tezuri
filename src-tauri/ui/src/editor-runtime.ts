@@ -20,6 +20,18 @@ import Highlight from "@tiptap/extension-highlight";
 import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
 import { Markdown } from "tiptap-markdown";
+
+/// Display-only src mapping: the file stores relative `media/...` refs;
+/// the rendered img rides the media protocol. Storage is never rewritten.
+const DisplayImage = Image.configure({ inline: true }).extend({
+  renderHTML({ node, HTMLAttributes }) {
+    let src = HTMLAttributes.src ?? "";
+    if (mediaBase && !/^(https?:|data:|blob:|media:)/i.test(src)) {
+      src = mediaBase + src.replace(/^(\.\/)?(\.\.\/)?(media\/)?/, "");
+    }
+    return ["img", { ...HTMLAttributes, src }];
+  },
+});
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 
@@ -134,19 +146,13 @@ function injectCaretStyle() {
   document.head.appendChild(style);
 }
 
-function resolveSrc(src: string): string {
-  return mediaBase && src.startsWith("../media/")
-    ? mediaBase + src.slice("../media/".length)
-    : src;
-}
-
 async function importImage(file: File) {
   const token = crypto.randomUUID();
   pending.set(token, (ref) => {
     editor
       ?.chain()
       .focus()
-      .setImage({ src: resolveSrc(`../media/${ref}`) })
+      .setImage({ src: `media/${ref.replace(/^media\//, "")}` })
       .run();
   });
   const base64 = toBase64(await file.arrayBuffer());
@@ -185,7 +191,7 @@ async function boot(markdown: string) {
         codeBlock: false,
       }),
       Link.configure({ openOnClick: false }),
-      Image.configure({ allowBase64: false, inline: false }),
+      DisplayImage.configure({ allowBase64: false, inline: false }),
       Underline,
       TaskList,
       TaskItem.configure({ nested: true }),
