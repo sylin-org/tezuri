@@ -610,6 +610,8 @@ pub struct ArticleFull {
     pub article: Article,
     /// The editing text: unsaved dirty copy when one exists, else canonical.
     pub raw: String,
+    /// The canonical article.md, always — the diff baseline.
+    pub canonical_raw: String,
     /// True while unsaved edits sit in the dirty copy.
     pub dirty: bool,
 }
@@ -620,13 +622,15 @@ fn read_article(slug: String, session: State<Session>) -> Result<ArticleFull, Co
     let a = Article::load(&root_path, &slug).map_err(err)?;
     let doc_path = tezuri::articles::Article::doc_path(&root_path, &slug).map_err(err)?;
     let dirty = tezuri::articles::Article::read_dirty(&root_path, &slug).map_err(err)?;
+    let canonical_raw = std::fs::read_to_string(&doc_path).map_err(err)?;
     let raw = match &dirty {
         Some(d) => d.clone(),
-        None => std::fs::read_to_string(doc_path).map_err(err)?,
+        None => canonical_raw.clone(),
     };
     Ok(ArticleFull {
         article: a,
         raw,
+        canonical_raw,
         dirty: dirty.is_some(),
     })
 }

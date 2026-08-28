@@ -51,6 +51,8 @@ export default function App() {
     id: string | null; author: string | null;
   } | null>(null);
   const [text, setText] = useState("");
+  // The canonical article.md — the diff baseline for the unsaved wash.
+  const [canonicalText, setCanonicalText] = useState("");
   // The space's template, projected live for Write mode.
   const [compose, setCompose] = useState<any | null>(null);
   // Conduct: the working copy of templates/article.html (seeded from the
@@ -132,6 +134,7 @@ export default function App() {
     setSaveStatus("saving");
     try {
       await invoke("save_document", { slug: d.slug, document: textRef.current });
+      setCanonicalText(textRef.current);
       dirtyRef.current = false;
       setSaveStatus("saved");
       await refreshDesk();
@@ -288,6 +291,7 @@ export default function App() {
         id: a.article.meta.id ?? null,
         author: a.article.meta.author ?? null,
       });
+      setCanonicalText(a.canonical_raw ?? "");
       setText(a.raw);
       // Conduct seed: the space's file when it owns one, else the embedded
       // default. templateFile records disk truth; the draft starts equal.
@@ -578,6 +582,7 @@ export default function App() {
                     slug={doc.slug}
                     template={templateDraft}
                     markdown={text}
+                    canonical={canonicalText}
                     mediaBase={mediaBase}
                     onMarkdown={(md) => { setText(md); touch(); }}
                   />

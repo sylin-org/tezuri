@@ -6,11 +6,13 @@
 import React from "react";
 import { invoke } from "./bridge";
 
-export function WritePane({ slug, template, markdown, mediaBase, onMarkdown }: {
+export function WritePane({ slug, template, markdown, canonical, mediaBase, onMarkdown }: {
   slug: string;
   /** The working template (space file or conduct draft). */
   template: string | null;
   markdown: string;
+  /** The canonical article.md — the baseline the unsaved wash diffs against. */
+  canonical: string;
   mediaBase: string;
   /** Content changed inside the frame; the host autosaves. */
   onMarkdown: (md: string) => void;
@@ -19,8 +21,8 @@ export function WritePane({ slug, template, markdown, mediaBase, onMarkdown }: {
   const frameRef = React.useRef<HTMLIFrameElement | null>(null);
   const bootedRef = React.useRef(false);
   // Latest values for the message handler without re-binding it mid-typing.
-  const latest = React.useRef({ markdown, mediaBase, slug, template });
-  latest.current = { markdown, mediaBase, slug, template };
+  const latest = React.useRef({ markdown, canonical, mediaBase, slug, template });
+  latest.current = { markdown, canonical, mediaBase, slug, template };
 
   const reload = React.useCallback(async () => {
     try {

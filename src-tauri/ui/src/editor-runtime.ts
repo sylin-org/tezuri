@@ -20,6 +20,8 @@ import Highlight from "@tiptap/extension-highlight";
 import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
 import { Markdown } from "tiptap-markdown";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { Decoration, DecorationSet } from "@tiptap/pm/view";
 
 declare global {
   interface Window {
@@ -36,6 +38,10 @@ let mediaBase = "";
 // a boot must never autosave a round-trip normalization.
 let booted = false;
 let lastKnown = "";
+// The diff baseline: whatever canonical text the host last confirmed
+// (the saved article now; the published artifact later). Blocks that
+// differ from it wear a gentle wash — the unsaved areas, made visible.
+let canonical = "";
 
 function post(msg: Record<string, unknown>) {
   parent?.postMessage(msg, "*");
@@ -54,6 +60,66 @@ function toBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
+const unsavedKey = new PluginKey("tz-unsaved");
+
+function blocksOf(md: string): string[] {
+  return md
+    .split(/\n\s*\n/)
+    .map((b) => b.replace(/\s+/g, " ").trim())
+    .filter((b) => b.length > 0);
+}
+
+function computeUnsavedDecorations(doc: any): DecorationSet {
+  if (!canonical) return DecorationSet.empty;
+  const canon = blocksOf(canonical);
+  const cur: string[] = [];
+  const offsets: number[] = [];
+  let off = 0;
+  doc.forEach((node: any) => {
+    offsets.push(off);
+    off += node.nodeSize;
+    cur.push(node.textContent.replace(/\s+/g, " ").trim());
+  });
+  // LCS alignment over blocks: same = quiet, skipped current blocks =
+  // unsaved (inserted or rewritten), skipped canonical blocks = deletions
+  // (nothing in the document to wash).
+  const n = canon.length, m = cur.length;
+  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--)
+    for (let j = m - 1; j >= 0; j--)
+      dp[i][j] = canon[i] === cur[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  const decos: any[] = [];
+  let i = 0, j = 0;
+  const mark = (idx: number) => {
+    decos.push(Decoration.node(offsets[idx], offsets[idx] + doc.child(idx).nodeSize, { class: "tz-unsaved" }));
+  };
+  while (i < n && j < m) {
+    if (canon[i] === cur[j]) { i++; j++; continue; }
+    if (dp[i + 1][j] >= dp[i][j + 1]) { i++; continue; }
+    mark(j); j++;
+  }
+  while (j < m) { mark(j); j++; }
+  return DecorationSet.create(doc, decos);
+}
+
+const unsavedPlugin = new Plugin({
+  key: unsavedKey,
+  state: {
+    init: (_: any, state: any) => computeUnsavedDecorations(state.doc),
+    apply: (tr: any, old: DecorationSet) =>
+      tr.docChanged || tr.getMeta(unsavedKey)
+        ? computeUnsavedDecorations(tr.doc)
+        : old,
+  },
+  props: { decorations: (state: any) => unsavedKey.getState(state) },
+});
+
+function refreshUnsavedMarks() {
+  if (!editor) return;
+  const tr = editor.state.tr.setMeta(unsavedKey, { recompute: true });
+  editor.view.dispatch(tr);
+}
+
 function injectCaretStyle() {
   const style = document.createElement("style");
   style.textContent = `
@@ -63,6 +129,7 @@ function injectCaretStyle() {
   opacity: 0.4;
 }
 .ProseMirror img { cursor: pointer; }
+.tz-unsaved { background: rgba(255, 196, 90, 0.09); transition: background 0.4s ease; }
 `;
   document.head.appendChild(style);
 }
@@ -156,6 +223,9 @@ async function boot(markdown: string) {
     },
   });
 
+  editor.registerPlugin(unsavedPlugin);
+  refreshUnsavedMarks();
+
   const dom = editor.view.dom as HTMLElement;
   dom.addEventListener("dragover", (e) => e.preventDefault());
 }
@@ -165,12 +235,17 @@ window.addEventListener("message", (event) => {
   if (msg.type === "tz-init") {
     if (booted) return; // idempotent: a booted editor never re-boots
     mediaBase = msg.mediaBase ?? "";
+    canonical = msg.canonical ?? "";
     const markdown = msg.markdown ?? "";
     void boot(markdown).then(() => {
       booted = true;
       lastKnown = markdown;
       post({ type: "tz-booted" });
     });
+  } else if (msg.type === "tz-canonical") {
+    // The host saved (or loaded): the baseline moved, so the wash moves.
+    canonical = msg.canonical ?? "";
+    refreshUnsavedMarks();
   } else if (msg.type === "tz-media") {
     const resolve = pending.get(msg.token);
     if (resolve) {
