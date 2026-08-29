@@ -255,6 +255,11 @@ async function boot(markdown: string) {
 
   const dom = editor.view.dom as HTMLElement;
   dom.addEventListener("dragover", (e) => e.preventDefault());
+  // A file drop that misses the prose must never navigate this frame to the
+  // raw file — swallowing it is the Dreamweaver-trauma guard. The editor's
+  // handleDrop is the only place an import can happen.
+  document.addEventListener("dragover", (e) => e.preventDefault());
+  document.addEventListener("drop", (e) => e.preventDefault());
 }
 
 // Conduct affordances: every wrapped slot gains a chip that opens a
