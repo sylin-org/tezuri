@@ -72,6 +72,62 @@ function log(message: string) {
   post({ type: "tz-log", message });
 }
 
+// ---- file-drag landing ------------------------------------------------------
+// Module scope, not boot(): the listeners must exist exactly once per
+// document, or the enter/leave depth counter breaks and the fade sticks.
+let dragDepth = 0;
+let dropHint: HTMLDivElement | null = null;
+
+function hasFiles(e: DragEvent): boolean {
+  return Array.from(e.dataTransfer?.types ?? []).includes("Files");
+}
+
+// The artifact page belongs to the space's own template, so "everything
+// except the prose" cannot be a fixed selector list: dim the whole tree,
+// then re-light the ancestor chain of .article-prose plus the hint chip.
+function lightLandingPath() {
+  document.querySelectorAll(".tz-lit").forEach((el) => el.classList.remove("tz-lit"));
+  let el: Element | null = document.querySelector(".article-prose");
+  while (el && el !== document.body) {
+    el.classList.add("tz-lit");
+    el = el.parentElement;
+  }
+  document.querySelector(".article-prose")?.classList.add("tz-lit");
+  dropHint?.classList.add("tz-lit");
+}
+
+function setDragLanding(on: boolean) {
+  document.documentElement.classList.toggle("tz-drag", on);
+  if (on) {
+    if (!dropHint) {
+      dropHint = document.createElement("div");
+      dropHint.className = "tz-drop-hint tz-lit";
+      dropHint.textContent = "release to place an image";
+      document.body.appendChild(dropHint);
+    }
+    dropHint.style.display = "";
+    lightLandingPath();
+  }
+}
+
+document.addEventListener("dragenter", (e) => {
+  if (!hasFiles(e)) return;
+  dragDepth += 1;
+  setDragLanding(true);
+});
+document.addEventListener("dragleave", () => {
+  if (dragDepth > 0) dragDepth -= 1;
+  if (dragDepth === 0) setDragLanding(false);
+});
+// A drop that misses the prose must never navigate this frame to the raw
+// file — swallowing it is the Dreamweaver-trauma guard. The editor's
+// handleDrop is the only place an import can happen.
+document.addEventListener("dragover", (e) => e.preventDefault());
+document.addEventListener("drop", () => {
+  dragDepth = 0;
+  setDragLanding(false);
+});
+
 function toBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let binary = "";
@@ -163,6 +219,19 @@ function injectCaretStyle() {
 .tz-menu-opt { text-align: left; background: none; border: none; color: #eee;
   font: 12px/1.6 sans-serif; padding: 3px 6px; border-radius: 5px; cursor: pointer; }
 .tz-menu-opt:hover { background: rgba(255,255,255,.12); }
+/* File-drag landing: the artifact page fades except the prose, which wears
+   the landing outline; the hint chip floats above it all. Instant by
+   default — a fade is motion, and motion is opt-in (reduced-motion law). */
+html.tz-drag body * { opacity: .35 !important; filter: grayscale(.6); }
+html.tz-drag body .tz-lit, html.tz-drag body .tz-lit * { opacity: 1 !important; filter: none; }
+html.tz-drag .article-prose { outline: 2px dashed rgba(190, 242, 100, .55); outline-offset: 10px; }
+.tz-drop-hint { position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+  z-index: 2147483647; pointer-events: none; padding: 6px 12px; border-radius: 8px;
+  background: rgba(12,12,12,.96); border: 1px solid rgba(255,255,255,.2);
+  font: 600 12px/1.6 sans-serif; color: #bef264; }
+@media (prefers-reduced-motion: no-preference) {
+  html.tz-drag body * { transition: opacity .15s ease, filter .15s ease; }
+}
 `;
   document.head.appendChild(style);
 }
@@ -255,11 +324,6 @@ async function boot(markdown: string) {
 
   const dom = editor.view.dom as HTMLElement;
   dom.addEventListener("dragover", (e) => e.preventDefault());
-  // A file drop that misses the prose must never navigate this frame to the
-  // raw file — swallowing it is the Dreamweaver-trauma guard. The editor's
-  // handleDrop is the only place an import can happen.
-  document.addEventListener("dragover", (e) => e.preventDefault());
-  document.addEventListener("drop", (e) => e.preventDefault());
 }
 
 // Conduct affordances: every wrapped slot gains a chip that opens a

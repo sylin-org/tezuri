@@ -533,6 +533,22 @@ body.tezuri-dirty .state-word { color: var(--amber); }
   padding: 16px; overflow-y: auto; }
 #assist.on { display: block; }
 
+/* ---- file-drag landing ----
+   A file drag over the window fades everything that cannot receive the
+   drop; only the Write frame's ancestor chain is lit (the frame itself
+   spotlights the prose from inside). Regions of the lit chain that are
+   still not landing zones re-fade explicitly. Instant by default; the
+   fade is motion and stays opt-in. */
+body.tz-file-drag #root * { opacity: .35 !important; filter: grayscale(.6); }
+body.tz-file-drag #root .tz-lit,
+body.tz-file-drag #root .tz-lit * { opacity: 1 !important; filter: none; }
+body.tz-file-drag .space-ribbon,
+body.tz-file-drag .pinbar,
+body.tz-file-drag #assist { opacity: .35 !important; filter: grayscale(.6); }
+@media (prefers-reduced-motion: no-preference) {
+  body.tz-file-drag #root * { transition: opacity .15s ease, filter .15s ease; }
+}
+
 /* ---- About ---- */
 .about { flex: 1; overflow-y: auto; display: flex; gap: 48px; padding: 44px 52px; }
 .about-body { max-width: 640px; }
