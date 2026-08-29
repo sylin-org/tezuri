@@ -9,6 +9,7 @@ import "./styles.css";
 // window, the desk fades and the Write frame's ancestor chain is lit —
 // the visual grammar of where a drop can land.
 let dragDepth = 0;
+let dragIdleTimer: number | undefined;
 const hasFiles = (e: DragEvent) =>
   Array.from(e.dataTransfer?.types ?? []).includes("Files");
 const setLanding = (on: boolean) => {
@@ -31,9 +32,20 @@ window.addEventListener("dragleave", () => {
   if (dragDepth > 0) dragDepth -= 1;
   if (dragDepth === 0) setLanding(false);
 });
-window.addEventListener("dragover", (e) => e.preventDefault());
+window.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  if (!hasFiles(e)) return;
+  // A canceled or absorbed drag may never deliver dragleave/drop — the
+  // landing state heals itself when dragover stops arriving.
+  window.clearTimeout(dragIdleTimer);
+  dragIdleTimer = window.setTimeout(() => {
+    dragDepth = 0;
+    setLanding(false);
+  }, 350);
+});
 window.addEventListener("drop", (e) => {
   dragDepth = 0;
+  window.clearTimeout(dragIdleTimer);
   setLanding(false);
   e.preventDefault();
 });

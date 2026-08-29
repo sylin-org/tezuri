@@ -76,6 +76,7 @@ function log(message: string) {
 // Module scope, not boot(): the listeners must exist exactly once per
 // document, or the enter/leave depth counter breaks and the fade sticks.
 let dragDepth = 0;
+let dragIdleTimer: number | undefined;
 let dropHint: HTMLDivElement | null = null;
 
 function hasFiles(e: DragEvent): boolean {
@@ -98,6 +99,7 @@ function lightLandingPath() {
 
 function setDragLanding(on: boolean) {
   document.documentElement.classList.toggle("tz-drag", on);
+  if (dropHint) dropHint.style.display = on ? "" : "none";
   if (on) {
     if (!dropHint) {
       dropHint = document.createElement("div");
@@ -105,7 +107,6 @@ function setDragLanding(on: boolean) {
       dropHint.textContent = "release to place an image";
       document.body.appendChild(dropHint);
     }
-    dropHint.style.display = "";
     lightLandingPath();
   }
 }
@@ -122,9 +123,20 @@ document.addEventListener("dragleave", () => {
 // A drop that misses the prose must never navigate this frame to the raw
 // file — swallowing it is the Dreamweaver-trauma guard. The editor's
 // handleDrop is the only place an import can happen.
-document.addEventListener("dragover", (e) => e.preventDefault());
+document.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  if (!hasFiles(e)) return;
+  // A canceled or absorbed drag may never deliver dragleave/drop — the
+  // landing state heals itself when dragover stops arriving.
+  window.clearTimeout(dragIdleTimer);
+  dragIdleTimer = window.setTimeout(() => {
+    dragDepth = 0;
+    setDragLanding(false);
+  }, 350);
+});
 document.addEventListener("drop", () => {
   dragDepth = 0;
+  window.clearTimeout(dragIdleTimer);
   setDragLanding(false);
 });
 
