@@ -6,7 +6,7 @@
 import React from "react";
 import { invoke } from "./bridge";
 
-export function WritePane({ slug, template, markdown, canonical, mediaBase, resetToken, catalog, onConduct, onMarkdown }: {
+export function WritePane({ slug, template, markdown, canonical, mediaBase, resetToken, catalog, onConduct, onMarkdown, onRefusal }: {
   slug: string;
   /** The working template (space file or conduct draft). */
   template: string | null;
@@ -22,6 +22,8 @@ export function WritePane({ slug, template, markdown, canonical, mediaBase, rese
   onConduct: (raw: string, occurrence: number, current: string[], optKey: string, value: string) => void;
   /** Content changed inside the frame; the host autosaves. */
   onMarkdown: (md: string) => void;
+  /** The desk refused an image (format, size); the message is user-phrased. */
+  onRefusal: (message: string) => void;
 }) {
   const [page, setPage] = React.useState<string | null>(null);
   const frameRef = React.useRef<HTMLIFrameElement | null>(null);
@@ -31,6 +33,8 @@ export function WritePane({ slug, template, markdown, canonical, mediaBase, rese
   latest.current = { markdown, canonical, mediaBase, slug, template };
   const conductRef = React.useRef(onConduct);
   conductRef.current = onConduct;
+  const refusalRef = React.useRef(onRefusal);
+  refusalRef.current = onRefusal;
 
   const reload = React.useCallback(async () => {
     try {
@@ -92,8 +96,14 @@ export function WritePane({ slug, template, markdown, canonical, mediaBase, rese
       } else if (msg.type === "tz-image") {
         (async () => {
           try {
-            const ref = await invoke<string>("add_media_from_base64", {
-              base64: String(msg.base64),
+            // The store sniffs the real format from the bytes (PNG, JPEG,
+            // GIF, WebP) and dedups by content — no transcoding here, so
+            // animated GIFs stay animated.
+            const bin = atob(String(msg.base64));
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            const ref = await invoke<string>("add_media", {
+              bytes: Array.from(bytes),
               originalName: String(msg.name ?? "pasted"),
             });
             frame.contentWindow?.postMessage(
@@ -101,8 +111,7 @@ export function WritePane({ slug, template, markdown, canonical, mediaBase, rese
               "*",
             );
           } catch (e: any) {
-            // A refused image simply never inserts; the refusal is logged
-            // by the desk's media machinery.
+            refusalRef.current(e?.message ?? String(e));
           }
         })();
       }

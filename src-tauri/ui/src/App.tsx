@@ -643,6 +643,7 @@ export default function App() {
                       conduct(raw, occurrence, current, optKey, value);
                     }}
                     onMarkdown={(md) => { setText(md); touch(); }}
+                    onRefusal={(m) => setNote(m)}
                   />
                 )}
               </>
