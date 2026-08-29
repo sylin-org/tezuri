@@ -8,6 +8,32 @@ carried forward; repository history remains history, not architecture guidance.
 
 ---
 
+## 2026-08-28 — Images enter documents as original bytes; file drags are HTML5
+
+The Write plane imports images (paste and drag-drop) through one path: the frame posts the bytes
+to the host, `add_media` sniffs the real format from magic bytes — PNG, JPEG, GIF, WebP — and
+stores the original untouched under a content-addressed identity. Nothing is ever transcoded at
+import: converting to PNG would kill GIF animation and rewrite JPEGs for nothing; renditions are
+derived later per the display policy. Identical bytes dedup to the same file; anything
+unsniffable or over 25 MB is refused as a receipt note in the article view, never silently.
+
+File drags belong to the page, not the shell: the window sets `dragDropEnabled: false`, because
+Tauri's native drag handler consumes OLE drops before the DOM sees them (this is why Explorer
+drags silently did nothing at first). Nothing in the app uses the native events; the guards that
+come with the choice matter more — a drop that misses the editor prose is swallowed inside the
+Write frame, and a stray drop on the desk chrome can never navigate the application to a raw
+file.
+
+While a file drag is over the window, the interface shows where a drop can land: everything
+unlandable fades to grayscale, the article prose wears a dashed landing outline, and a floating
+chip says "release to place an image". The dimming is exclusion-free CSS over the whole tree with
+the landing ancestor chain re-lit — template-agnostic by construction, since spaces own their own
+markup — and the chip lives outside the editable document so it can never enter the article. The
+fade is instant by default; the transition is gated behind `prefers-reduced-motion`.
+
+This extends the Write-plane entry (import mechanics) and the asset-library entry's network
+posture (bounded picker downloads remain the only networked surface).
+
 ## 2026-08-27 — The Write plane is the artifact page; the pipeline re-founded
 
 The Write plane is no longer a composed projection. `write_page` assembles the article through the
